@@ -63,7 +63,7 @@ export class LetsEncryptService {
         termsOfServiceAgreed: true,
         contact: [`mailto:${this.email}`],
       });
-      logger.info('Let\'s Encrypt account created/verified', { accountUrl: account.url });
+      logger.info('Let\'s Encrypt account created/verified', { account });
     } catch (error: any) {
       if (error.type === 'urn:ietf:params:acme:error:accountDoesNotExist') {
         throw error;

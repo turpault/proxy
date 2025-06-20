@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Proxy Server Management</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background-color: #f5f7fa;
+      color: #2d3748;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 2rem;
+      border-radius: 8px;
+      margin-bottom: 2rem;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .header h1 {
+      font-size: 2.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .header p {
+      opacity: 0.9;
+      font-size: 1.1rem;
+    }
+
+    .connection-status {
+      margin-top: 1rem;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      font-weight: 500;
+      font-size: 0.9rem;
+      display: inline-block;
+    }
+
+    .connection-status.connected {
+      background: rgba(34, 197, 94, 0.1);
+      color: #16a34a;
+      border: 1px solid rgba(34, 197, 94, 0.2);
+    }
+
+    .connection-status.disconnected {
+      background: rgba(239, 68, 68, 0.1);
+      color: #dc2626;
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    .status-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 1.5rem;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      border: 1px solid #e2e8f0;
+    }
+
+    .card h3 {
+      color: #4a5568;
+      margin-bottom: 0.5rem;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .card .value {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #2d3748;
+    }
+
+    .refresh-btn {
+      background: #4299e1;
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1rem;
+      margin-bottom: 2rem;
+      transition: background-color 0.2s;
+    }
+
+    .refresh-btn:hover {
+      background: #3182ce;
+    }
+
+    .refresh-btn:disabled {
+      background: #a0aec0;
+      cursor: not-allowed;
+    }
+
+    .processes-section {
+      background: white;
+      border-radius: 8px;
+      padding: 2rem;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      border: 1px solid #e2e8f0;
+    }
+
+    .processes-section h2 {
+      color: #2d3748;
+      margin-bottom: 1.5rem;
+      font-size: 1.5rem;
+    }
+
+    .process {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      overflow: hidden;
+      transition: box-shadow 0.2s;
+    }
+
+    .process:hover {
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .process-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      margin-bottom: 1rem;
+      min-height: 4rem;
+      gap: 1rem;
+      transition: all 0.2s ease;
+      border: 1px solid #e2e8f0;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .process-header:hover {
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+      transform: translateY(-1px);
+    }
+
+    .process-header::after {
+      content: '▼';
+      position: absolute;
+      right: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #718096;
+      font-size: 0.8rem;
+      transition: transform 0.2s ease;
+    }
+
+    .process-header.expanded::after {
+      transform: translateY(-50%) rotate(180deg);
+    }
+
+    .process-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 3rem;
+    }
+
+    .process-name {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 0.5rem;
+      line-height: 1.2;
+    }
+
+    .process-details {
+      font-size: 0.9rem;
+      color: #718096;
+      margin-top: 0.25rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      justify-content: flex-start;
+    }
+
+    .process-details span {
+      white-space: nowrap;
+      min-width: fit-content;
+      height: 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.25rem 0.5rem;
+      background: #f8f9fa;
+      border-radius: 4px;
+      border: 1px solid #e9ecef;
+      font-weight: 500;
+      font-size: 0.85rem;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+      line-height: 1;
+      text-align: center;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .process-details span.success {
+      background: #d4edda;
+      border-color: #c3e6cb;
+      color: #155724;
+    }
+
+    .process-details span.warning {
+      background: #fff3cd;
+      border-color: #ffeaa7;
+      color: #856404;
+    }
+
+    .process-details span.error {
+      background: #f8d7da;
+      border-color: #f5c6cb;
+      color: #721c24;
+    }
+
+    .process-status {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .status-badge {
+      padding: 0.25rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+
+    .status-running {
+      background: #c6f6d5;
+      color: #22543d;
+    }
+
+    .status-stopped {
+      background: #fed7d7;
+      color: #742a2a;
+    }
+
+    .status-warning {
+      background: #fef5e7;
+      color: #744210;
+    }
+
+    .status-error {
+      background: #fed7d7;
+      color: #742a2a;
+    }
+
+    .process-actions {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      min-height: 3rem;
+      justify-content: flex-end;
+    }
+
+    .btn {
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 0.9rem;
+      transition: all 0.2s;
+      height: 2.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 80px;
+      white-space: nowrap;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-start {
+      background: #48bb78;
+      color: white;
+    }
+
+    .btn-start:hover:not(:disabled) {
+      background: #38a169;
+    }
+
+    .btn-stop {
+      background: #f56565;
+      color: white;
+    }
+
+    .btn-stop:hover:not(:disabled) {
+      background: #e53e3e;
+    }
+
+    .btn-restart {
+      background: #ed8936;
+      color: white;
+    }
+
+    .btn-restart:hover:not(:disabled) {
+      background: #dd6b20;
+    }
+
+    .btn-logs {
+      background: #4299e1;
+      color: white;
+    }
+
+    .btn-logs:hover {
+      background: #3182ce;
+    }
+
+    .process-body {
+      padding: 1rem;
+      display: none;
+    }
+
+    .process-body.expanded {
+      display: block;
+    }
+
+    .process-metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .metric {
+      text-align: center;
+    }
+
+    .metric-label {
+      font-size: 0.8rem;
+      color: #718096;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .metric-value {
+      font-size: 1.2rem;
+      font-weight: bold;
+      color: #2d3748;
+    }
+
+    .metric-value.warning {
+      color: #d69e2e;
+    }
+
+    .metric-value.error {
+      color: #e53e3e;
+    }
+
+    .metric-value.success {
+      color: #38a169;
+    }
+
+    .restart-history {
+      background: #f7fafc;
+      border-radius: 6px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .restart-history h4 {
+      color: #2d3748;
+      margin-bottom: 0.5rem;
+      font-size: 1rem;
+    }
+
+    .restart-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .restart-item:last-child {
+      border-bottom: none;
+    }
+
+    .restart-time {
+      font-size: 0.9rem;
+      color: #4a5568;
+    }
+
+    .restart-count {
+      font-weight: bold;
+      color: #2d3748;
+    }
+
+    .health-status {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+      flex-wrap: wrap;
+      height: 1.5rem;
+      padding: 0.25rem 0.5rem;
+      background: #f8f9fa;
+      border-radius: 4px;
+      border: 1px solid #e9ecef;
+    }
+
+    .health-status span {
+      white-space: nowrap;
+    }
+
+    .health-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .health-good {
+      background: #48bb78;
+    }
+
+    .health-warning {
+      background: #ed8936;
+    }
+
+    .health-error {
+      background: #f56565;
+    }
+
+    .logs-container {
+      background: #1a202c;
+      color: #e2e8f0;
+      border-radius: 6px;
+      padding: 1rem;
+      max-height: 300px;
+      overflow-y: auto;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 0.9rem;
+      line-height: 1.4;
+      position: relative;
+    }
+
+    .logs-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid #4a5568;
+    }
+
+    .logs-title {
+      font-weight: bold;
+      color: #e2e8f0;
+    }
+
+    .live-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      color: #48bb78;
+    }
+
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      background: #48bb78;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+
+    .log-line {
+      margin-bottom: 0.25rem;
+      word-wrap: break-word;
+      padding: 0.1rem 0;
+    }
+
+    .log-line:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .loading {
+      text-align: center;
+      color: #718096;
+      font-style: italic;
+    }
+
+    .error {
+      background: #fed7d7;
+      color: #742a2a;
+      padding: 1rem;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+    }
+
+    .success {
+      background: #c6f6d5;
+      color: #22543d;
+      padding: 1rem;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+    }
+
+    .notification {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 1rem 1.5rem;
+      border-radius: 6px;
+      color: white;
+      font-weight: bold;
+      z-index: 1000;
+      transform: translateX(400px);
+      transition: transform 0.3s ease;
+    }
+
+    .notification.show {
+      transform: translateX(0);
+    }
+
+    .notification.success {
+      background: #48bb78;
+    }
+
+    .notification.error {
+      background: #f56565;
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        padding: 10px;
+      }
+
+      .header h1 {
+        font-size: 2rem;
+      }
+
+      .process-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+        min-height: auto;
+        padding: 0.75rem;
+      }
+
+      .process-info {
+        min-height: auto;
+        width: 100%;
+      }
+
+      .process-actions {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        width: 100%;
+        justify-content: flex-start;
+        min-height: auto;
+      }
+
+      .btn {
+        height: 2.25rem;
+        min-width: 70px;
+        font-size: 0.85rem;
+        padding: 0.4rem 0.8rem;
+      }
+
+      .process-details {
+        flex-direction: column;
+        gap: 0.5rem;
+        align-items: flex-start;
+        justify-content: flex-start;
+      }
+
+      .process-details span {
+        font-size: 0.85rem;
+        height: 1.4rem;
+        padding: 0.2rem 0.4rem;
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .health-status {
+        margin-top: 0.25rem;
+        gap: 0.25rem;
+        height: 1.4rem;
+        padding: 0.2rem 0.4rem;
+        width: 100%;
+        justify-content: flex-start;
+      }
+    }
+
+    .logs-content {
+      max-height: 250px;
+      overflow-y: auto;
+      padding-right: 0.5rem;
+    }
+
+    .logs-content::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .logs-content::-webkit-scrollbar-track {
+      background: #2d3748;
+      border-radius: 3px;
+    }
+
+    .logs-content::-webkit-scrollbar-thumb {
+      background: #4a5568;
+      border-radius: 3px;
+    }
+
+    .logs-content::-webkit-scrollbar-thumb:hover {
+      background: #718096;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🚀 Proxy Server Management</h1>
+      <p>Monitor and control your managed processes</p>
+      <div id="connection-status" class="connection-status">🟡 Connecting...</div>
+    </div>
+
+    <div class="status-cards">
+      <div class="card">
+        <h3>Total Processes</h3>
+        <div class="value" id="processes-count">-</div>
+      </div>
+      <div class="card">
+        <h3>Running Processes</h3>
+        <div class="value" id="running-count">-</div>
+      </div>
+      <div class="card">
+        <h3>Server Uptime</h3>
+        <div class="value" id="uptime">-</div>
+      </div>
+      <div class="card">
+        <h3>Last Updated</h3>
+        <div class="value" id="last-updated">-</div>
+      </div>
+    </div>
+
+    <div class="processes-section">
+      <h2>Managed Processes</h2>
+      <div id="processes-container">
+        <div class="loading">Loading processes...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let ws = null;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+    const reconnectDelay = 2000;
+    let processesData = [];
+    let statusData = {};
+    let liveUpdateIntervals = {};
+
+    // WebSocket connection management
+    function connectWebSocket() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws/management`;
+      
+      ws = new WebSocket(wsUrl);
+      
+      ws.onopen = function() {
+        console.log('WebSocket connected');
+        reconnectAttempts = 0;
+        updateConnectionStatus(true);
+      };
+      
+      ws.onmessage = function(event) {
+        try {
+          const message = JSON.parse(event.data);
+          handleWebSocketMessage(message);
+        } catch (error) {
+          console.error('Failed to parse WebSocket message:', error);
+        }
+      };
+      
+      ws.onclose = function() {
+        console.log('WebSocket disconnected');
+        updateConnectionStatus(false);
+        
+        // Attempt to reconnect
+        if (reconnectAttempts < maxReconnectAttempts) {
+          reconnectAttempts++;
+          console.log(`Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts})...`);
+          setTimeout(connectWebSocket, reconnectDelay);
+        } else {
+          console.error('Max reconnection attempts reached');
+          showNotification('WebSocket connection lost. Please refresh the page.', 'error');
+        }
+      };
+      
+      ws.onerror = function(error) {
+        console.error('WebSocket error:', error);
+      };
+    }
+
+    function updateConnectionStatus(connected) {
+      const statusElement = document.getElementById('connection-status');
+      if (statusElement) {
+        statusElement.textContent = connected ? '🟢 Connected' : '🔴 Disconnected';
+        statusElement.className = connected ? 'connected' : 'disconnected';
+      }
+    }
+
+    function handleWebSocketMessage(message) {
+      switch (message.type) {
+        case 'processes':
+          processesData = message.data;
+          updateProcessesDisplay();
+          break;
+        case 'status':
+          statusData = message.data;
+          updateStatusDisplay();
+          break;
+        case 'logs':
+          updateProcessLogs(message.data.processId, message.data.logs);
+          break;
+        case 'error':
+          console.error('WebSocket error:', message.data);
+          showNotification('WebSocket error: ' + message.data.message, 'error');
+          break;
+        case 'pong':
+          // Handle ping/pong for connection health
+          break;
+        default:
+          console.warn('Unknown WebSocket message type:', message.type);
+      }
+    }
+
+    function requestLogs(processId) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'request_logs',
+          processId: processId
+        }));
+      }
+    }
+
+    // Update status display
+    function updateStatusDisplay() {
+      const processesCount = statusData.processes?.length || 0;
+      const runningCount = statusData.processes?.filter(p => p.status === 'running').length || 0;
+      const uptime = statusData.uptime || 0;
+      const timestamp = statusData.timestamp ? new Date(statusData.timestamp).toLocaleString() : 'N/A';
+
+      document.getElementById('processes-count').textContent = processesCount;
+      document.getElementById('running-count').textContent = runningCount;
+      document.getElementById('uptime').textContent = formatUptime(uptime * 1000);
+      document.getElementById('last-updated').textContent = timestamp;
+    }
+
+    // Update processes display
+    function updateProcessesDisplay() {
+      const container = document.getElementById('processes-container');
+      
+      if (!processesData || processesData.length === 0) {
+        container.innerHTML = '<div class="no-processes">No processes configured</div>';
+        return;
+      }
+
+      container.innerHTML = processesData.map(process => {
+        const statusClass = process.status === 'running' ? 'success' : 'error';
+        const statusText = process.status === 'running' ? 'Running' : 'Stopped';
+        
+        return `
+          <div class="process">
+            <div class="process-header" onclick="toggleProcess('${process.id}')">
+              <div class="process-info">
+                <div class="process-name">${process.name || process.id}</div>
+                <div class="process-details">
+                  <span class="status-badge ${statusClass}">${statusText}</span>
+                  ${process.pid ? `<span>PID: ${process.pid}</span>` : ''}
+                  ${process.port ? `<span>Port: ${process.port}</span>` : ''}
+                  <span>Restarts: ${process.restartAttempts || 0}</span>
+                  <span class="health-badge ${process.healthFailures > 0 ? 'warning' : 'success'}">Health: ${process.healthFailures || 0}</span>
+                </div>
+              </div>
+              <div class="process-actions">
+                <button onclick="event.stopPropagation(); startProcess('${process.id}')" class="btn btn-success" ${process.status === 'running' ? 'disabled' : ''}>
+                  Start
+                </button>
+                <button onclick="event.stopPropagation(); stopProcess('${process.id}')" class="btn btn-danger" ${process.status !== 'running' ? 'disabled' : ''}>
+                  Stop
+                </button>
+                <button onclick="event.stopPropagation(); restartProcess('${process.id}')" class="btn btn-warning">
+                  Restart
+                </button>
+                <button onclick="event.stopPropagation(); showLogs('${process.id}')" class="btn btn-info">
+                  Logs
+                </button>
+              </div>
+            </div>
+            <div class="process-body" id="process-${process.id}">
+              <div class="process-metrics">
+                <div class="metric">
+                  <div class="metric-label">Start Time</div>
+                  <div class="metric-value">${process.startTime ? new Date(process.startTime).toLocaleString() : 'N/A'}</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">Last Restart</div>
+                  <div class="metric-value">${process.lastRestartTime ? new Date(process.lastRestartTime).toLocaleString() : 'N/A'}</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">Uptime</div>
+                  <div class="metric-value">${process.uptime ? formatUptime(process.uptime * 1000) : 'N/A'}</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">Restart Count</div>
+                  <div class="metric-value ${getRestartCountClass(process.restartAttempts || 0)}">${process.restartAttempts || 0}</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">Health Failures</div>
+                  <div class="metric-value ${getRestartCountClass(process.healthFailures || 0)}">${process.healthFailures || 0}</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">Process State</div>
+                  <div class="metric-value ${process.status === 'running' ? 'success' : 'error'}">${process.status === 'running' ? 'Active' : 'Inactive'}</div>
+                </div>
+              </div>
+              
+              <div class="restart-history">
+                <h4>🔄 Restart History</h4>
+                <div class="restart-item">
+                  <span class="restart-time">Current Session</span>
+                  <span class="restart-count">${process.restartAttempts || 0} restarts</span>
+                </div>
+                ${process.lastRestartTime ? `
+                <div class="restart-item">
+                  <span class="restart-time">Last Restart</span>
+                  <span class="restart-count">${new Date(process.lastRestartTime).toLocaleString()}</span>
+                </div>
+                ` : ''}
+                ${process.isReconnected ? `
+                <div class="restart-item">
+                  <span class="restart-time">Process Reconnected</span>
+                  <span class="restart-count">Existing PID: ${process.pid}</span>
+                </div>
+                ` : ''}
+              </div>
+
+              <div class="process-metrics">
+                <div class="metric">
+                  <div class="metric-label">Log File</div>
+                  <div class="metric-value" style="font-size: 0.8rem;">${process.logFile || 'N/A'}</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">PID File</div>
+                  <div class="metric-value" style="font-size: 0.8rem;">${process.pidFile || 'N/A'}</div>
+                </div>
+              </div>
+              
+              <div class="logs-container" id="logs-${process.id}">
+                <div class="loading">Click "Logs" to load recent log entries</div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Toggle process details
+    function toggleProcess(processId) {
+      const processBody = document.getElementById(`process-${processId}`);
+      const processHeader = processBody?.parentElement?.querySelector('.process-header');
+      
+      if (processBody) {
+        const isExpanding = !processBody.classList.contains('expanded');
+        processBody.classList.toggle('expanded');
+        if (processHeader) {
+          processHeader.classList.toggle('expanded');
+        }
+        
+        // Automatically load logs when expanding
+        if (isExpanding) {
+          requestLogs(processId);
+          startLiveLogUpdates(processId);
+        } else {
+          stopLiveLogUpdates(processId);
+        }
+      }
+    }
+
+    // Process control functions
+    async function startProcess(processId) {
+      await performProcessAction(processId, 'start');
+    }
+
+    async function stopProcess(processId) {
+      await performProcessAction(processId, 'stop');
+    }
+
+    async function restartProcess(processId) {
+      await performProcessAction(processId, 'restart');
+    }
+
+    async function performProcessAction(processId, action) {
+      try {
+        const response = await fetch(`/api/processes/${processId}/${action}`, {
+          method: 'POST'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showNotification(`Process ${processId} ${action}ed successfully`, 'success');
+          // WebSocket will automatically update the display
+        } else {
+          showNotification(`Failed to ${action} process: ` + data.error, 'error');
+        }
+      } catch (error) {
+        showNotification(`Failed to ${action} process: ` + error.message, 'error');
+      }
+    }
+
+    // Update process logs via WebSocket
+    function updateProcessLogs(processId, logs) {
+      const logsContainer = document.getElementById(`logs-${processId}`);
+      if (!logsContainer) {
+        return;
+      }
+
+      if (!logs || logs.length === 0) {
+        logsContainer.innerHTML = `
+          <div class="logs-header">
+            <div class="logs-title">Process Logs</div>
+            <div class="live-indicator">
+              <div class="live-dot"></div>
+              <span>Live</span>
+            </div>
+          </div>
+          <div class="loading">No logs available</div>
+        `;
+        return;
+      }
+
+      const logLines = logs.map(log => {
+        // Logs are already parsed as HTML from the server
+        return `<div class="log-line">${log}</div>`;
+      }).join('');
+
+      logsContainer.innerHTML = `
+        <div class="logs-header">
+          <div class="logs-title">Process Logs (${logs.length} lines)</div>
+          <div class="live-indicator">
+            <div class="live-dot"></div>
+            <span>Live</span>
+          </div>
+        </div>
+        <div class="logs-content">
+          ${logLines}
+        </div>
+      `;
+      
+      // Scroll to bottom for new logs
+      const logsContent = logsContainer.querySelector('.logs-content');
+      if (logsContent) {
+        logsContent.scrollTop = logsContent.scrollHeight;
+      }
+    }
+
+    // Start live log updates for a process
+    function startLiveLogUpdates(processId) {
+      // Stop any existing interval for this process
+      stopLiveLogUpdates(processId);
+      
+      // Request logs every 5 seconds via WebSocket
+      liveUpdateIntervals[processId] = setInterval(() => {
+        requestLogs(processId);
+      }, 5000);
+    }
+
+    // Stop live log updates for a process
+    function stopLiveLogUpdates(processId) {
+      if (liveUpdateIntervals[processId]) {
+        clearInterval(liveUpdateIntervals[processId]);
+        delete liveUpdateIntervals[processId];
+      }
+    }
+
+    // Show logs (now uses WebSocket)
+    async function showLogs(processId) {
+      // First expand the process details if not already expanded
+      const processBody = document.getElementById(`process-${processId}`);
+      const processHeader = processBody?.parentElement?.querySelector('.process-header');
+      
+      if (processBody && !processBody.classList.contains('expanded')) {
+        processBody.classList.add('expanded');
+        if (processHeader) {
+          processHeader.classList.add('expanded');
+        }
+      }
+
+      // Request logs via WebSocket and start live updates
+      requestLogs(processId);
+      startLiveLogUpdates(processId);
+    }
+
+    // Utility functions
+    function formatUptime(milliseconds) {
+      const seconds = Math.floor(milliseconds / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      const days = Math.floor(hours / 24);
+
+      if (days > 0) return `${days}d ${hours % 24}h`;
+      if (hours > 0) return `${hours}h ${minutes % 60}m`;
+      if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+      return `${seconds}s`;
+    }
+
+    function getRestartCountClass(count) {
+      if (count === 0) return 'success';
+      if (count <= 3) return 'warning';
+      return 'error';
+    }
+
+    function showNotification(message, type) {
+      const notification = document.createElement('div');
+      notification.className = `notification ${type}`;
+      notification.textContent = message;
+
+      document.body.appendChild(notification);
+
+      setTimeout(() => notification.classList.add('show'), 100);
+      setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => document.body.removeChild(notification), 300);
+      }, 3000);
+    }
+
+    // Clean up all live updates
+    function cleanupLiveUpdates() {
+      Object.keys(liveUpdateIntervals).forEach(processId => {
+        stopLiveLogUpdates(processId);
+      });
+    }
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', cleanupLiveUpdates);
+
+    // Initialize WebSocket connection
+    connectWebSocket();
+  </script>
+</body>
+
+</html>

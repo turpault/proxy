@@ -1,0 +1,110 @@
+# Example Configuration with Independent Process Management
+# This file demonstrates how to configure the proxy server with separate process management
+
+# HTTP and HTTPS ports
+port: 4480
+httpsPort: 4443
+
+# Process management configuration file (independent of routes)
+processConfigFile: "./config/processes.yaml"
+
+# Proxy routes configuration
+routes:
+  # Static file serving
+  - domain: "example.com"
+    type: "static"
+    path: "/app"
+    staticPath: "/var/www/app"
+    spaFallback: true
+    ssl: true
+
+  # API proxy with OAuth2
+  - domain: "api.example.com"
+    type: "proxy"
+    target: "http://localhost:3001"
+    ssl: true
+    oauth2:
+      enabled: true
+      provider: "example"
+      clientId: "${OAUTH_CLIENT_ID}"
+      clientSecret: "${OAUTH_CLIENT_SECRET}"
+      authorizationEndpoint: "https://auth.example.com/oauth/authorize"
+      tokenEndpoint: "https://auth.example.com/oauth/token"
+      callbackUrl: "https://api.example.com/oauth/callback"
+      scopes: ["read", "write"]
+    publicPaths:
+      - "/oauth/callback"
+      - "/health"
+
+  # Multiple routes using the same managed process
+  - domain: "example.com"
+    type: "proxy"
+    path: "/photos"
+    target: "http://localhost:8892"
+    ssl: true
+    rewrite:
+      "^/photos/": "/"
+
+  - domain: "example.com"
+    type: "proxy"
+    path: "/app2"
+    target: "http://localhost:8892"
+    ssl: true
+    rewrite:
+      "^/app2/": "/"
+
+  # Another managed service
+  - domain: "example.com"
+    type: "proxy"
+    path: "/api"
+    target: "http://localhost:3000"
+    ssl: true
+    cors:
+      enabled: true
+      origin: ["https://example.com"]
+      credentials: true
+
+  # Redirect example
+  - domain: "www.example.com"
+    type: "redirect"
+    redirectTo: "https://example.com"
+    ssl: true
+
+# Let's Encrypt configuration
+letsEncrypt:
+  email: "admin@example.com"
+  staging: false
+  certDir: "./certificates"
+
+# Logging configuration
+logging:
+  level: "info"
+  file: "./logs/proxy.log"
+
+# Security configuration
+security:
+  rateLimitWindowMs: 900000  # 15 minutes
+  rateLimitMaxRequests: 100
+  csp:
+    enabled: true
+    reportOnly: false
+    directives:
+      defaultSrc: ["'self'"]
+      scriptSrc: ["'self'", "'unsafe-inline'"]
+      styleSrc: ["'self'", "'unsafe-inline'"]
+      imgSrc: ["'self'", "data:", "https:"]
+      connectSrc: ["'self'", "https://api.example.com"]
+      fontSrc: ["'self'", "data:"]
+      objectSrc: ["'none'"]
+      mediaSrc: ["'self'"]
+      frameSrc: ["'none'"]
+
+# Geolocation filtering
+geolocationFilter:
+  enabled: true
+  mode: "allow"
+  countries: ["US", "CA"]
+  customResponse:
+    statusCode: 403
+    message: "Access from your location is not permitted"
+  logBlocked: true 

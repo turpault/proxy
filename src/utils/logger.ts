@@ -16,8 +16,9 @@ class Logger {
         winston.format.timestamp(),
         winston.format.errors({ stack: true }),
         winston.format.colorize(),
-        winston.format.printf(({ timestamp, level, message, stack }) => {
-          return `${timestamp} [${level}]: ${message}${stack ? '\n' + stack : ''}`;
+        winston.format.printf(({ timestamp, level, message, stack, ...meta }) => {
+          const metaString = Object.keys(meta).length > 0 ? '\n' + JSON.stringify(meta) : '';
+          return `${timestamp} [${level}]: ${message}${stack ? '\n' + stack : ''}${metaString}`;
         })
       ),
       transports: [

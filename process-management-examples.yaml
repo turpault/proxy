@@ -1,0 +1,299 @@
+# Process Management Examples for Proxy Server
+# These examples show how to configure automatic subprocess management
+
+# Basic Node.js application with process management
+port: 80
+httpsPort: 443
+
+routes:
+  # Example 1: Simple Node.js API with auto-restart
+  - domain: "api.example.com"
+    type: "proxy"
+    target: "http://localhost:3001"
+    ssl: true
+    process:
+      enabled: true
+      command: "node"
+      args: ["server.js"]
+      cwd: "./backend-api"
+      env:
+        NODE_ENV: "production"
+        PORT: "3001"
+      restartOnExit: true
+      restartDelay: 2000
+      maxRestarts: 10
+      # PID file management
+      pidDir: "./pids"  # Directory to store PID files
+      cleanupPidOnExit: true  # Remove PID file when process exits
+      healthCheck:
+        enabled: true
+        path: "/health"
+        interval: 30000
+        timeout: 5000
+        retries: 3
+
+  # Example 2: Python Flask application
+  - domain: "app.example.com"
+    type: "proxy"
+    path: "/api"
+    target: "http://localhost:5000"
+    ssl: true
+    process:
+      enabled: true
+      command: "python"
+      args: ["-m", "flask", "run"]
+      cwd: "./python-app"
+      env:
+        FLASK_APP: "app.py"
+        FLASK_ENV: "production"
+        PORT: "5000"
+      restartOnExit: true
+      restartDelay: 3000
+      maxRestarts: 5
+      healthCheck:
+        enabled: true
+        path: "/api/health"
+        interval: 45000
+        timeout: 10000
+        retries: 2
+
+  # Example 3: Static site with build process
+  - domain: "blog.example.com"
+    type: "static"
+    staticPath: "./blog/dist"
+    ssl: true
+    spaFallback: false
+    process:
+      enabled: true
+      command: "npm"
+      args: ["run", "build:watch"]
+      cwd: "./blog"
+      env:
+        NODE_ENV: "production"
+      restartOnExit: true
+      restartDelay: 5000
+      maxRestarts: 3
+      # No health check for build processes
+
+  # Example 4: Microservice with custom startup script
+  - domain: "microservice.example.com"
+    type: "proxy"
+    target: "http://localhost:8080"
+    ssl: true
+    process:
+      enabled: true
+      command: "./start-service.sh"
+      args: ["--port", "8080", "--env", "prod"]
+      cwd: "./microservice"
+      env:
+        SERVICE_PORT: "8080"
+        DATABASE_URL: "${DATABASE_URL}"
+        REDIS_URL: "${REDIS_URL}"
+      restartOnExit: true
+      restartDelay: 1000
+      maxRestarts: 20
+      # Custom PID file path for monitoring
+      pidFile: "/var/run/microservice.pid"
+      cleanupPidOnExit: true
+      healthCheck:
+        enabled: true
+        path: "/status"
+        interval: 15000
+        timeout: 3000
+        retries: 5
+
+  # Example 5: Docker container management (if Docker is available)
+  - domain: "docker-app.example.com"
+    type: "proxy"
+    target: "http://localhost:9000"
+    ssl: true
+    process:
+      enabled: true
+      command: "docker"
+      args: ["run", "--rm", "-p", "9000:3000", "my-app:latest"]
+      cwd: "."
+      restartOnExit: true
+      restartDelay: 10000
+      maxRestarts: 3
+      healthCheck:
+        enabled: true
+        path: "/ready"
+        interval: 60000
+        timeout: 15000
+        retries: 2
+
+  # Example 6: Development server with fast restart
+  - domain: "dev.example.com"
+    type: "proxy"
+    target: "http://localhost:3000"
+    ssl: false
+    process:
+      enabled: true
+      command: "npm"
+      args: ["run", "dev"]
+      cwd: "./frontend"
+      env:
+        NODE_ENV: "development"
+        PORT: "3000"
+        CHOKIDAR_USEPOLLING: "true"
+      restartOnExit: true
+      restartDelay: 500
+      maxRestarts: 50  # Allow many restarts during development
+      healthCheck:
+        enabled: false  # Disable health checks for dev server
+
+letsEncrypt:
+  email: "admin@example.com"
+  staging: false
+  certDir: "./certificates"
+
+logging:
+  level: "info"
+  file: "./logs/proxy.log"
+
+security:
+  rateLimitWindowMs: 900000
+  rateLimitMaxRequests: 100
+
+# Process Management Notes:
+# 
+# 1. PROCESS CONFIGURATION OPTIONS:
+#    - enabled: Enable/disable process management (default: true)
+#    - command: Command to execute (required)
+#    - args: Array of command arguments
+#    - cwd: Working directory for the process
+#    - env: Environment variables for the process
+#    - restartOnExit: Auto-restart when process exits (default: true)
+#    - restartDelay: Delay before restart in milliseconds (default: 1000)
+#    - maxRestarts: Maximum restart attempts (default: 5)
+#    - pidFile: Exact path for PID file
+#    - pidDir: Directory to store PID files (creates <process-id>.pid)
+#    - cleanupPidOnExit: Remove PID file when process exits (default: true)
+#    NOTE: If neither pidFile nor pidDir is specified, PID files are stored in /tmp
+#
+# 2. HEALTH CHECK OPTIONS:
+#    - enabled: Enable health checks (default: false)
+#    - path: Health check endpoint path (default: "/health")
+#    - interval: Check interval in milliseconds (default: 30000)
+#    - timeout: Request timeout in milliseconds (default: 5000)
+#    - retries: Max failed checks before restart (default: 3)
+#
+# 3. LOGGING:
+#    - Process stdout/stderr are redirected to log files and monitored in real-time
+#    - Process lifecycle events (start, stop, restart) are logged
+#    - Health check results are logged at debug/warn levels
+#    - Log files are stored alongside PID files for persistence
+#
+# 4. PROCESS PERSISTENCE:
+#    - Processes are detached and survive proxy server restarts
+#    - On restart, the proxy reconnects to existing processes via PID files
+#    - Process output is monitored by tailing log files
+#    - Processes continue running even when proxy shuts down
+#
+# 5. PROCESS IDENTIFICATION:
+#    - Processes are identified by domain + path (e.g., "api-example-com")
+#    - Unique IDs prevent conflicts between routes
+#
+# 6. BEST PRACTICES:
+#    - Use health checks for critical services
+#    - Set appropriate restart limits for production
+#    - Configure working directories for relative paths
+#    - Use environment variables for configuration
+#    - Monitor log files for process output and lifecycle events
+#    - Processes persist across proxy restarts, providing high availability 
+
+# Process Management Configuration Examples
+# This file demonstrates how to configure managed processes with descriptive names
+
+processes:
+  # Example 1: Node.js application with descriptive name
+  api-server:
+    name: "API Server"
+    enabled: true
+    command: "node"
+    args: ["server.js"]
+    cwd: "/app/api"
+    env:
+      NODE_ENV: "production"
+      PORT: "3000"
+    restartOnExit: true
+    restartDelay: 5000
+    maxRestarts: 5
+    healthCheck:
+      enabled: true
+      path: "/health"
+      interval: 30000
+      timeout: 5000
+      retries: 3
+
+  # Example 2: Python application with descriptive name
+  data-processor:
+    name: "Data Processing Service"
+    enabled: true
+    command: "python"
+    args: ["processor.py"]
+    cwd: "/app/processor"
+    env:
+      PYTHONPATH: "/app/processor"
+      LOG_LEVEL: "INFO"
+    restartOnExit: true
+    restartDelay: 3000
+    healthCheck:
+      enabled: true
+      path: "/status"
+      interval: 60000
+
+  # Example 3: Java application with descriptive name
+  backend-service:
+    name: "Backend Microservice"
+    enabled: true
+    command: "java"
+    args: ["-jar", "backend-service.jar"]
+    cwd: "/app/backend"
+    env:
+      SPRING_PROFILES_ACTIVE: "production"
+      SERVER_PORT: "8080"
+    restartOnExit: true
+    restartDelay: 10000
+    healthCheck:
+      enabled: true
+      path: "/actuator/health"
+      interval: 45000
+
+  # Example 4: Custom binary with descriptive name
+  file-watcher:
+    name: "File System Monitor"
+    enabled: true
+    command: "/usr/local/bin/file-watcher"
+    args: ["--config", "watcher.conf", "--log-level", "info"]
+    cwd: "/var/log/watcher"
+    env:
+      WATCHER_CONFIG_PATH: "/etc/watcher"
+    restartOnExit: true
+    restartDelay: 2000
+
+  # Example 5: Process without explicit name (will use proxy-{id})
+  legacy-app:
+    enabled: true
+    command: "node"
+    args: ["legacy.js"]
+    cwd: "/app/legacy"
+    restartOnExit: true
+
+settings:
+  defaultHealthCheck:
+    enabled: true
+    interval: 30000
+    timeout: 5000
+    retries: 3
+  defaultRestart:
+    restartOnExit: true
+    restartDelay: 5000
+    maxRestarts: 5
+  pidManagement:
+    defaultPidDir: "/var/run/proxy-processes"
+    cleanupPidOnExit: true
+  logging:
+    logProcessOutput: true
+    logHealthChecks: true
+    logRestarts: true 

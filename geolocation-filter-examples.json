@@ -1,0 +1,164 @@
+{
+  "examples": {
+    "global_country_blocklist": {
+      "description": "Block requests from specific countries globally",
+      "config": {
+        "security": {
+          "geolocationFilter": {
+            "enabled": true,
+            "mode": "block",
+            "countries": ["CN", "RU", "KP"],
+            "customResponse": {
+              "statusCode": 403,
+              "message": "Access from your location is not permitted"
+            },
+            "logBlocked": true
+          }
+        }
+      }
+    },
+    "global_country_allowlist": {
+      "description": "Only allow requests from specific countries",
+      "config": {
+        "security": {
+          "geolocationFilter": {
+            "enabled": true,
+            "mode": "allow",
+            "countries": ["US", "CA", "GB", "AU"],
+            "customResponse": {
+              "statusCode": 451,
+              "message": "This service is only available in select countries"
+            },
+            "logBlocked": true
+          }
+        }
+      }
+    },
+    "route_specific_filtering": {
+      "description": "Apply different filters to different routes",
+      "config": {
+        "routes": [
+          {
+            "domain": "admin.example.com",
+            "target": "http://localhost:3001",
+            "geolocationFilter": {
+              "enabled": true,
+              "mode": "allow",
+              "countries": ["US"],
+              "cities": ["New York", "Los Angeles", "Chicago"],
+              "customResponse": {
+                "statusCode": 403,
+                "message": "Admin access restricted to specific locations"
+              }
+            }
+          },
+          {
+            "domain": "api.example.com",
+            "target": "http://localhost:3002",
+            "geolocationFilter": {
+              "enabled": true,
+              "mode": "block",
+              "countries": ["CN", "RU"],
+              "logBlocked": true
+            }
+          }
+        ]
+      }
+    },
+    "path_based_filtering": {
+      "description": "Filter based on specific paths",
+      "config": {
+        "routes": [
+          {
+            "domain": "example.com",
+            "target": "http://localhost:3000",
+            "path": "/admin",
+            "geolocationFilter": {
+              "enabled": true,
+              "mode": "allow",
+              "countries": ["US", "CA"],
+              "regions": ["CA", "NY", "TX"],
+              "customResponse": {
+                "redirectUrl": "https://example.com/restricted"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "city_region_filtering": {
+      "description": "Fine-grained filtering by city and region",
+      "config": {
+        "security": {
+          "geolocationFilter": {
+            "enabled": true,
+            "mode": "allow",
+            "countries": ["US"],
+            "regions": ["CA", "NY", "TX"],
+            "cities": ["San Francisco", "New York", "Austin"],
+            "customResponse": {
+              "statusCode": 451,
+              "message": "Service unavailable in your area"
+            },
+            "logBlocked": false
+          }
+        }
+      }
+    },
+    "redirect_on_block": {
+      "description": "Redirect blocked users instead of showing error",
+      "config": {
+        "security": {
+          "geolocationFilter": {
+            "enabled": true,
+            "mode": "block",
+            "countries": ["CN", "RU", "KP"],
+            "customResponse": {
+              "redirectUrl": "https://example.com/unavailable"
+            },
+            "logBlocked": true
+          }
+        }
+      }
+    }
+  },
+  "country_codes": {
+    "description": "Common ISO 3166-1 alpha-2 country codes",
+    "codes": {
+      "US": "United States",
+      "CA": "Canada",
+      "GB": "United Kingdom",
+      "AU": "Australia",
+      "DE": "Germany",
+      "FR": "France",
+      "JP": "Japan",
+      "CN": "China",
+      "RU": "Russia",
+      "KP": "North Korea",
+      "IN": "India",
+      "BR": "Brazil",
+      "MX": "Mexico",
+      "ES": "Spain",
+      "IT": "Italy",
+      "NL": "Netherlands",
+      "SE": "Sweden",
+      "NO": "Norway",
+      "DK": "Denmark",
+      "FI": "Finland"
+    }
+  },
+  "usage_notes": [
+    "Geolocation filtering works at multiple levels: global, route-specific, and path-specific",
+    "Route-specific filters override global filters",
+    "Path-specific filters override both route and global filters",
+    "Mode 'allow' creates an allowlist (blocks everything NOT in the list)",
+    "Mode 'block' creates a blocklist (blocks everything IN the list)",
+    "You can combine countries, regions, and cities in the same filter",
+    "Country codes should be ISO 3166-1 alpha-2 format (e.g., 'US', 'GB', 'DE')",
+    "City names are case-insensitive and should match the geoip database entries",
+    "Region codes vary by country (e.g., US states like 'CA', 'NY', 'TX')",
+    "Set logBlocked to false to reduce log noise for high-traffic blocks",
+    "Use redirectUrl in customResponse to redirect blocked users to another page",
+    "Local/private IP addresses are automatically marked as 'Local' location"
+  ]
+} 
