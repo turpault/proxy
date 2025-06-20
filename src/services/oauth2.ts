@@ -34,14 +34,13 @@ export class OAuth2Service {
   private validateConfig(config: OAuth2Config): void {
     // If subscriptionKey is provided, ensure subscriptionKeyHeader is also set
     if (config.subscriptionKey && !config.subscriptionKeyHeader) {
-      logger.warn(`Subscription key provided but no header name specified for provider ${config.provider}. Using default 'Bb-Api-Subscription-Key'`, {
+      logger.warn(`Subscription key provided but no header name specified for provider ${config.provider}.'`, {
         provider: config.provider,
         hasSubscriptionKey: !!config.subscriptionKey,
         subscriptionKeyHeader: config.subscriptionKeyHeader,
       });
       
-      // Set default header name
-      config.subscriptionKeyHeader = 'Bb-Api-Subscription-Key';
+      throw new Error(`Subscription key provided but no header name specified for provider ${config.provider}.`);
     }
     
     // Log subscription key configuration for debugging
@@ -168,7 +167,7 @@ export class OAuth2Service {
 
       // Add subscription key header if configured
       if (config.subscriptionKey) {
-        const headerName = config.subscriptionKeyHeader || 'Bb-Api-Subscription-Key';
+        const headerName = config.subscriptionKeyHeader!;
         headers[headerName] = config.subscriptionKey;
       }
 
@@ -271,7 +270,7 @@ export class OAuth2Service {
 
       // Add subscription key header if configured
       if (config.subscriptionKey) {
-        const headerName = config.subscriptionKeyHeader || 'Bb-Api-Subscription-Key';
+        const headerName = config.subscriptionKeyHeader!;
         refreshHeaders[headerName] = config.subscriptionKey;
       }
 

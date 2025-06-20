@@ -1,0 +1,246 @@
+# Process Management Configuration
+# This example demonstrates process management functionality with the proxy server
+#
+# Features demonstrated:
+# - Process monitoring and control
+# - Health checks
+# - Auto-restart policies
+# - Environment variable management
+# - Log file management
+# - Multiple process types
+
+# Server configuration
+port: 80
+httpsPort: 443
+managementPort: 4481
+
+# Let's Encrypt configuration
+letsEncrypt:
+  email: "admin@example.com"
+  staging: false
+  certDir: "./certificates"
+
+# Process management configuration
+processManagement:
+  enabled: true
+  processConfigFile: "config/processes.yaml"
+  autoStart: true
+  healthCheckInterval: 30000  # 30 seconds
+  restartAttempts: 3
+  restartDelay: 5000  # 5 seconds
+
+# Routes configuration
+routes:
+  # Example 1: Node.js API server with process management
+  - domain: "api.example.com"
+    path: "/api"
+    target: "http://localhost:3001"
+    process: "node-api-server"  # Reference to process in processes.yaml
+    ssl: true
+    cors:
+      enabled: true
+      origin: ["https://app.example.com"]
+      credentials: true
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+      allowedHeaders: ["Content-Type", "Authorization"]
+      forwardHeaders: ["authorization"]
+
+  # Example 2: Python Flask application
+  - domain: "flask.example.com"
+    path: "/flask"
+    target: "http://localhost:5000"
+    process: "flask-app"
+    ssl: true
+    cors: true
+
+  # Example 3: React development server
+  - domain: "dev.example.com"
+    path: "/react"
+    target: "http://localhost:3000"
+    process: "react-dev-server"
+    ssl: true
+    cors: true
+
+  # Example 4: Static site with build process
+  - domain: "static.example.com"
+    type: "static"
+    path: "/"
+    staticPath: "/var/www/static-site/dist"
+    process: "static-builder"  # Build process that generates static files
+    ssl: true
+    spaFallback: true
+
+  # Example 5: Multiple routes using same process
+  - domain: "app.example.com"
+    path: "/app1"
+    target: "http://localhost:3002"
+    process: "shared-api-server"
+    ssl: true
+    cors: true
+
+  - domain: "app.example.com"
+    path: "/app2"
+    target: "http://localhost:3002"
+    process: "shared-api-server"  # Same process, different route
+    ssl: true
+    cors: true
+
+# Security configuration
+security:
+  rateLimitWindowMs: 900000  # 15 minutes
+  rateLimitMaxRequests: 100
+
+  csp:
+    enabled: true
+    directives:
+      defaultSrc: ["'self'"]
+      scriptSrc: ["'self'", "'unsafe-inline'"]
+      styleSrc: ["'self'", "'unsafe-inline'"]
+      imgSrc: ["'self'", "data:", "https:"]
+      connectSrc: ["'self'"]
+      fontSrc: ["'self'", "data:"]
+      objectSrc: ["'none'"]
+      mediaSrc: ["'self'"]
+      frameSrc: ["'none'"]
+
+# Logging configuration
+logging:
+  level: "info"
+  file: "./logs/process-proxy.log"
+
+# Statistics configuration
+statistics:
+  enabled: true
+  saveInterval: 300000  # 5 minutes
+  maxEntries: 10000
+  geolocation: true
+
+# Process Configuration File (config/processes.yaml)
+# This file defines the processes that will be managed by the proxy server
+
+processes:
+  # Node.js API Server
+  node-api-server:
+    enabled: true
+    name: "Node.js API Server"
+    description: "REST API server built with Node.js and Express"
+    command: "node"
+    args: ["server.js"]
+    cwd: "/var/www/node-api"
+    env:
+      NODE_ENV: "production"
+      PORT: "3001"
+      DATABASE_URL: "${DATABASE_URL}"
+      JWT_SECRET: "${JWT_SECRET}"
+    pidFile: "./pids/node-api-server.pid"
+    logFile: "./logs/node-api-server.log"
+    restartPolicy:
+      maxAttempts: 3
+      delay: 5000
+    healthCheck:
+      enabled: true
+      url: "http://localhost:3001/health"
+      interval: 30000
+      timeout: 5000
+
+  # Python Flask Application
+  flask-app:
+    enabled: true
+    name: "Flask Web Application"
+    description: "Python Flask web application"
+    command: "python"
+    args: ["-m", "flask", "run", "--host=0.0.0.0", "--port=5000"]
+    cwd: "/var/www/flask-app"
+    env:
+      FLASK_APP: "app.py"
+      FLASK_ENV: "production"
+      DATABASE_URL: "${FLASK_DATABASE_URL}"
+      SECRET_KEY: "${FLASK_SECRET_KEY}"
+    pidFile: "./pids/flask-app.pid"
+    logFile: "./logs/flask-app.log"
+    restartPolicy:
+      maxAttempts: 3
+      delay: 5000
+    healthCheck:
+      enabled: true
+      url: "http://localhost:5000/health"
+      interval: 30000
+      timeout: 5000
+
+  # React Development Server
+  react-dev-server:
+    enabled: true
+    name: "React Development Server"
+    description: "React development server with hot reloading"
+    command: "npm"
+    args: ["start"]
+    cwd: "/var/www/react-app"
+    env:
+      REACT_APP_API_URL: "https://api.example.com"
+      REACT_APP_ENV: "development"
+    pidFile: "./pids/react-dev-server.pid"
+    logFile: "./logs/react-dev-server.log"
+    restartPolicy:
+      maxAttempts: 5
+      delay: 3000
+    healthCheck:
+      enabled: true
+      url: "http://localhost:3000"
+      interval: 30000
+      timeout: 5000
+
+  # Static Site Builder
+  static-builder:
+    enabled: true
+    name: "Static Site Builder"
+    description: "Build process for static site generation"
+    command: "npm"
+    args: ["run", "build:watch"]
+    cwd: "/var/www/static-site"
+    env:
+      NODE_ENV: "production"
+      BUILD_ENV: "production"
+    pidFile: "./pids/static-builder.pid"
+    logFile: "./logs/static-builder.log"
+    restartPolicy:
+      maxAttempts: 3
+      delay: 10000
+    # No health check for build process
+
+  # Shared API Server (used by multiple routes)
+  shared-api-server:
+    enabled: true
+    name: "Shared API Server"
+    description: "API server shared between multiple applications"
+    command: "node"
+    args: ["server.js"]
+    cwd: "/var/www/shared-api"
+    env:
+      NODE_ENV: "production"
+      PORT: "3002"
+      SHARED_SECRET: "${SHARED_SECRET}"
+    pidFile: "./pids/shared-api-server.pid"
+    logFile: "./logs/shared-api-server.log"
+    restartPolicy:
+      maxAttempts: 3
+      delay: 5000
+    healthCheck:
+      enabled: true
+      url: "http://localhost:3002/health"
+      interval: 30000
+      timeout: 5000
+
+# Environment Variables Required:
+# DATABASE_URL=postgresql://user:pass@localhost/dbname
+# JWT_SECRET=your_jwt_secret_key
+# FLASK_DATABASE_URL=postgresql://user:pass@localhost/flask_db
+# FLASK_SECRET_KEY=your_flask_secret_key
+# SHARED_SECRET=your_shared_secret_key
+
+# Process Management API Endpoints:
+# GET /api/processes - List all processes
+# POST /api/processes/{id}/start - Start a process
+# POST /api/processes/{id}/stop - Stop a process
+# POST /api/processes/{id}/restart - Restart a process
+# GET /api/processes/{id}/logs - Get process logs
+# POST /api/processes/reload - Reload process configuration 

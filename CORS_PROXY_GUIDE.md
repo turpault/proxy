@@ -70,6 +70,36 @@ routes:
 | `maxAge` | number | `86400` | Preflight cache time (seconds) |
 | `preflightContinue` | boolean | `false` | Pass control to next handler for OPTIONS |
 | `optionsSuccessStatus` | number | `204` | Status code for successful OPTIONS requests |
+| `forwardHeaders` | string[] | See below | Headers to forward from client to target |
+
+#### Header Forwarding Configuration
+
+The `forwardHeaders` option allows you to specify which headers from the client request should be forwarded to the target server. This is useful for authentication and API keys that need to be passed through the proxy.
+
+**Default Headers Forwarded:**
+If `forwardHeaders` is not specified, the following headers are automatically forwarded:
+- `authorization` - Bearer tokens, Basic auth, etc.
+
+**Example Configurations:**
+
+```yaml
+# Forward only authorization header
+cors:
+  forwardHeaders: ["authorization"]
+
+# Forward custom headers for specific API
+cors:
+  forwardHeaders: ["authorization", "x-api-key", "x-custom-auth", "x-user-id"]
+
+# Forward no headers (empty array)
+cors:
+  forwardHeaders: []
+
+# Use default headers (don't specify forwardHeaders)
+cors:
+  enabled: true
+  origin: ["https://yourdomain.com"]
+```
 
 ## Usage Examples
 
@@ -176,6 +206,42 @@ fetch('/github/users/octocat')
     methods: ["GET", "POST", "PUT", "DELETE"]
     maxAge: 3600
 ```
+
+### 5. Custom Header Forwarding
+
+```yaml
+# Proxy API with custom authentication headers
+- domain: "yourdomain.com"
+  type: "proxy"
+  path: "/api/custom-auth"
+  target: "https://custom-api.com"
+  cors:
+    enabled: true
+    origin: ["https://yourdomain.com"]
+    credentials: true
+    allowedHeaders: ["Content-Type", "Authorization", "X-Custom-Auth", "X-User-ID"]
+    # Forward specific headers from client to target
+    forwardHeaders: ["authorization", "x-custom-auth", "x-user-id"]
+  rewrite:
+    "^/api/custom-auth/": "/"
+```
+
+Frontend usage:
+```javascript
+fetch('/api/custom-auth/users', {
+  method: 'GET',
+  credentials: 'include',
+  headers: {
+    'Authorization': 'Bearer your-token',
+    'X-Custom-Auth': 'custom-auth-value',
+    'X-User-ID': 'user123'
+  }
+})
+.then(response => response.json())
+.then(data => console.log(data));
+```
+
+In this example, the `Authorization`, `X-Custom-Auth`, and `X-User-ID` headers from the client request will be forwarded to the target server at `https://custom-api.com`.
 
 ## Security Considerations
 

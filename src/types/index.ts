@@ -181,7 +181,7 @@ export interface OAuth2Config {
   pkce?: boolean;
   additionalParams?: Record<string, string>;
   subscriptionKey?: string;
-  subscriptionKeyHeader?: string; // Required if subscriptionKey is provided, defaults to 'Bb-Api-Subscription-Key'
+  subscriptionKeyHeader?: string; // Required if subscriptionKey is provided
 }
 
 export interface OAuth2TokenResponse {
@@ -211,6 +211,7 @@ export interface CorsConfig {
   maxAge?: number;
   preflightContinue?: boolean;
   optionsSuccessStatus?: number;
+  forwardHeaders?: string[]; // List of headers to forward from client request to target
 }
 
 export interface DynamicCorsProxyConfig {

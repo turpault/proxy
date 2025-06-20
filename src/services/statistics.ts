@@ -12,6 +12,34 @@ export interface RequestStats {
   userAgents: Set<string>;
   routes: Set<string>;
   methods: Set<string>;
+  responseTimes: number[];
+  routeDetails: Array<{
+    domain: string;
+    target: string;
+    method: string;
+    responseTime: number;
+    timestamp: Date;
+  }>;
+}
+
+// Serializable version of RequestStats for JSON persistence
+export interface SerializableRequestStats {
+  ip: string;
+  geolocation: GeolocationInfo | null;
+  count: number;
+  firstSeen: string; // ISO string
+  lastSeen: string; // ISO string
+  userAgents: string[];
+  routes: string[];
+  methods: string[];
+  responseTimes: number[];
+  routeDetails: Array<{
+    domain: string;
+    target: string;
+    method: string;
+    responseTime: number;
+    timestamp: string; // ISO string
+  }>;
 }
 
 export interface StatisticsReport {
@@ -57,17 +85,50 @@ export interface StatisticsReport {
   };
 }
 
+export interface RouteStats {
+  domain: string;
+  target: string;
+  requests: number;
+  avgResponseTime: number;
+  topCountries: Array<{
+    country: string;
+    city?: string;
+    count: number;
+    percentage: number;
+  }>;
+  uniqueIPs: number;
+  methods: string[];
+}
+
+export interface TimePeriodStats {
+  totalRequests: number;
+  uniqueRoutes: number;
+  uniqueCountries: number;
+  avgResponseTime: number;
+  routes: RouteStats[];
+  period: {
+    start: Date;
+    end: Date;
+  };
+}
+
 export class StatisticsService {
   private static instance: StatisticsService;
   private stats: Map<string, RequestStats> = new Map();
   private reportInterval: NodeJS.Timeout | null = null;
   private reportDir: string;
+  private dataDir: string;
   private isShuttingDown = false;
+  private saveInterval: NodeJS.Timeout | null = null;
 
   constructor() {
     this.reportDir = path.resolve(process.cwd(), 'logs', 'statistics');
+    this.dataDir = path.resolve(process.cwd(), 'data', 'statistics');
     this.ensureReportDirectory();
+    this.ensureDataDirectory();
+    this.loadPersistedStats();
     this.startPeriodicReporting();
+    this.startPeriodicSaving();
   }
 
   public static getInstance(): StatisticsService {
@@ -78,6 +139,145 @@ export class StatisticsService {
   }
 
   /**
+   * Convert RequestStats to serializable format
+   */
+  private serializeStats(stats: RequestStats): SerializableRequestStats {
+    return {
+      ip: stats.ip,
+      geolocation: stats.geolocation,
+      count: stats.count,
+      firstSeen: stats.firstSeen.toISOString(),
+      lastSeen: stats.lastSeen.toISOString(),
+      userAgents: Array.from(stats.userAgents),
+      routes: Array.from(stats.routes),
+      methods: Array.from(stats.methods),
+      responseTimes: stats.responseTimes,
+      routeDetails: stats.routeDetails.map(detail => ({
+        ...detail,
+        timestamp: detail.timestamp.toISOString()
+      }))
+    };
+  }
+
+  /**
+   * Convert serializable format back to RequestStats
+   */
+  private deserializeStats(serialized: SerializableRequestStats): RequestStats {
+    return {
+      ip: serialized.ip,
+      geolocation: serialized.geolocation,
+      count: serialized.count,
+      firstSeen: new Date(serialized.firstSeen),
+      lastSeen: new Date(serialized.lastSeen),
+      userAgents: new Set(serialized.userAgents),
+      routes: new Set(serialized.routes),
+      methods: new Set(serialized.methods),
+      responseTimes: serialized.responseTimes,
+      routeDetails: serialized.routeDetails.map(detail => ({
+        ...detail,
+        timestamp: new Date(detail.timestamp)
+      }))
+    };
+  }
+
+  /**
+   * Save current statistics to disk
+   */
+  private async saveStats(): Promise<void> {
+    try {
+      const statsData: SerializableRequestStats[] = Array.from(this.stats.values()).map(stat => 
+        this.serializeStats(stat)
+      );
+
+      const dataFile = path.join(this.dataDir, 'current-stats.json');
+      await fs.writeJson(dataFile, {
+        timestamp: new Date().toISOString(),
+        stats: statsData,
+        totalEntries: statsData.length
+      }, { spaces: 2 });
+
+      logger.debug(`Statistics saved: ${statsData.length} entries`);
+    } catch (error) {
+      logger.error('Failed to save statistics:', error);
+    }
+  }
+
+  /**
+   * Load persisted statistics from disk
+   */
+  private async loadPersistedStats(): Promise<void> {
+    try {
+      const dataFile = path.join(this.dataDir, 'current-stats.json');
+      
+      if (await fs.pathExists(dataFile)) {
+        const data = await fs.readJson(dataFile);
+        
+        if (data.stats && Array.isArray(data.stats)) {
+          this.stats.clear();
+          
+          data.stats.forEach((serializedStat: SerializableRequestStats) => {
+            const stat = this.deserializeStats(serializedStat);
+            this.stats.set(stat.ip, stat);
+          });
+          
+          logger.info(`Statistics loaded: ${data.stats.length} entries from ${data.timestamp}`);
+        }
+      }
+    } catch (error) {
+      logger.error('Failed to load persisted statistics:', error);
+    }
+  }
+
+  /**
+   * Ensure data directory exists
+   */
+  private async ensureDataDirectory(): Promise<void> {
+    try {
+      await fs.ensureDir(this.dataDir);
+      logger.debug(`Statistics data directory ensured: ${this.dataDir}`);
+    } catch (error) {
+      logger.error('Failed to create statistics data directory:', error);
+    }
+  }
+
+  /**
+   * Start periodic saving of statistics
+   */
+  private startPeriodicSaving(): void {
+    // Save every 5 minutes
+    this.saveInterval = setInterval(() => {
+      this.saveStats();
+    }, 5 * 60 * 1000);
+    
+    logger.info('Periodic statistics saving started (every 5 minutes)');
+  }
+
+  /**
+   * Clean up old statistics data
+   */
+  private async cleanupOldStats(): Promise<void> {
+    try {
+      const now = new Date();
+      const cutoffDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000); // 90 days ago
+      
+      let cleanedCount = 0;
+      for (const [ip, stat] of this.stats.entries()) {
+        if (stat.lastSeen < cutoffDate) {
+          this.stats.delete(ip);
+          cleanedCount++;
+        }
+      }
+      
+      if (cleanedCount > 0) {
+        logger.info(`Cleaned up ${cleanedCount} old statistics entries`);
+        await this.saveStats();
+      }
+    } catch (error) {
+      logger.error('Failed to cleanup old statistics:', error);
+    }
+  }
+
+  /**
    * Record a request for statistics
    */
   public recordRequest(
@@ -85,7 +285,10 @@ export class StatisticsService {
     geolocation: GeolocationInfo | null,
     route: string,
     method: string,
-    userAgent: string
+    userAgent: string,
+    responseTime?: number,
+    domain?: string,
+    target?: string
   ): void {
     if (this.isShuttingDown) return;
 
@@ -99,6 +302,28 @@ export class StatisticsService {
       existing.userAgents.add(userAgent);
       existing.routes.add(route);
       existing.methods.add(method);
+      
+      if (responseTime !== undefined) {
+        existing.responseTimes.push(responseTime);
+        // Keep only last 1000 response times to prevent memory issues
+        if (existing.responseTimes.length > 1000) {
+          existing.responseTimes = existing.responseTimes.slice(-1000);
+        }
+      }
+      
+      if (domain && target) {
+        existing.routeDetails.push({
+          domain,
+          target,
+          method,
+          responseTime: responseTime || 0,
+          timestamp: now,
+        });
+        // Keep only last 1000 route details
+        if (existing.routeDetails.length > 1000) {
+          existing.routeDetails = existing.routeDetails.slice(-1000);
+        }
+      }
     } else {
       // Create new stats entry
       this.stats.set(ip, {
@@ -110,6 +335,14 @@ export class StatisticsService {
         userAgents: new Set([userAgent]),
         routes: new Set([route]),
         methods: new Set([method]),
+        responseTimes: responseTime !== undefined ? [responseTime] : [],
+        routeDetails: domain && target ? [{
+          domain,
+          target,
+          method,
+          responseTime: responseTime || 0,
+          timestamp: now,
+        }] : [],
       });
     }
   }
@@ -363,8 +596,8 @@ export class StatisticsService {
         topCity: report.summary.topCities[0]?.city || 'None',
       });
       
-      // Clear stats for next period
-      this.stats.clear();
+      // Clean up old stats instead of clearing all
+      await this.cleanupOldStats();
     } catch (error) {
       logger.error('Failed to generate statistics report', error);
     }
@@ -385,23 +618,46 @@ export class StatisticsService {
     uniqueIPs: number;
     uniqueCountries: number;
     cacheSize: number;
+    lastSaved?: string;
+    dataFileSize?: number;
   } {
     const statsArray = Array.from(this.stats.values());
     const totalRequests = statsArray.reduce((sum, stat) => sum + stat.count, 0);
     const uniqueCountries = new Set(statsArray.map(stat => stat.geolocation?.country).filter(Boolean)).size;
 
-    return {
+    const summary: {
+      totalRequests: number;
+      uniqueIPs: number;
+      uniqueCountries: number;
+      cacheSize: number;
+      lastSaved?: string;
+      dataFileSize?: number;
+    } = {
       totalRequests,
       uniqueIPs: statsArray.length,
       uniqueCountries,
       cacheSize: this.stats.size,
     };
+
+    // Try to get file info
+    try {
+      const dataFile = path.join(this.dataDir, 'current-stats.json');
+      if (fs.existsSync(dataFile)) {
+        const stats = fs.statSync(dataFile);
+        summary.lastSaved = stats.mtime.toISOString();
+        summary.dataFileSize = stats.size;
+      }
+    } catch (error) {
+      // Ignore file errors
+    }
+
+    return summary;
   }
 
   /**
    * Shutdown the statistics service
    */
-  public shutdown(): void {
+  public async shutdown(): Promise<void> {
     this.isShuttingDown = true;
     
     if (this.reportInterval) {
@@ -409,10 +665,203 @@ export class StatisticsService {
       this.reportInterval = null;
     }
     
+    if (this.saveInterval) {
+      clearInterval(this.saveInterval);
+      this.saveInterval = null;
+    }
+    
+    // Save current statistics before shutting down
+    await this.saveStats();
+    
     // Generate final report
-    this.generateAndSaveReport();
+    await this.generateAndSaveReport();
     
     logger.info('Statistics service shutdown complete');
+  }
+
+  /**
+   * Force save current statistics (for manual backup)
+   */
+  public async forceSave(): Promise<void> {
+    await this.saveStats();
+    logger.info('Statistics force saved');
+  }
+
+  /**
+   * Generate statistics for a specific time period
+   */
+  public getTimePeriodStats(period: string): TimePeriodStats {
+    const now = new Date();
+    let startDate: Date;
+
+    switch (period) {
+      case '24h':
+        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        break;
+      case '7d':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case '30d':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case '90d':
+        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        break;
+      default:
+        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000); // Default to 24h
+    }
+
+    // Filter stats for the time period
+    const periodStats = Array.from(this.stats.values()).filter(stat => 
+      stat.lastSeen >= startDate
+    );
+
+    // Collect all route details from the period
+    const allRouteDetails = periodStats.flatMap(stat => 
+      stat.routeDetails.filter(detail => detail.timestamp >= startDate)
+    );
+
+    // Group by domain and target
+    const routeGroups = new Map<string, {
+      domain: string;
+      target: string;
+      requests: number;
+      responseTimes: number[];
+      countries: Map<string, { count: number; cities: Set<string> }>;
+      ips: Set<string>;
+      methods: Set<string>;
+    }>();
+
+    allRouteDetails.forEach(detail => {
+      const key = `${detail.domain}:${detail.target}`;
+      const existing = routeGroups.get(key);
+      
+      if (existing) {
+        existing.requests++;
+        existing.responseTimes.push(detail.responseTime);
+        existing.methods.add(detail.method);
+        
+        // Find the IP that made this request
+        const stat = periodStats.find(s => 
+          s.routeDetails.some(rd => 
+            rd.domain === detail.domain && 
+            rd.target === detail.target && 
+            rd.timestamp.getTime() === detail.timestamp.getTime()
+          )
+        );
+        
+        if (stat) {
+          existing.ips.add(stat.ip);
+          
+          if (stat.geolocation) {
+            const country = stat.geolocation.country || 'Unknown';
+            const city = stat.geolocation.city;
+            
+            const countryData = existing.countries.get(country);
+            if (countryData) {
+              countryData.count++;
+              if (city) countryData.cities.add(city);
+            } else {
+              existing.countries.set(country, {
+                count: 1,
+                cities: city ? new Set([city]) : new Set()
+              });
+            }
+          }
+        }
+      } else {
+        const countries = new Map<string, { count: number; cities: Set<string> }>();
+        const ips = new Set<string>();
+        const methods = new Set<string>([detail.method]);
+        
+        // Find the IP that made this request
+        const stat = periodStats.find(s => 
+          s.routeDetails.some(rd => 
+            rd.domain === detail.domain && 
+            rd.target === detail.target && 
+            rd.timestamp.getTime() === detail.timestamp.getTime()
+          )
+        );
+        
+        if (stat) {
+          ips.add(stat.ip);
+          
+          if (stat.geolocation) {
+            const country = stat.geolocation.country || 'Unknown';
+            const city = stat.geolocation.city;
+            
+            countries.set(country, {
+              count: 1,
+              cities: city ? new Set([city]) : new Set()
+            });
+          }
+        }
+        
+        routeGroups.set(key, {
+          domain: detail.domain,
+          target: detail.target,
+          requests: 1,
+          responseTimes: [detail.responseTime],
+          countries,
+          ips,
+          methods
+        });
+      }
+    });
+
+    // Convert to RouteStats format
+    const routes: RouteStats[] = Array.from(routeGroups.values()).map(route => {
+      const avgResponseTime = route.responseTimes.length > 0 
+        ? route.responseTimes.reduce((sum, time) => sum + time, 0) / route.responseTimes.length 
+        : 0;
+
+      const topCountries = Array.from(route.countries.entries())
+        .map(([country, data]) => ({
+          country,
+          count: data.count,
+          percentage: (data.count / route.requests) * 100,
+          city: data.cities.size > 0 ? Array.from(data.cities)[0] : undefined
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+
+      return {
+        domain: route.domain,
+        target: route.target,
+        requests: route.requests,
+        avgResponseTime,
+        topCountries,
+        uniqueIPs: route.ips.size,
+        methods: Array.from(route.methods)
+      };
+    });
+
+    // Sort routes by request count
+    routes.sort((a, b) => b.requests - a.requests);
+
+    // Calculate overall statistics
+    const totalRequests = routes.reduce((sum, route) => sum + route.requests, 0);
+    const uniqueCountries = new Set(
+      periodStats
+        .map(stat => stat.geolocation?.country)
+        .filter(Boolean)
+    ).size;
+    
+    const avgResponseTime = routes.length > 0 
+      ? routes.reduce((sum, route) => sum + route.avgResponseTime, 0) / routes.length 
+      : 0;
+
+    return {
+      totalRequests,
+      uniqueRoutes: routes.length,
+      uniqueCountries,
+      avgResponseTime,
+      routes,
+      period: {
+        start: startDate,
+        end: now
+      }
+    };
   }
 }
 

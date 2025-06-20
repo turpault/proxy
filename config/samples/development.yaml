@@ -1,0 +1,315 @@
+# Development Configuration
+# This example is optimized for development environments
+#
+# Features demonstrated:
+# - Development-friendly settings
+# - Hot reloading
+# - Debug logging
+# - Local development servers
+# - Development-specific CORS settings
+# - Staging Let's Encrypt
+
+# Server configuration (development ports)
+port: 4480        # Development HTTP port
+httpsPort: 4443   # Development HTTPS port
+managementPort: 4481  # Management interface
+
+# Let's Encrypt configuration (staging for development)
+letsEncrypt:
+  email: "dev@example.com"
+  staging: true   # Use staging environment to avoid rate limits
+  certDir: "./certificates-dev"
+
+# Process management configuration
+processManagement:
+  enabled: true
+  processConfigFile: "config/processes-dev.yaml"
+  autoStart: true
+  healthCheckInterval: 10000  # Faster health checks for development
+  restartAttempts: 5
+  restartDelay: 2000  # Faster restarts
+
+# Routes configuration
+routes:
+  # Example 1: React development server
+  - domain: "localhost"
+    path: "/react"
+    target: "http://localhost:3000"
+    process: "react-dev"
+    ssl: false  # No SSL for local development
+    cors:
+      enabled: true
+      origin: true  # Allow all origins in development
+      credentials: true
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+      allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
+      forwardHeaders: ["authorization"]
+
+  # Example 2: Vue.js development server
+  - domain: "localhost"
+    path: "/vue"
+    target: "http://localhost:8080"
+    process: "vue-dev"
+    ssl: false
+    cors: true
+
+  # Example 3: Node.js API development server
+  - domain: "localhost"
+    path: "/api"
+    target: "http://localhost:3001"
+    process: "node-api-dev"
+    ssl: false
+    cors:
+      enabled: true
+      origin: true
+      credentials: true
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+      allowedHeaders: ["Content-Type", "Authorization"]
+      forwardHeaders: ["authorization"]
+
+  # Example 4: Python Flask development server
+  - domain: "localhost"
+    path: "/flask"
+    target: "http://localhost:5000"
+    process: "flask-dev"
+    ssl: false
+    cors: true
+
+  # Example 5: Static file serving for development
+  - domain: "localhost"
+    type: "static"
+    path: "/static"
+    staticPath: "./public"
+    ssl: false
+    cors: true
+
+  # Example 6: Development API with hot reloading
+  - domain: "localhost"
+    path: "/dev-api"
+    target: "http://localhost:3002"
+    process: "dev-api"
+    ssl: false
+    cors:
+      enabled: true
+      origin: true
+      credentials: true
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+      allowedHeaders: ["Content-Type", "Authorization", "X-Dev-Token"]
+      forwardHeaders: ["authorization", "x-dev-token"]
+
+  # Example 7: WebSocket development server
+  - domain: "localhost"
+    path: "/ws"
+    target: "ws://localhost:3003"
+    process: "websocket-dev"
+    ssl: false
+    cors: true
+
+# Security configuration (relaxed for development)
+security:
+  # Rate limiting (higher limits for development)
+  rateLimitWindowMs: 900000  # 15 minutes
+  rateLimitMaxRequests: 1000  # Higher limit for development
+
+  # Content Security Policy (relaxed for development)
+  csp:
+    enabled: true
+    directives:
+      defaultSrc: ["'self'"]
+      scriptSrc: [
+        "'self'", 
+        "'unsafe-inline'", 
+        "'unsafe-eval'",  # Allow eval for development
+        "http://localhost:*",  # Allow localhost for development
+        "https://localhost:*"
+      ]
+      styleSrc: [
+        "'self'", 
+        "'unsafe-inline'",
+        "http://localhost:*",
+        "https://localhost:*"
+      ]
+      imgSrc: ["'self'", "data:", "https:", "http://localhost:*"]
+      connectSrc: [
+        "'self'",
+        "http://localhost:*",
+        "https://localhost:*",
+        "ws://localhost:*",
+        "wss://localhost:*"
+      ]
+      fontSrc: ["'self'", "data:", "http://localhost:*"]
+      objectSrc: ["'self'"]  # Allow objects for development
+      mediaSrc: ["'self'", "http://localhost:*"]
+      frameSrc: ["'self'", "http://localhost:*"]
+
+# Logging configuration (verbose for development)
+logging:
+  level: "debug"  # Debug level for development
+  file: "./logs/dev-proxy.log"
+
+# Statistics configuration
+statistics:
+  enabled: true
+  saveInterval: 60000   # Save stats every minute for development
+  maxEntries: 1000      # Fewer entries for development
+  geolocation: false    # Disable geolocation for development
+
+# Development Process Configuration (config/processes-dev.yaml)
+# This file defines development processes with hot reloading
+
+processes:
+  # React Development Server
+  react-dev:
+    enabled: true
+    name: "React Development Server"
+    description: "React development server with hot reloading"
+    command: "npm"
+    args: ["start"]
+    cwd: "./react-app"
+    env:
+      REACT_APP_API_URL: "http://localhost:4480/api"
+      REACT_APP_ENV: "development"
+      CHOKIDAR_USEPOLLING: "true"  # Better for some development environments
+    pidFile: "./pids/react-dev.pid"
+    logFile: "./logs/react-dev.log"
+    restartPolicy:
+      maxAttempts: 10  # More attempts for development
+      delay: 2000
+    healthCheck:
+      enabled: true
+      url: "http://localhost:3000"
+      interval: 10000  # Faster checks
+      timeout: 3000
+
+  # Vue.js Development Server
+  vue-dev:
+    enabled: true
+    name: "Vue.js Development Server"
+    description: "Vue.js development server with hot reloading"
+    command: "npm"
+    args: ["run", "serve"]
+    cwd: "./vue-app"
+    env:
+      VUE_APP_API_URL: "http://localhost:4480/api"
+      NODE_ENV: "development"
+    pidFile: "./pids/vue-dev.pid"
+    logFile: "./logs/vue-dev.log"
+    restartPolicy:
+      maxAttempts: 10
+      delay: 2000
+    healthCheck:
+      enabled: true
+      url: "http://localhost:8080"
+      interval: 10000
+      timeout: 3000
+
+  # Node.js API Development Server
+  node-api-dev:
+    enabled: true
+    name: "Node.js API Development Server"
+    description: "Node.js API server with nodemon for hot reloading"
+    command: "npx"
+    args: ["nodemon", "server.js"]
+    cwd: "./node-api"
+    env:
+      NODE_ENV: "development"
+      PORT: "3001"
+      DATABASE_URL: "postgresql://localhost/dev_db"
+      JWT_SECRET: "dev-secret-key"
+    pidFile: "./pids/node-api-dev.pid"
+    logFile: "./logs/node-api-dev.log"
+    restartPolicy:
+      maxAttempts: 10
+      delay: 2000
+    healthCheck:
+      enabled: true
+      url: "http://localhost:3001/health"
+      interval: 10000
+      timeout: 3000
+
+  # Python Flask Development Server
+  flask-dev:
+    enabled: true
+    name: "Flask Development Server"
+    description: "Flask development server with auto-reload"
+    command: "python"
+    args: ["-m", "flask", "run", "--host=0.0.0.0", "--port=5000", "--debug"]
+    cwd: "./flask-app"
+    env:
+      FLASK_APP: "app.py"
+      FLASK_ENV: "development"
+      FLASK_DEBUG: "1"
+      DATABASE_URL: "postgresql://localhost/flask_dev_db"
+      SECRET_KEY: "dev-secret-key"
+    pidFile: "./pids/flask-dev.pid"
+    logFile: "./logs/flask-dev.log"
+    restartPolicy:
+      maxAttempts: 10
+      delay: 2000
+    healthCheck:
+      enabled: true
+      url: "http://localhost:5000/health"
+      interval: 10000
+      timeout: 3000
+
+  # Development API Server
+  dev-api:
+    enabled: true
+    name: "Development API Server"
+    description: "Development API server with hot reloading"
+    command: "npx"
+    args: ["nodemon", "--watch", "src", "src/server.js"]
+    cwd: "./dev-api"
+    env:
+      NODE_ENV: "development"
+      PORT: "3002"
+      DEV_MODE: "true"
+      DEBUG: "*"
+    pidFile: "./pids/dev-api.pid"
+    logFile: "./logs/dev-api.log"
+    restartPolicy:
+      maxAttempts: 10
+      delay: 2000
+    healthCheck:
+      enabled: true
+      url: "http://localhost:3002/health"
+      interval: 10000
+      timeout: 3000
+
+  # WebSocket Development Server
+  websocket-dev:
+    enabled: true
+    name: "WebSocket Development Server"
+    description: "WebSocket server for development"
+    command: "npx"
+    args: ["nodemon", "websocket-server.js"]
+    cwd: "./websocket-app"
+    env:
+      NODE_ENV: "development"
+      PORT: "3003"
+      WS_PORT: "3003"
+    pidFile: "./pids/websocket-dev.pid"
+    logFile: "./logs/websocket-dev.log"
+    restartPolicy:
+      maxAttempts: 10
+      delay: 2000
+    healthCheck:
+      enabled: true
+      url: "http://localhost:3003/health"
+      interval: 10000
+      timeout: 3000
+
+# Development Environment Variables:
+# DATABASE_URL=postgresql://localhost/dev_db
+# JWT_SECRET=dev-secret-key
+# FLASK_DATABASE_URL=postgresql://localhost/flask_dev_db
+# FLASK_SECRET_KEY=dev-secret-key
+
+# Development Tips:
+# 1. Use staging Let's Encrypt to avoid rate limits
+# 2. Enable debug logging for troubleshooting
+# 3. Use faster health check intervals
+# 4. Allow more restart attempts
+# 5. Relax CSP for development tools
+# 6. Use localhost domains for local development
+# 7. Enable hot reloading with nodemon/npm scripts 

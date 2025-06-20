@@ -132,3 +132,6 @@ build/
 # Backup files
 *.bak
 *.backup 
+config/processes.yaml
+config/proxy.yaml
+config/processes.yaml

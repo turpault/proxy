@@ -1,0 +1,195 @@
+# Advanced CORS Proxy Configuration
+# This example demonstrates advanced CORS proxy functionality with custom header forwarding
+#
+# Features demonstrated:
+# - Advanced CORS configuration
+# - Custom header forwarding
+# - Multiple API endpoints
+# - Different CORS policies per route
+# - URL rewriting
+# - Dynamic target support
+
+# Server configuration
+port: 80
+httpsPort: 443
+managementPort: 4481
+
+# Let's Encrypt configuration
+letsEncrypt:
+  email: "admin@example.com"
+  staging: false
+  certDir: "./certificates"
+
+# Routes configuration
+routes:
+  # Example 1: REST API with full CORS support
+  - domain: "api.example.com"
+    path: "/rest"
+    target: "https://api.external-service.com"
+    ssl: true
+    cors:
+      enabled: true
+      origin: ["https://app.example.com", "http://localhost:3000"]
+      credentials: true
+      methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+      allowedHeaders: [
+        "Content-Type", 
+        "Authorization", 
+        "X-API-Key", 
+        "X-Requested-With",
+        "Accept",
+        "Origin"
+      ]
+      exposedHeaders: [
+        "X-RateLimit-Limit", 
+        "X-RateLimit-Remaining", 
+        "X-Total-Count"
+      ]
+      maxAge: 3600  # 1 hour preflight cache
+      # Forward specific headers from client to target
+      forwardHeaders: ["authorization", "x-api-key", "x-user-id"]
+    rewrite:
+      "^/rest/": "/"  # Remove /rest prefix when forwarding
+
+  # Example 2: Public API with minimal CORS
+  - domain: "public-api.example.com"
+    path: "/public"
+    target: "https://public-api.external.com"
+    ssl: true
+    cors:
+      enabled: true
+      origin: true  # Allow all origins
+      credentials: false  # No credentials for public API
+      methods: ["GET", "POST"]
+      allowedHeaders: ["Content-Type", "Authorization"]
+      # Only forward authorization header
+      forwardHeaders: ["authorization"]
+
+  # Example 3: Internal API with strict CORS
+  - domain: "internal.example.com"
+    path: "/internal"
+    target: "https://internal-api.company.com"
+    ssl: true
+    cors:
+      enabled: true
+      origin: ["https://internal.example.com"]  # Only internal domain
+      credentials: true
+      methods: ["GET", "POST", "PUT", "DELETE"]
+      allowedHeaders: [
+        "Content-Type", 
+        "Authorization", 
+        "X-Internal-Key",
+        "X-User-Role"
+      ]
+      # Forward internal authentication headers
+      forwardHeaders: [
+        "authorization", 
+        "x-internal-key", 
+        "x-user-role"
+      ]
+
+  # Example 4: Dynamic CORS proxy with URL parameter
+  - domain: "proxy.example.com"
+    path: "/dynamic"
+    target: "https://dynamic-target.com"  # Base target (can be overridden)
+    ssl: true
+    cors:
+      enabled: true
+      origin: ["https://app.example.com"]
+      credentials: true
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+      allowedHeaders: ["Content-Type", "Authorization", "X-API-Key"]
+      forwardHeaders: ["authorization", "x-api-key"]
+    # Dynamic target configuration
+    dynamicTarget:
+      enabled: true
+      allowedDomains: [
+        "api1.external.com",
+        "api2.external.com",
+        "*.external.com"  # Wildcard support
+      ]
+      httpsOnly: true
+      urlParameter: "target"  # Use ?target= parameter
+      timeouts:
+        request: 30000   # 30 seconds
+        proxy: 30000     # 30 seconds
+      logging:
+        logRequests: true
+        logBlocked: true
+        logErrors: true
+
+  # Example 5: File upload proxy with specific headers
+  - domain: "upload.example.com"
+    path: "/upload"
+    target: "https://upload-service.com"
+    ssl: true
+    cors:
+      enabled: true
+      origin: ["https://app.example.com"]
+      credentials: true
+      methods: ["POST", "PUT", "OPTIONS"]
+      allowedHeaders: [
+        "Content-Type", 
+        "Authorization", 
+        "X-Upload-Token",
+        "X-File-Name"
+      ]
+      exposedHeaders: ["X-Upload-ID", "X-Upload-Status"]
+      maxAge: 1800  # 30 minutes
+      # Forward upload-specific headers
+      forwardHeaders: [
+        "authorization", 
+        "x-upload-token", 
+        "x-file-name"
+      ]
+
+  # Example 6: WebSocket proxy with CORS
+  - domain: "ws.example.com"
+    path: "/ws"
+    target: "wss://websocket-service.com"
+    ssl: true
+    cors:
+      enabled: true
+      origin: ["https://app.example.com"]
+      credentials: true
+      methods: ["GET", "POST", "OPTIONS"]
+      allowedHeaders: ["Content-Type", "Authorization"]
+      forwardHeaders: ["authorization"]
+
+# Security configuration
+security:
+  # Rate limiting
+  rateLimitWindowMs: 900000  # 15 minutes
+  rateLimitMaxRequests: 1000  # Higher limit for API usage
+
+  # Global CSP configuration
+  csp:
+    enabled: true
+    directives:
+      defaultSrc: ["'self'"]
+      scriptSrc: ["'self'", "'unsafe-inline'"]
+      styleSrc: ["'self'", "'unsafe-inline'"]
+      imgSrc: ["'self'", "data:", "https:"]
+      connectSrc: [
+        "'self'",
+        "https://api.external-service.com",
+        "https://public-api.external.com",
+        "https://internal-api.company.com",
+        "wss://websocket-service.com"
+      ]
+      fontSrc: ["'self'", "data:"]
+      objectSrc: ["'none'"]
+      mediaSrc: ["'self'"]
+      frameSrc: ["'none'"]
+
+# Logging configuration
+logging:
+  level: "info"
+  file: "./logs/cors-proxy.log"
+
+# Statistics configuration
+statistics:
+  enabled: true
+  saveInterval: 300000  # 5 minutes
+  maxEntries: 10000
+  geolocation: true 

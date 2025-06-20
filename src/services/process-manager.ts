@@ -19,6 +19,8 @@ export interface ManagedProcess {
   logFilePath: string; // Track the log file path for this process
   isReconnected: boolean; // Whether this process was reconnected to an existing one
   processMonitor?: NodeJS.Timeout; // Change to NodeJS.Timeout
+  isStopped: boolean; // Whether this process has been manually stopped
+  isRemoved: boolean; // Whether this process has been removed from configuration
 }
 
 // Add function to monitor process by PID
@@ -381,6 +383,8 @@ export class ProcessManager {
       pidFilePath,
       logFilePath,
       isReconnected: false,
+      isStopped: false,
+      isRemoved: false,
     };
 
     this.processes.set(id, managedProcess);
@@ -389,6 +393,7 @@ export class ProcessManager {
       // Reconnect to existing process
       managedProcess.isRunning = true;
       managedProcess.isReconnected = true;
+      managedProcess.isStopped = false;
       managedProcess.startTime = new Date();
 
       // Set up process death monitoring
@@ -487,7 +492,8 @@ export class ProcessManager {
     // Do NOT remove PID file - preserve it for reconnection
 
     managedProcess.isRunning = false;
-    this.processes.delete(id);
+    managedProcess.isStopped = true;
+    // Keep the process in the Map instead of deleting it
 
     // Remove PID file
     await this.removePidFile(managedProcess.pidFilePath);
@@ -531,6 +537,7 @@ export class ProcessManager {
 
     // Reset reconnection state
     managedProcess.isReconnected = false;
+    managedProcess.isStopped = false;
 
     // Wait for restart delay
     const restartDelay = managedProcess.config.restartDelay || 1000;
@@ -595,9 +602,6 @@ export class ProcessManager {
           // Start with a clean environment, excluding proxy-specific variables
           ...Object.fromEntries(
             Object.entries(process.env).filter(([key]) => 
-              !key.startsWith('PROXY_') && 
-              !key.startsWith('LETSENCRYPT_') && 
-              !key.startsWith('BLACKBAUD_') &&
               key !== 'PORT' &&
               key !== 'HTTPS_PORT' &&
               key !== 'CONFIG_FILE' &&
@@ -715,6 +719,7 @@ export class ProcessManager {
       childProcess.on('spawn', async () => {
         managedProcess.process = childProcess;
         managedProcess.isRunning = true;
+        managedProcess.isStopped = false;
         managedProcess.startTime = new Date();
         
         // Write PID file
@@ -907,6 +912,17 @@ export class ProcessManager {
   }
 
   /**
+   * Mark a process as removed from configuration
+   */
+  markProcessAsRemoved(id: string): void {
+    const managedProcess = this.processes.get(id);
+    if (managedProcess) {
+      managedProcess.isRemoved = true;
+      logger.info(`Process ${id} marked as removed from configuration`);
+    }
+  }
+
+  /**
    * Get status of all managed processes
    */
   getProcessStatus(): Array<{
@@ -922,6 +938,8 @@ export class ProcessManager {
     lastRestartTime: Date | null;
     uptime?: number;
     healthCheckFailures: number;
+    isStopped: boolean;
+    isRemoved: boolean;
   }> {
     return Array.from(this.processes.values()).map(proc => ({
       id: proc.id,
@@ -936,6 +954,8 @@ export class ProcessManager {
       lastRestartTime: proc.lastRestartTime,
       uptime: proc.startTime ? Date.now() - proc.startTime.getTime() : undefined,
       healthCheckFailures: proc.healthCheckFailures,
+      isStopped: proc.isStopped,
+      isRemoved: proc.isRemoved,
     }));
   }
 

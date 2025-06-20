@@ -3,7 +3,7 @@ import { logger } from '../utils/logger';
 import { parseAnsiToHtml } from '../utils/ansi';
 
 export interface WebSocketMessage {
-  type: 'processes' | 'status' | 'logs' | 'error' | 'pong';
+  type: 'processes' | 'processes_update' | 'status' | 'logs' | 'error' | 'pong';
   data: any;
   timestamp: string;
 }
@@ -24,39 +24,72 @@ export class WebSocketService {
   }
 
   initialize(server: any): void {
-    this.wss = new WebSocketServer({ 
-      server,
-      path: '/ws/management'
-    });
+    try {
+      if (!server) {
+        logger.error('WebSocket initialization failed: server is null or undefined');
+        return;
+      }
 
-    this.wss.on('connection', (ws: WebSocket) => {
-      logger.info('WebSocket client connected');
-      this.clients.add(ws);
+      // Validate server object
+      if (typeof server !== 'object' || !server.listen) {
+        logger.error('WebSocket initialization failed: invalid server object');
+        return;
+      }
 
-      // Send initial data
-      this.sendInitialData(ws);
+      // Check if server is listening
+      if (!server.listening) {
+        logger.error('WebSocket initialization failed: server is not listening');
+        return;
+      }
 
-      ws.on('message', (message: string) => {
-        try {
-          const parsed = JSON.parse(message);
-          this.handleMessage(ws, parsed);
-        } catch (error) {
-          logger.error('Failed to parse WebSocket message', error);
-        }
+      this.wss = new WebSocketServer({ 
+        server,
+        path: '/ws'
       });
 
-      ws.on('close', () => {
-        logger.info('WebSocket client disconnected');
-        this.clients.delete(ws);
+      this.wss.on('connection', (ws: WebSocket) => {
+        logger.info('WebSocket client connected');
+        this.clients.add(ws);
+
+        // Send initial data
+        this.sendInitialData(ws);
+
+        ws.on('message', (message: Buffer | string) => {
+          try {
+            // Handle both Buffer and string message types
+            const messageStr = typeof message === 'string' ? message : message.toString('utf8');
+            const parsed = JSON.parse(messageStr);
+            this.handleMessage(ws, parsed);
+          } catch (error) {
+            logger.error('Failed to parse WebSocket message', error);
+            // Send error response to client
+            this.sendToClient(ws, {
+              type: 'error',
+              data: { message: 'Invalid message format' },
+              timestamp: new Date().toISOString()
+            });
+          }
+        });
+
+        ws.on('close', () => {
+          logger.info('WebSocket client disconnected');
+          this.clients.delete(ws);
+        });
+
+        ws.on('error', (error) => {
+          logger.error('WebSocket error', error);
+          this.clients.delete(ws);
+        });
       });
 
-      ws.on('error', (error) => {
-        logger.error('WebSocket error', error);
-        this.clients.delete(ws);
+      this.wss.on('error', (error) => {
+        logger.error('WebSocket server error', error);
       });
-    });
 
-    logger.info('WebSocket server initialized on /ws/management');
+      logger.info('WebSocket server initialized on /ws');
+    } catch (error) {
+      logger.error('Failed to initialize WebSocket server', error);
+    }
   }
 
   private async sendInitialData(ws: WebSocket): Promise<void> {
@@ -78,11 +111,14 @@ export class WebSocketService {
       });
     } catch (error) {
       logger.error('Failed to send initial data', error);
-      this.sendToClient(ws, {
-        type: 'error',
-        data: { message: 'Failed to load initial data' },
-        timestamp: new Date().toISOString()
-      });
+      // Only send error if connection is still open
+      if (ws.readyState === WebSocket.OPEN) {
+        this.sendToClient(ws, {
+          type: 'error',
+          data: { message: 'Failed to load initial data' },
+          timestamp: new Date().toISOString()
+        });
+      }
     }
   }
 
@@ -119,25 +155,40 @@ export class WebSocketService {
   }
 
   private sendToClient(ws: WebSocket, message: WebSocketMessage): void {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(message));
+    try {
+      if (ws.readyState === WebSocket.OPEN) {
+        const messageStr = JSON.stringify(message);
+        ws.send(messageStr);
+      }
+    } catch (error) {
+      logger.error('Failed to send message to WebSocket client', error);
     }
   }
 
   // Broadcast to all connected clients
   broadcast(message: WebSocketMessage): void {
-    const messageStr = JSON.stringify(message);
-    this.clients.forEach(client => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(messageStr);
-      }
-    });
+    try {
+      const messageStr = JSON.stringify(message);
+      this.clients.forEach(client => {
+        try {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(messageStr);
+          }
+        } catch (error) {
+          logger.error('Failed to send broadcast message to client', error);
+          // Remove problematic client
+          this.clients.delete(client);
+        }
+      });
+    } catch (error) {
+      logger.error('Failed to broadcast message', error);
+    }
   }
 
   // Broadcast process updates
   broadcastProcessUpdate(processes: any[]): void {
     this.broadcast({
-      type: 'processes',
+      type: 'processes_update',
       data: processes,
       timestamp: new Date().toISOString()
     });
@@ -169,14 +220,22 @@ export class WebSocketService {
 
   // Close all connections
   close(): void {
-    this.clients.forEach(client => {
-      client.close();
-    });
-    this.clients.clear();
-    
-    if (this.wss) {
-      this.wss.close();
-      this.wss = null;
+    try {
+      this.clients.forEach(client => {
+        try {
+          client.close();
+        } catch (error) {
+          logger.error('Error closing WebSocket client', error);
+        }
+      });
+      this.clients.clear();
+      
+      if (this.wss) {
+        this.wss.close();
+        this.wss = null;
+      }
+    } catch (error) {
+      logger.error('Error closing WebSocket service', error);
     }
   }
 } 

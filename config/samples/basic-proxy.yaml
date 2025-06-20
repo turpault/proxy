@@ -1,0 +1,80 @@
+# Basic Proxy Server Configuration
+# This is a simple example showing basic reverse proxy functionality
+# 
+# Features demonstrated:
+# - Basic reverse proxy routing
+# - SSL certificate management
+# - Simple CORS configuration
+# - Static file serving
+
+# Server ports configuration
+port: 80          # HTTP port (redirects to HTTPS)
+httpsPort: 443    # HTTPS port (main server)
+managementPort: 4481  # Management interface port
+
+# Let's Encrypt SSL certificate configuration
+letsEncrypt:
+  email: "admin@example.com"  # Contact email for certificate notifications
+  staging: false              # Set to true for testing (avoids rate limits)
+  certDir: "./certificates"   # Directory to store certificates
+
+# Proxy routes configuration
+routes:
+  # Example 1: Basic API proxy
+  - domain: "api.example.com"
+    target: "http://localhost:3000"  # Backend API server
+    ssl: true                        # Enable SSL certificate
+    cors: true                       # Enable CORS (simple configuration)
+
+  # Example 2: Static file serving
+  - domain: "static.example.com"
+    type: "static"                   # Serve static files
+    path: "/files"                   # URL path prefix
+    staticPath: "/var/www/static"    # Local filesystem path
+    ssl: true
+    cors: true
+
+  # Example 3: Path-based routing
+  - domain: "app.example.com"
+    path: "/api"                     # Route /api/* to backend
+    target: "http://localhost:3001"
+    ssl: true
+    cors: true
+
+  # Example 4: Redirect example
+  - domain: "www.example.com"
+    type: "redirect"
+    redirectTo: "https://example.com"  # Redirect www to non-www
+    ssl: true
+
+# Logging configuration
+logging:
+  level: "info"                     # Log level: debug, info, warn, error
+  file: "./logs/proxy.log"          # Log file path
+
+# Security configuration
+security:
+  # Rate limiting
+  rateLimitWindowMs: 900000         # 15 minutes
+  rateLimitMaxRequests: 100         # Max requests per window
+
+  # Content Security Policy
+  csp:
+    enabled: true
+    directives:
+      defaultSrc: ["'self'"]
+      scriptSrc: ["'self'", "'unsafe-inline'"]
+      styleSrc: ["'self'", "'unsafe-inline'"]
+      imgSrc: ["'self'", "data:", "https:"]
+      connectSrc: ["'self'"]
+      fontSrc: ["'self'", "data:"]
+      objectSrc: ["'none'"]
+      mediaSrc: ["'self'"]
+      frameSrc: ["'none'"]
+
+# Statistics and monitoring
+statistics:
+  enabled: true
+  saveInterval: 300000              # Save stats every 5 minutes
+  maxEntries: 10000                 # Maximum entries to keep
+  geolocation: true                 # Enable IP geolocation tracking 

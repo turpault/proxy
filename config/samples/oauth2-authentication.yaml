@@ -1,0 +1,230 @@
+# OAuth2 Authentication Configuration
+# This example demonstrates OAuth2 authentication integration with the proxy server
+#
+# Features demonstrated:
+# - OAuth2 provider integration
+# - Session management
+# - Route protection
+# - Public path configuration
+# - CSP headers for OAuth flows
+# - Multiple OAuth providers
+
+# Server configuration
+port: 80
+httpsPort: 443
+managementPort: 4481
+
+# Let's Encrypt configuration
+letsEncrypt:
+  email: "admin@example.com"
+  staging: false
+  certDir: "./certificates"
+
+# Routes configuration
+routes:
+  # Example 1: Google OAuth2 protected application
+  - domain: "app.example.com"
+    type: "static"
+    path: "/google-app"
+    staticPath: "/var/www/google-app/build"
+    spaFallback: true  # Enable SPA routing
+    ssl: true
+    requireAuth: true  # Require authentication
+    oauth2:
+      enabled: true
+      provider: "google"
+      clientId: "${GOOGLE_CLIENT_ID}"
+      clientSecret: "${GOOGLE_CLIENT_SECRET}"
+      authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth"
+      tokenEndpoint: "https://oauth2.googleapis.com/token"
+      callbackUrl: "https://app.example.com/google-app/oauth/callback"
+      scopes: ["openid", "profile", "email"]
+      pkce: true  # Enable PKCE for enhanced security
+    # Public paths that don't require authentication
+    publicPaths:
+      - "/oauth/callback"
+      - "/oauth/session"
+      - "/oauth/logout"
+      - "/login"
+      - "/static"
+      - "/assets"
+
+  # Example 2: GitHub OAuth2 protected API
+  - domain: "api.example.com"
+    path: "/github-api"
+    target: "http://localhost:3001"
+    ssl: true
+    requireAuth: true
+    oauth2:
+      enabled: true
+      provider: "github"
+      clientId: "${GITHUB_CLIENT_ID}"
+      clientSecret: "${GITHUB_CLIENT_SECRET}"
+      authorizationEndpoint: "https://github.com/login/oauth/authorize"
+      tokenEndpoint: "https://github.com/login/oauth/access_token"
+      callbackUrl: "https://api.example.com/github-api/oauth/callback"
+      scopes: ["read:user", "user:email"]
+      pkce: false  # GitHub doesn't support PKCE
+    publicPaths:
+      - "/oauth/callback"
+      - "/oauth/session"
+      - "/health"
+    cors:
+      enabled: true
+      origin: ["https://app.example.com"]
+      credentials: true
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+      allowedHeaders: ["Content-Type", "Authorization"]
+      forwardHeaders: ["authorization"]
+
+  # Example 3: Custom OAuth2 provider with subscription key
+  - domain: "enterprise.example.com"
+    type: "static"
+    path: "/enterprise-app"
+    staticPath: "/var/www/enterprise-app/build"
+    spaFallback: true
+    ssl: true
+    requireAuth: true
+    oauth2:
+      enabled: true
+      provider: "enterprise"
+      clientId: "${ENTERPRISE_CLIENT_ID}"
+      clientSecret: "${ENTERPRISE_CLIENT_SECRET}"
+      authorizationEndpoint: "https://auth.enterprise.com/oauth/authorize"
+      tokenEndpoint: "https://auth.enterprise.com/oauth/token"
+      callbackUrl: "https://enterprise.example.com/enterprise-app/oauth/callback"
+      scopes: ["read", "write"]
+      pkce: true
+      # Additional OAuth2 parameters
+      additionalParams:
+        response_mode: "form_post"
+        prompt: "login"
+      # API subscription key for enterprise APIs
+      subscriptionKey: "${ENTERPRISE_SUBSCRIPTION_KEY}"
+      subscriptionKeyHeader: "X-Enterprise-Key"
+    publicPaths:
+      - "/oauth/callback"
+      - "/oauth/session"
+      - "/oauth/logout"
+      - "/static"
+    # Route-specific CSP for enterprise OAuth
+    csp:
+      enabled: true
+      directives:
+        defaultSrc: ["'self'"]
+        scriptSrc: ["'self'", "'unsafe-inline'"]
+        styleSrc: ["'self'", "'unsafe-inline'"]
+        imgSrc: ["'self'", "data:", "https:"]
+        connectSrc: [
+          "'self'",
+          "https://auth.enterprise.com",
+          "https://api.enterprise.com"
+        ]
+        fontSrc: ["'self'", "data:"]
+        objectSrc: ["'none'"]
+        mediaSrc: ["'self'"]
+        frameSrc: ["'none'"]
+
+  # Example 4: OAuth2 protected API with custom headers
+  - domain: "secure-api.example.com"
+    path: "/secure"
+    target: "http://localhost:3002"
+    ssl: true
+    requireAuth: true
+    oauth2:
+      enabled: true
+      provider: "secure"
+      clientId: "${SECURE_CLIENT_ID}"
+      clientSecret: "${SECURE_CLIENT_SECRET}"
+      authorizationEndpoint: "https://secure-auth.com/oauth/authorize"
+      tokenEndpoint: "https://secure-auth.com/oauth/token"
+      callbackUrl: "https://secure-api.example.com/secure/oauth/callback"
+      scopes: ["api:read", "api:write"]
+      pkce: true
+    publicPaths:
+      - "/oauth/callback"
+      - "/oauth/session"
+      - "/health"
+    cors:
+      enabled: true
+      origin: ["https://app.example.com"]
+      credentials: true
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+      allowedHeaders: [
+        "Content-Type", 
+        "Authorization", 
+        "X-API-Key",
+        "X-User-Role"
+      ]
+      # Forward OAuth token and custom headers
+      forwardHeaders: [
+        "authorization", 
+        "x-api-key", 
+        "x-user-role"
+      ]
+
+  # Example 5: Public API (no OAuth2 required)
+  - domain: "public-api.example.com"
+    path: "/public"
+    target: "http://localhost:3003"
+    ssl: true
+    # No requireAuth or oauth2 - public access
+    cors:
+      enabled: true
+      origin: true  # Allow all origins
+      credentials: false
+      methods: ["GET", "POST"]
+      allowedHeaders: ["Content-Type"]
+      forwardHeaders: []  # No headers forwarded for public API
+
+# Security configuration
+security:
+  # Rate limiting
+  rateLimitWindowMs: 900000  # 15 minutes
+  rateLimitMaxRequests: 100
+
+  # Global CSP configuration
+  csp:
+    enabled: true
+    directives:
+      defaultSrc: ["'self'"]
+      scriptSrc: ["'self'", "'unsafe-inline'"]
+      styleSrc: ["'self'", "'unsafe-inline'"]
+      imgSrc: ["'self'", "data:", "https:"]
+      connectSrc: [
+        "'self'",
+        "https://accounts.google.com",
+        "https://oauth2.googleapis.com",
+        "https://github.com",
+        "https://api.github.com",
+        "https://auth.enterprise.com",
+        "https://api.enterprise.com",
+        "https://secure-auth.com"
+      ]
+      fontSrc: ["'self'", "data:"]
+      objectSrc: ["'none'"]
+      mediaSrc: ["'self'"]
+      frameSrc: ["'none'"]
+
+# Logging configuration
+logging:
+  level: "info"
+  file: "./logs/oauth2-proxy.log"
+
+# Statistics configuration
+statistics:
+  enabled: true
+  saveInterval: 300000  # 5 minutes
+  maxEntries: 10000
+  geolocation: true
+
+# Environment Variables Required:
+# GOOGLE_CLIENT_ID=your_google_client_id
+# GOOGLE_CLIENT_SECRET=your_google_client_secret
+# GITHUB_CLIENT_ID=your_github_client_id
+# GITHUB_CLIENT_SECRET=your_github_client_secret
+# ENTERPRISE_CLIENT_ID=your_enterprise_client_id
+# ENTERPRISE_CLIENT_SECRET=your_enterprise_client_secret
+# ENTERPRISE_SUBSCRIPTION_KEY=your_enterprise_subscription_key
+# SECURE_CLIENT_ID=your_secure_client_id
+# SECURE_CLIENT_SECRET=your_secure_client_secret 

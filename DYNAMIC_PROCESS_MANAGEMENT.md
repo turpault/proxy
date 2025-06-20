@@ -1,334 +1,394 @@
 # Dynamic Process Management
 
-The proxy server now supports dynamic process management with file watching and hot reloading capabilities. This allows you to modify process configurations without restarting the entire proxy server.
+The proxy server supports dynamic process management with hot reloading capabilities, allowing you to modify process configurations without restarting the entire server.
 
 ## Features
 
-### 🔄 Hot Reloading
-- **File Watching**: Automatically monitors `processes.yaml` for changes
-- **Live Updates**: Processes are started, stopped, or restarted based on configuration changes
-- **Debounced Updates**: Prevents rapid-fire updates with 2-second debouncing
-- **Configuration Validation**: Validates changes before applying them
+- **🔄 Hot Reloading**: Automatically reload process configurations when files change
+- **📁 File Watching**: Real-time monitoring of `processes.yaml` for changes
+- **⚡ Live Updates**: Processes are started, stopped, or restarted based on configuration changes
+- **🛡️ Validation**: Configuration changes are validated before applying
+- **⏱️ Debouncing**: Prevents rapid-fire updates with configurable debouncing
+- **🎛️ Manual Control**: Force reload configuration via API endpoint
 
-### 📁 Independent Configuration Loading
-- **Separate File**: Process configuration is loaded from `config/processes.yaml`
-- **Dynamic Loading**: Configuration is loaded independently of the main proxy config
-- **File Watching**: Real-time monitoring of configuration file changes
-- **Error Handling**: Graceful handling of invalid configurations
+## How It Works
 
-### 🎛️ Management API
-- **Manual Reload**: Force reload configuration via API endpoint
-- **Process Status**: Real-time status of all managed processes
-- **Individual Control**: Start, stop, restart individual processes
-- **Log Access**: View process logs through the management interface
+### File Watching
+
+The system uses Node.js `fs.watchFile()` to monitor the `processes.yaml` file for changes:
+
+```typescript
+// Automatic file watching
+fs.watchFile(processConfigPath, { interval: 1000 }, (curr, prev) => {
+  if (curr.mtime > prev.mtime) {
+    // Configuration file changed
+    handleConfigChange();
+  }
+});
+```
+
+### Configuration Validation
+
+Before applying changes, the new configuration is validated:
+
+```typescript
+try {
+  const newConfig = loadProcessConfig();
+  validateProcessConfig(newConfig);
+  applyProcessChanges(newConfig);
+} catch (error) {
+  logger.error('Invalid process configuration:', error);
+  // Continue with existing configuration
+}
+```
+
+### Debounced Updates
+
+To prevent multiple rapid updates, changes are debounced:
+
+```typescript
+let reloadTimeout: NodeJS.Timeout | null = null;
+
+function handleConfigChange() {
+  if (reloadTimeout) {
+    clearTimeout(reloadTimeout);
+  }
+  
+  reloadTimeout = setTimeout(() => {
+    reloadProcessConfiguration();
+    reloadTimeout = null;
+  }, 2000); // 2-second debounce
+}
+```
 
 ## Configuration
 
-### Main Proxy Configuration
+### Enable Dynamic Process Management
 
-In your `config/proxy.yaml`, specify the process configuration file:
+In your `config/proxy.yaml`:
 
 ```yaml
-# Process management configuration file (independent of routes)
-processConfigFile: "./config/processes.yaml"
+# Process management configuration
+processManagement:
+  enabled: true
+  processConfigFile: "config/processes.yaml"
+  autoStart: true
+  healthCheckInterval: 30000
+  restartAttempts: 3
+  # Dynamic reloading settings
+  watchConfig: true           # Enable file watching (default: true)
+  reloadDebounceMs: 2000      # Debounce time in milliseconds (default: 2000)
+  validateOnReload: true      # Validate configuration before applying (default: true)
 ```
 
 ### Process Configuration File
 
-The `config/processes.yaml` file is watched for changes:
+The `config/processes.yaml` file is monitored for changes:
 
 ```yaml
 # Process Management Configuration
 processes:
-  bds-server:
+  # Example Server 1
+  example-server-1:
     enabled: true
-    command: "npm"
-    args: ["start", "--", "--config", "/path/to/config"]
-    cwd: "../bdreader-server"
+    name: "Example Server 1"
+    description: "First example application server"
+    command: "node"
+    args: ["index.ts","--config","/path/to/example-config-1"]
+    cwd: "/path/to/example-app-1"
     env:
       NODE_ENV: "production"
-      PORT: "8888"
-    restartOnExit: true
-    restartDelay: 2000
-    maxRestarts: 10
+      PORT: "3001"
+    pidFile: "./pids/example-server-1.pid"
+    logFile: "./logs/example-server-1.log"
+    restartPolicy:
+      maxAttempts: 3
+      delay: 5000
     healthCheck:
       enabled: true
-      path: "http://localhost:8888/health"
+      url: "http://localhost:3001/health"
       interval: 30000
       timeout: 5000
-      retries: 3
 
-  photos-server:
+  # Example Server 2
+  example-server-2:
     enabled: true
-    command: "npm"
-    args: ["start", "--", "--config", "/path/to/photos-config"]
-    cwd: "../bdreader-server"
+    name: "Example Server 2"
+    description: "Second example application server"
+    command: "node"
+    args: ["index.ts","--config","/path/to/example-config-2"]
+    cwd: "/path/to/example-app-2"
     env:
       NODE_ENV: "production"
-      PORT: "8892"
-    restartOnExit: true
-    restartDelay: 2000
-    maxRestarts: 10
+      PORT: "3002"
+    pidFile: "./pids/example-server-2.pid"
+    logFile: "./logs/example-server-2.log"
+    restartPolicy:
+      maxAttempts: 3
+      delay: 5000
+    healthCheck:
+      enabled: true
+      url: "http://localhost:3002/health"
+      interval: 30000
+      timeout: 5000
 
-# Global settings
-settings:
-  defaultHealthCheck:
+  # Example Server 3
+  example-server-3:
     enabled: true
-    interval: 30000
-    timeout: 5000
-    retries: 3
-  defaultRestart:
-    restartOnExit: true
-    restartDelay: 2000
-    maxRestarts: 10
-  pidManagement:
-    defaultPidDir: "./pids"
-    cleanupPidOnExit: true
-  logging:
-    logProcessOutput: true
-    logHealthChecks: false
-    logRestarts: true
-```
-
-## Dynamic Updates
-
-### Automatic File Watching
-
-The proxy server automatically watches the `processes.yaml` file for changes:
-
-1. **File Change Detection**: Uses Node.js `fs.watch()` to monitor the file
-2. **Debounced Updates**: Waits 2 seconds after the last change before processing
-3. **Configuration Validation**: Validates the new configuration before applying
-4. **Process Management**: Starts, stops, or restarts processes as needed
-
-### Update Scenarios
-
-#### Adding a New Process
-```yaml
-# Add to processes.yaml
-processes:
-  new-service:
-    enabled: true
+    name: "Example Server 3"
+    description: "Third example application server"
     command: "node"
-    args: ["server.js"]
-    cwd: "./new-service"
+    args: ["index.ts","--config","/path/to/example-config-3"]
+    cwd: "/path/to/example-app-3"
     env:
-      PORT: "3000"
+      NODE_ENV: "production"
+      PORT: "3003"
+    pidFile: "./pids/example-server-3.pid"
+    logFile: "./logs/example-server-3.log"
+    restartPolicy:
+      maxAttempts: 3
+      delay: 5000
+    healthCheck:
+      enabled: true
+      url: "http://localhost:3003/health"
+      interval: 30000
+      timeout: 5000
 ```
 
-**Result**: The new process is automatically started.
-
-#### Removing a Process
-```yaml
-# Remove from processes.yaml or set enabled: false
-processes:
-  old-service:
-    enabled: false  # or remove entirely
-```
-
-**Result**: The process is automatically stopped.
-
-#### Modifying Process Configuration
-```yaml
-# Change any configuration
-processes:
-  existing-service:
-    command: "npm"  # Changed from "node"
-    args: ["start"]  # Changed arguments
-    env:
-      PORT: "3001"  # Changed port
-```
-
-**Result**: The process is automatically restarted with the new configuration.
-
-#### Disabling Process Management
-```yaml
-# Set enabled: false for a process
-processes:
-  some-service:
-    enabled: false
-```
-
-**Result**: The process is stopped and won't be restarted.
-
-## Management API
+## API Endpoints
 
 ### Manual Configuration Reload
 
-Force a reload of the process configuration:
+Force a configuration reload:
 
-```http
+```bash
 POST /api/processes/reload
 ```
 
-**Response:**
+Response:
 ```json
 {
   "success": true,
-  "message": "Process configuration reloaded successfully"
+  "message": "Process configuration reloaded successfully",
+  "timestamp": "2024-01-01T12:00:00.000Z",
+  "changes": {
+    "added": ["example-server-4"],
+    "removed": ["example-server-3"],
+    "modified": ["example-server-1"]
+  }
 }
 ```
 
-### Process Status
+### Get Configuration Status
 
-Get the current status of all processes:
+Check the current configuration status:
 
-```http
-GET /api/processes
+```bash
+GET /api/processes/config/status
 ```
 
-**Response:**
+Response:
 ```json
 {
-  "success": true,
-  "data": [
-    {
-      "id": "bds-server",
-      "enabled": true,
-      "command": "npm",
-      "args": ["start", "--", "--config", "/path/to/config"],
-      "isRunning": true,
-      "pid": 12345,
-      "restartCount": 0,
-      "startTime": "2024-01-01T12:00:00.000Z",
-      "uptime": 3600000,
-      "healthCheckFailures": 0,
-      "pidFile": "./pids/bds-server.pid",
-      "logFile": "./pids/bds-server.log"
-    }
-  ]
+  "configFile": "/path/to/config/processes.yaml",
+  "lastModified": "2024-01-01T12:00:00.000Z",
+  "lastReloaded": "2024-01-01T12:00:00.000Z",
+  "watching": true,
+  "valid": true,
+  "processes": {
+    "total": 3,
+    "enabled": 2,
+    "running": 2
+  }
 }
 ```
 
-### Individual Process Control
+## Logging
 
-Start, stop, or restart individual processes:
+Dynamic process management provides detailed logging:
 
-```http
-POST /api/processes/{processId}/start
-POST /api/processes/{processId}/stop
-POST /api/processes/{processId}/restart
+```
+[2024-01-01T12:00:00.000Z] info: Process configuration file changed: /path/to/config/processes.yaml
+[2024-01-01T12:00:00.500Z] info: Validating new process configuration...
+[2024-01-01T12:00:00.600Z] info: New configuration is valid
+[2024-01-01T12:00:00.700Z] info: Stopping process: example-server-3
+[2024-01-01T12:00:01.800Z] info: Starting process: example-server-4
+[2024-01-01T12:00:02.900Z] info: Process configuration reloaded successfully
 ```
 
-## File Watching Behavior
+## Error Handling
 
-### Debouncing
-- **Purpose**: Prevents multiple rapid updates when editing files
-- **Delay**: 2 seconds after the last file change
-- **Benefit**: Ensures stable configuration updates
+### Invalid Configuration
 
-### Error Handling
-- **Invalid Configuration**: Changes are ignored, error logged
-- **File Access Issues**: Watcher continues, error logged
-- **Process Failures**: Individual process failures don't affect others
+If the new configuration is invalid, the system continues with the existing configuration:
 
-### Logging
-- **File Changes**: Logged when configuration file is modified
-- **Update Processing**: Logged when applying configuration changes
-- **Process Actions**: Logged when starting, stopping, or restarting processes
-
-## Example Workflow
-
-### 1. Initial Setup
-```bash
-# Start the proxy server
-npm start
+```
+[2024-01-01T12:00:00.000Z] error: Invalid process configuration: Missing required field 'command' for process 'example-server-4'
+[2024-01-01T12:00:00.100Z] warn: Keeping existing process configuration due to validation errors
 ```
 
-### 2. Add a New Process
-Edit `config/processes.yaml`:
-```yaml
-processes:
-  new-api:
-    enabled: true
-    command: "node"
-    args: ["api-server.js"]
-    cwd: "./api"
-    env:
-      PORT: "3000"
+### File Access Errors
+
+If the configuration file cannot be read:
+
 ```
-
-**Result**: The new API process is automatically started.
-
-### 3. Modify Process Configuration
-Edit `config/processes.yaml`:
-```yaml
-processes:
-  new-api:
-    enabled: true
-    command: "node"
-    args: ["api-server.js"]
-    cwd: "./api"
-    env:
-      PORT: "3001"  # Changed port
-    healthCheck:
-      enabled: true
-      path: "/health"
+[2024-01-01T12:00:00.000Z] error: Failed to read process configuration file: ENOENT: no such file or directory
+[2024-01-01T12:00:00.100Z] warn: Process configuration file not found, using default configuration
 ```
-
-**Result**: The API process is automatically restarted with the new configuration.
-
-### 4. Disable a Process
-Edit `config/processes.yaml`:
-```yaml
-processes:
-  new-api:
-    enabled: false  # Disabled
-```
-
-**Result**: The API process is automatically stopped.
-
-### 5. Manual Reload
-```bash
-curl -X POST http://localhost:4481/api/processes/reload
-```
-
-**Result**: Configuration is manually reloaded and processes updated.
 
 ## Best Practices
 
-### 1. Configuration Management
-- **Version Control**: Keep `processes.yaml` in version control
-- **Backup**: Maintain backup configurations
-- **Testing**: Test configuration changes in development first
+### 1. Configuration Validation
 
-### 2. Process Design
-- **Health Checks**: Implement health check endpoints in your applications
-- **Graceful Shutdown**: Handle SIGTERM signals properly
-- **Logging**: Use structured logging for better monitoring
+Always validate your configuration before saving:
 
-### 3. Monitoring
-- **Process Status**: Regularly check process status via API
-- **Log Monitoring**: Monitor process logs for issues
-- **Health Checks**: Ensure health check endpoints are working
+```yaml
+# Good: Complete configuration
+example-server:
+  enabled: true
+  name: "Example Server"
+  command: "node"
+  args: ["index.js"]
+  cwd: "./app"
+  env:
+    NODE_ENV: "production"
+  healthCheck:
+    enabled: true
+    url: "http://localhost:3000/health"
 
-### 4. Security
-- **File Permissions**: Restrict access to `processes.yaml`
-- **Network Access**: Limit access to management API
-- **Process Isolation**: Run processes with appropriate permissions
+# Bad: Missing required fields
+example-server:
+  enabled: true
+  # Missing 'command' field
+  args: ["index.js"]
+```
+
+### 2. Gradual Changes
+
+Make changes incrementally to avoid disrupting running services:
+
+```yaml
+# Step 1: Add new process
+example-server-4:
+  enabled: false  # Start disabled
+  name: "Example Server 4"
+  command: "node"
+  args: ["index.js"]
+
+# Step 2: Enable after testing
+example-server-4:
+  enabled: true   # Enable after validation
+  name: "Example Server 4"
+  command: "node"
+  args: ["index.js"]
+```
+
+### 3. Backup Configuration
+
+Keep a backup of your working configuration:
+
+```bash
+# Create backup before making changes
+cp config/processes.yaml config/processes.yaml.backup
+
+# Restore if needed
+cp config/processes.yaml.backup config/processes.yaml
+```
+
+## Example Workflows
+
+### Adding a New Process
+
+1. **Edit the configuration file:**
+   ```yaml
+   example-server-4:
+     enabled: true
+     name: "Example Server 4"
+     command: "node"
+     args: ["index.js"]
+     cwd: "./app4"
+   ```
+
+2. **Save the file** - the process will be automatically started
+
+3. **Monitor the logs** to ensure successful startup
+
+### Modifying an Existing Process
+
+1. **Edit the configuration file:**
+   ```yaml
+   example-server-1:
+     # ... existing configuration
+     env:
+       NODE_ENV: "production"
+       PORT: "3001"
+       DEBUG: "true"  # Add new environment variable
+   ```
+
+2. **Save the file** - the process will be restarted with new configuration
+
+### Removing a Process
+
+1. **Edit the configuration file** and remove the process entry
+2. **Save the file** - the process will be automatically stopped
 
 ## Troubleshooting
 
-### Process Won't Start
-- Check command and arguments
-- Verify working directory exists
-- Ensure environment variables are set
-- Check process logs
+### Configuration Not Reloading
 
-### Configuration Not Updating
-- Verify file path is correct
-- Check file permissions
-- Look for configuration validation errors
-- Use manual reload endpoint
+1. **Check file permissions:**
+   ```bash
+   ls -la config/processes.yaml
+   ```
 
-### File Watching Issues
-- Check if file system supports watching
-- Verify file path is absolute
-- Look for file system errors in logs
-- Restart proxy server if needed
+2. **Verify file watching is enabled:**
+   ```bash
+   GET /api/processes/config/status
+   ```
 
-### Process Restart Loops
-- Check health check configuration
-- Verify target service is responding
-- Review restart limits and delays
-- Check process logs for errors 
+3. **Check logs for errors:**
+   ```bash
+   tail -f logs/proxy.log | grep "process"
+   ```
+
+### Processes Not Starting
+
+1. **Validate configuration:**
+   ```bash
+   POST /api/processes/reload
+   ```
+
+2. **Check process logs:**
+   ```bash
+   GET /api/processes/{id}/logs
+   ```
+
+3. **Verify dependencies and paths**
+
+### Performance Issues
+
+1. **Increase debounce time:**
+   ```yaml
+   processManagement:
+     reloadDebounceMs: 5000  # 5 seconds
+   ```
+
+2. **Disable validation for development:**
+   ```yaml
+   processManagement:
+     validateOnReload: false
+   ```
+
+## Limitations
+
+- **File System Events**: Relies on file system events which may not be 100% reliable on all systems
+- **Configuration Validation**: Invalid configurations will not be applied
+- **Process Dependencies**: No support for process dependencies or startup order
+- **Rollback**: No automatic rollback to previous configuration on failure
+
+## Security Considerations
+
+- **File Permissions**: Ensure the configuration file has appropriate permissions
+- **Validation**: Always validate configuration changes before applying
+- **Backup**: Keep backups of working configurations
+- **Monitoring**: Monitor process behavior after configuration changes 

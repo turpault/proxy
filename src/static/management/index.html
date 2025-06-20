@@ -5,6 +5,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Proxy Server Management</title>
+  <!-- ECharts CDN for world map heatmap -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/extension/dataTool.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/extension/bmap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/extension/world.js"></script>
   <style>
     * {
       margin: 0;
@@ -20,9 +25,51 @@
     }
 
     .container {
-      max-width: 1200px;
+      max-width: 1400px;
       margin: 0 auto;
       padding: 20px;
+    }
+
+    /* Tab bar styles */
+    .tab-bar {
+      display: flex;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 8px 8px 0 0;
+      overflow: hidden;
+      margin-bottom: 2rem;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.08);
+    }
+    
+    .tab {
+      flex: 1;
+      padding: 1.2rem 0;
+      text-align: center;
+      color: #fff;
+      font-size: 1.2rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: none;
+      border: none;
+      outline: none;
+      transition: background 0.2s, color 0.2s;
+    }
+    
+    .tab.active {
+      background: rgba(255,255,255,0.15);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    
+    .tab:not(.active):hover {
+      background: rgba(255,255,255,0.08);
+    }
+    
+    .tab-content {
+      display: none;
+    }
+    
+    .tab-content.active {
+      display: block;
     }
 
     .header {
@@ -65,14 +112,14 @@
       border: 1px solid rgba(239, 68, 68, 0.2);
     }
 
-    .status-cards {
+    .status-cards, .stats-overview {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 1rem;
       margin-bottom: 2rem;
     }
 
-    .card {
+    .card, .stat-card {
       background: white;
       border-radius: 8px;
       padding: 1.5rem;
@@ -80,7 +127,7 @@
       border: 1px solid #e2e8f0;
     }
 
-    .card h3 {
+    .card h3, .stat-card h4 {
       color: #4a5568;
       margin-bottom: 0.5rem;
       font-size: 0.9rem;
@@ -88,7 +135,7 @@
       letter-spacing: 0.5px;
     }
 
-    .card .value {
+    .card .value, .stat-card .value {
       font-size: 2rem;
       font-weight: bold;
       color: #2d3748;
@@ -115,18 +162,26 @@
       cursor: not-allowed;
     }
 
-    .processes-section {
+    .processes-section, .routes-section, .certificates-section {
       background: white;
       border-radius: 8px;
       padding: 2rem;
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
       border: 1px solid #e2e8f0;
+      margin-bottom: 2rem;
     }
 
-    .processes-section h2 {
+    .processes-section h2, .routes-section h2, .certificates-section h2 {
       color: #2d3748;
-      margin-bottom: 1.5rem;
+      margin-bottom: 0.5rem;
       font-size: 1.5rem;
+    }
+
+    .section-description {
+      color: #718096;
+      font-size: 0.95rem;
+      margin-bottom: 1.5rem;
+      font-style: italic;
     }
 
     .process {
@@ -223,6 +278,7 @@
       text-align: center;
       overflow: hidden;
       text-overflow: ellipsis;
+      margin-bottom: 1rem;
     }
 
     .process-details span.success {
@@ -372,6 +428,7 @@
     .metric-value {
       font-size: 1.2rem;
       font-weight: bold;
+      padding: 1rem;
       color: #2d3748;
     }
 
@@ -422,48 +479,12 @@
       color: #2d3748;
     }
 
-    .health-status {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      margin-top: 0.5rem;
-      flex-wrap: wrap;
-      height: 1.5rem;
-      padding: 0.25rem 0.5rem;
-      background: #f8f9fa;
-      border-radius: 4px;
-      border: 1px solid #e9ecef;
-    }
-
-    .health-status span {
-      white-space: nowrap;
-    }
-
-    .health-indicator {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      display: inline-block;
-    }
-
-    .health-good {
-      background: #48bb78;
-    }
-
-    .health-warning {
-      background: #ed8936;
-    }
-
-    .health-error {
-      background: #f56565;
-    }
-
     .logs-container {
       background: #1a202c;
       color: #e2e8f0;
       border-radius: 6px;
       padding: 1rem;
-      max-height: 300px;
+      max-height: 310px;
       overflow-y: auto;
       font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
       font-size: 0.9rem;
@@ -517,6 +538,256 @@
       background: rgba(255, 255, 255, 0.05);
     }
 
+    .logs-content {
+      max-height: 250px;
+      overflow-y: auto;
+      padding-right: 0.5rem;
+    }
+
+    .logs-content::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .logs-content::-webkit-scrollbar-track {
+      background: #2d3748;
+      border-radius: 3px;
+    }
+
+    .logs-content::-webkit-scrollbar-thumb {
+      background: #4a5568;
+      border-radius: 3px;
+    }
+
+    .logs-content::-webkit-scrollbar-thumb:hover {
+      background: #718096;
+    }
+
+    /* Time filter styles */
+    .time-filter {
+      background: white;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      border: 1px solid #e2e8f0;
+    }
+
+    .time-filter h3 {
+      margin-bottom: 1rem;
+      color: #2d3748;
+    }
+
+    .filter-buttons {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      background: #e2e8f0;
+      color: #4a5568;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: all 0.2s;
+    }
+
+    .filter-btn.active {
+      background: #4299e1;
+      color: white;
+    }
+
+    .filter-btn:hover {
+      background: #4299e1;
+      color: white;
+    }
+
+    /* Routes table styles */
+    .routes-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+
+    .routes-table th,
+    .routes-table td {
+      padding: 1rem;
+      text-align: left;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .routes-table th {
+      background: #f7fafc;
+      font-weight: 600;
+      color: #4a5568;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .routes-table tr:hover {
+      background: #f7fafc;
+    }
+
+    .route-domain {
+      font-weight: 600;
+      color: #2d3748;
+    }
+
+    .route-target {
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 0.9rem;
+      color: #4a5568;
+    }
+
+    .request-count {
+      font-weight: 600;
+      color: #2d3748;
+    }
+
+    .geolocation {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .country-flag {
+      width: 20px;
+      height: 15px;
+      border-radius: 2px;
+      object-fit: cover;
+    }
+
+    .country-name {
+      font-size: 0.9rem;
+      color: #4a5568;
+    }
+
+    /* Certificate styles */
+    .certificate-card {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      background: #f7fafc;
+    }
+
+    .certificate-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .certificate-name {
+      font-weight: 600;
+      color: #2d3748;
+      font-size: 1.1rem;
+    }
+
+    .certificate-status {
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      font-weight: 500;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .certificate-status.valid {
+      background: rgba(34, 197, 94, 0.1);
+      color: #16a34a;
+      border: 1px solid rgba(34, 197, 94, 0.2);
+    }
+
+    .certificate-status.expired {
+      background: rgba(239, 68, 68, 0.1);
+      color: #dc2626;
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    .certificate-status.expiring-soon {
+      background: rgba(245, 158, 11, 0.1);
+      color: #d97706;
+      border: 1px solid rgba(245, 158, 11, 0.2);
+    }
+
+    .certificate-details {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+
+    .certificate-detail {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .certificate-detail-label {
+      font-weight: 500;
+      color: #4a5568;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.25rem;
+    }
+
+    .certificate-detail-value {
+      color: #2d3748;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 0.9rem;
+    }
+
+    .letsencrypt-info {
+      background: #f7fafc;
+      border-radius: 6px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      border: 1px solid #e2e8f0;
+    }
+
+    .letsencrypt-info h4 {
+      color: #2d3748;
+      margin-bottom: 0.5rem;
+      font-size: 1rem;
+    }
+
+    .letsencrypt-details {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      font-size: 0.9rem;
+    }
+
+    .letsencrypt-detail {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0;
+    }
+
+    .letsencrypt-detail .label {
+      color: #4a5568;
+      font-weight: 500;
+    }
+
+    .letsencrypt-detail .value {
+      color: #2d3748;
+      font-weight: 600;
+    }
+
+    /* Geolocation heatmap */
+    #geo-heatmap {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      border: 1px solid #e2e8f0;
+      margin-bottom: 2rem;
+    }
+
+    /* Utility classes */
     .loading {
       text-align: center;
       color: #718096;
@@ -534,7 +805,6 @@
     .success {
       background: #c6f6d5;
       color: #22543d;
-      padding: 1rem;
       border-radius: 6px;
       margin-bottom: 1rem;
     }
@@ -564,6 +834,7 @@
       background: #f56565;
     }
 
+    /* Mobile responsiveness */
     @media (max-width: 768px) {
       .container {
         padding: 10px;
@@ -616,78 +887,171 @@
         justify-content: flex-start;
       }
 
-      .health-status {
-        margin-top: 0.25rem;
-        gap: 0.25rem;
-        height: 1.4rem;
-        padding: 0.2rem 0.4rem;
-        width: 100%;
-        justify-content: flex-start;
+      .routes-table {
+        font-size: 0.8rem;
       }
-    }
 
-    .logs-content {
-      max-height: 250px;
-      overflow-y: auto;
-      padding-right: 0.5rem;
-    }
+      .routes-table th,
+      .routes-table td {
+        padding: 0.5rem;
+      }
 
-    .logs-content::-webkit-scrollbar {
-      width: 6px;
-    }
+      .letsencrypt-details {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+      }
 
-    .logs-content::-webkit-scrollbar-track {
-      background: #2d3748;
-      border-radius: 3px;
-    }
-
-    .logs-content::-webkit-scrollbar-thumb {
-      background: #4a5568;
-      border-radius: 3px;
-    }
-
-    .logs-content::-webkit-scrollbar-thumb:hover {
-      background: #718096;
+      .letsencrypt-detail {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+      }
     }
   </style>
 </head>
 
 <body>
   <div class="container">
-    <div class="header">
-      <h1>🚀 Proxy Server Management</h1>
-      <p>Monitor and control your managed processes</p>
-      <div id="connection-status" class="connection-status">🟡 Connecting...</div>
+    <div class="tab-bar">
+      <button class="tab active" id="tab-processes" onclick="showTab('processes')">🚀 Processes</button>
+      <button class="tab" id="tab-statistics" onclick="showTab('statistics')">📊 Statistics</button>
+      <button class="tab" id="tab-certificates" onclick="showTab('certificates')">🔒 Certificates</button>
+    </div>
+    
+    <!-- Processes Tab -->
+    <div id="content-processes" class="tab-content active">
+      <div class="header">
+        <h1>🚀 Proxy Server Management</h1>
+        <p>Monitor and control your managed processes</p>
+        <div id="connection-status" class="connection-status">🟡 Connecting...</div>
+      </div>
+
+      <div class="status-cards">
+        <div class="card">
+          <h3>Total Processes</h3>
+          <div class="value" id="processes-count">-</div>
+        </div>
+        <div class="card">
+          <h3>Active Processes</h3>
+          <div class="value" id="running-count">-</div>
+        </div>
+        <div class="card">
+          <h3>Inactive Processes</h3>
+          <div class="value" id="stopped-count">-</div>
+        </div>
+        <div class="card">
+          <h3>Server Uptime</h3>
+          <div class="value" id="uptime">-</div>
+        </div>
+        <div class="card">
+          <h3>Last Updated</h3>
+          <div class="value" id="last-updated">-</div>
+        </div>
+      </div>
+
+      <div class="processes-section">
+        <h2>All Managed Processes</h2>
+        <p class="section-description">Showing all configured processes including running and stopped instances</p>
+        <div id="processes-container">
+          <div class="loading">Loading processes...</div>
+        </div>
+      </div>
     </div>
 
-    <div class="status-cards">
-      <div class="card">
-        <h3>Total Processes</h3>
-        <div class="value" id="processes-count">-</div>
+    <!-- Statistics Tab -->
+    <div id="content-statistics" class="tab-content">
+      <div class="header">
+        <h1>📊 HTTP Service Statistics</h1>
+        <p>Monitor proxy traffic, routes, and geolocation data</p>
       </div>
-      <div class="card">
-        <h3>Running Processes</h3>
-        <div class="value" id="running-count">-</div>
+
+      <!-- World map heatmap for geolocation statistics -->
+      <div id="geo-heatmap" style="width:100%;height:500px;"></div>
+
+      <div class="time-filter">
+        <h3>Time Period</h3>
+        <div class="filter-buttons">
+          <button class="filter-btn active" onclick="setTimeFilter('1h')">1 Hour</button>
+          <button class="filter-btn" onclick="setTimeFilter('24h')">24 Hours</button>
+          <button class="filter-btn" onclick="setTimeFilter('7d')">7 Days</button>
+          <button class="filter-btn" onclick="setTimeFilter('30d')">30 Days</button>
+        </div>
       </div>
-      <div class="card">
-        <h3>Server Uptime</h3>
-        <div class="value" id="uptime">-</div>
+
+      <div class="stats-overview">
+        <div class="stat-card">
+          <h4>Total Requests</h4>
+          <div class="value" id="totalRequests">-</div>
+        </div>
+        <div class="stat-card">
+          <h4>Unique IPs</h4>
+          <div class="value" id="uniqueIPs">-</div>
+        </div>
+        <div class="stat-card">
+          <h4>Active Routes</h4>
+          <div class="value" id="activeRoutes">-</div>
+        </div>
+        <div class="stat-card">
+          <h4>Countries</h4>
+          <div class="value" id="uniqueCountries">-</div>
+        </div>
+        <div class="stat-card">
+          <h4>Avg Response Time</h4>
+          <div class="value" id="avgResponseTime">-</div>
+        </div>
       </div>
-      <div class="card">
-        <h3>Last Updated</h3>
-        <div class="value" id="last-updated">-</div>
+
+      <div class="routes-section">
+        <h2>Route Statistics</h2>
+        <div id="routesTable">
+          <div class="loading">Loading route statistics...</div>
+        </div>
       </div>
     </div>
 
-    <div class="processes-section">
-      <h2>Managed Processes</h2>
-      <div id="processes-container">
-        <div class="loading">Loading processes...</div>
+    <!-- Certificates Tab -->
+    <div id="content-certificates" class="tab-content">
+      <div class="header">
+        <h1>🔒 SSL Certificates</h1>
+        <p>Manage SSL certificates and Let's Encrypt configuration</p>
+      </div>
+
+      <div class="stats-overview">
+        <div class="stat-card">
+          <h4>SSL Certificates</h4>
+          <div class="value" id="certificates-count">-</div>
+        </div>
+        <div class="stat-card">
+          <h4>Valid Certificates</h4>
+          <div class="value" id="valid-certificates">-</div>
+        </div>
+        <div class="stat-card">
+          <h4>Expiring Soon</h4>
+          <div class="value" id="expiring-soon">-</div>
+        </div>
+        <div class="stat-card">
+          <h4>Expired</h4>
+          <div class="value" id="expired-certificates">-</div>
+        </div>
+        <div class="stat-card">
+          <h4>Let's Encrypt</h4>
+          <div class="value" id="letsencrypt-status">-</div>
+        </div>
+      </div>
+
+      <div class="certificates-section">
+        <h2>SSL Certificates</h2>
+        <p class="section-description">Let's Encrypt certificate status and expiration information</p>
+        <button onclick="loadCertificates()" class="refresh-btn">🔄 Refresh Certificates</button>
+        <div id="certificates-container">
+          <div class="loading">Loading certificates...</div>
+        </div>
       </div>
     </div>
   </div>
 
   <script>
+    // Global variables
     let ws = null;
     let reconnectAttempts = 0;
     const maxReconnectAttempts = 5;
@@ -695,11 +1059,36 @@
     let processesData = [];
     let statusData = {};
     let liveUpdateIntervals = {};
+    let currentTimeFilter = '24h';
+    let geoHeatmapChart = null;
+    let geoHeatmapLoaded = false;
+    let certificatesData = {};
+
+    // Tab switching logic
+    function showTab(tab) {
+      // Hide all tabs
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      
+      // Show selected tab
+      document.getElementById(`tab-${tab}`).classList.add('active');
+      document.getElementById(`content-${tab}`).classList.add('active');
+      
+      // Load data for specific tabs
+      if (tab === 'statistics') {
+        if (!geoHeatmapLoaded) {
+          renderGeoHeatmap();
+        }
+        loadStatistics();
+      } else if (tab === 'certificates') {
+        loadCertificates();
+      }
+    }
 
     // WebSocket connection management
     function connectWebSocket() {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/ws/management`;
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
       
       ws = new WebSocket(wsUrl);
       
@@ -784,11 +1173,13 @@
     function updateStatusDisplay() {
       const processesCount = statusData.processes?.length || 0;
       const runningCount = statusData.processes?.filter(p => p.status === 'running').length || 0;
+      const stoppedCount = processesCount - runningCount;
       const uptime = statusData.uptime || 0;
       const timestamp = statusData.timestamp ? new Date(statusData.timestamp).toLocaleString() : 'N/A';
 
       document.getElementById('processes-count').textContent = processesCount;
       document.getElementById('running-count').textContent = runningCount;
+      document.getElementById('stopped-count').textContent = stoppedCount;
       document.getElementById('uptime').textContent = formatUptime(uptime * 1000);
       document.getElementById('last-updated').textContent = timestamp;
     }
@@ -820,16 +1211,16 @@
                 </div>
               </div>
               <div class="process-actions">
-                <button onclick="event.stopPropagation(); startProcess('${process.id}')" class="btn btn-success" ${process.status === 'running' ? 'disabled' : ''}>
+                <button onclick="event.stopPropagation(); startProcess('${process.id}')" class="btn btn-start" ${process.status === 'running' ? 'disabled' : ''}>
                   Start
                 </button>
-                <button onclick="event.stopPropagation(); stopProcess('${process.id}')" class="btn btn-danger" ${process.status !== 'running' ? 'disabled' : ''}>
+                <button onclick="event.stopPropagation(); stopProcess('${process.id}')" class="btn btn-stop" ${process.status !== 'running' ? 'disabled' : ''}>
                   Stop
                 </button>
-                <button onclick="event.stopPropagation(); restartProcess('${process.id}')" class="btn btn-warning">
+                <button onclick="event.stopPropagation(); restartProcess('${process.id}')" class="btn btn-restart">
                   Restart
                 </button>
-                <button onclick="event.stopPropagation(); showLogs('${process.id}')" class="btn btn-info">
+                <button onclick="event.stopPropagation(); showLogs('${process.id}')" class="btn btn-logs">
                   Logs
                 </button>
               </div>
@@ -1039,6 +1430,284 @@
       startLiveLogUpdates(processId);
     }
 
+    // Statistics functions
+    function setTimeFilter(period) {
+      currentTimeFilter = period;
+      
+      // Update active button
+      document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+      
+      loadStatistics();
+      if (geoHeatmapLoaded) {
+        renderGeoHeatmap();
+      }
+    }
+
+    async function loadStatistics() {
+      try {
+        const response = await fetch(`/api/statistics?period=${currentTimeFilter}`);
+        const data = await response.json();
+        
+        if (data.success) {
+          updateStatisticsDisplay(data.data);
+        } else {
+          console.error('Failed to load statistics:', data.error);
+        }
+      } catch (error) {
+        console.error('Error loading statistics:', error);
+      }
+    }
+
+    function updateStatisticsDisplay(data) {
+      // Update overview cards
+      document.getElementById('totalRequests').textContent = formatNumber(data.totalRequests || 0);
+      document.getElementById('uniqueIPs').textContent = formatNumber(data.uniqueIPs || 0);
+      document.getElementById('activeRoutes').textContent = (data.routes || []).length;
+      document.getElementById('uniqueCountries').textContent = formatNumber(data.uniqueCountries || 0);
+      document.getElementById('avgResponseTime').textContent = formatResponseTime(data.avgResponseTime || 0);
+      
+      // Update routes table
+      const routesContainer = document.getElementById('routesTable');
+      if (data.routes && data.routes.length > 0) {
+        const routesHtml = `
+          <table class="routes-table">
+            <thead>
+              <tr>
+                <th>Domain</th>
+                <th>Target</th>
+                <th>Requests</th>
+                <th>Top Countries</th>
+                <th>Avg Response Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.routes.map(route => `
+                <tr>
+                  <td class="route-domain">${route.domain}</td>
+                  <td class="route-target">${route.target}</td>
+                  <td class="request-count">${formatNumber(route.requestCount || route.requests || 0)}</td>
+                  <td>
+                    ${(route.topCountries || []).slice(0, 3).map(country => `
+                      <div class="geolocation">
+                        <img src="https://flagcdn.com/16x12/${country.countryCode?.toLowerCase() || 'xx'}.png" 
+                             alt="${country.country}" 
+                             class="country-flag"
+                             onerror="this.style.display='none'">
+                        <span class="country-name">${country.country} (${country.count})</span>
+                      </div>
+                    `).join('')}
+                  </td>
+                  <td>${formatResponseTime(route.avgResponseTime || 0)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+        routesContainer.innerHTML = routesHtml;
+      } else {
+        routesContainer.innerHTML = '<div class="loading">No route data available</div>';
+      }
+    }
+
+    async function renderGeoHeatmap() {
+      const container = document.getElementById('geo-heatmap');
+      container.innerHTML = '';
+      
+      if (!window.echarts) {
+        container.innerHTML = '<div style="color:#e53e3e;padding:2rem;text-align:center;">ECharts library not loaded</div>';
+        return;
+      }
+      
+      if (!geoHeatmapChart) {
+        geoHeatmapChart = echarts.init(container);
+      }
+      
+      geoHeatmapChart.showLoading('default', { text: 'Loading geolocation statistics...' });
+
+      try {
+        const res = await fetch(`/api/statistics?period=${currentTimeFilter}`);
+        const data = await res.json();
+        
+        if (!data.success) {
+          throw new Error('Failed to load statistics');
+        }
+        
+        // Aggregate country counts from all routes
+        const countryCounts = {};
+        (data.data.routes || []).forEach(route => {
+          (route.topCountries || []).forEach(c => {
+            if (!c.country) return;
+            countryCounts[c.country] = (countryCounts[c.country] || 0) + c.count;
+          });
+        });
+        
+        // Convert to ECharts format
+        const mapData = Object.entries(countryCounts).map(([country, count]) => ({ 
+          name: country, 
+          value: count 
+        }));
+        
+        geoHeatmapChart.setOption({
+          title: {
+            text: `Geolocation Heatmap (${currentTimeFilter})`,
+            left: 'center',
+            top: 10,
+            textStyle: { fontSize: 20 }
+          },
+          tooltip: {
+            trigger: 'item',
+            formatter: params => `${params.name}: ${params.value || 0} requests`
+          },
+          visualMap: {
+            min: 0,
+            max: Math.max(10, ...mapData.map(d => d.value)),
+            text: ['High','Low'],
+            realtime: false,
+            calculable: true,
+            inRange: {
+              color: ['#e0f3f8','#abd9e9','#74add1','#4575b4','#313695','#a50026']
+            },
+            left: 'left',
+            bottom: 30
+          },
+          series: [{
+            name: 'Requests',
+            type: 'map',
+            map: 'world',
+            roam: true,
+            emphasis: { label: { show: true } },
+            data: mapData
+          }]
+        });
+        
+        geoHeatmapChart.hideLoading();
+        geoHeatmapLoaded = true;
+      } catch (err) {
+        container.innerHTML = '<div style="color:#e53e3e;padding:2rem;text-align:center;">Failed to load geolocation statistics</div>';
+      }
+    }
+
+    // Certificate functions
+    async function loadCertificates() {
+      try {
+        const response = await fetch('/api/certificates');
+        const data = await response.json();
+
+        if (data.success) {
+          certificatesData = data.data;
+          updateCertificatesDisplay();
+        } else {
+          console.error('Failed to load certificates:', data.error);
+        }
+      } catch (error) {
+        console.error('Failed to load certificates:', error);
+      }
+    }
+
+    function updateCertificatesDisplay() {
+      const { certificates, letsEncryptStatus } = certificatesData;
+
+      // Update status cards
+      document.getElementById('certificates-count').textContent = letsEncryptStatus.totalCertificates;
+      document.getElementById('valid-certificates').textContent = letsEncryptStatus.validCertificates;
+      document.getElementById('expiring-soon').textContent = letsEncryptStatus.expiringSoon;
+      document.getElementById('expired-certificates').textContent = letsEncryptStatus.expired;
+      
+      const letsEncryptMode = letsEncryptStatus.staging ? 'Staging' : 'Production';
+      document.getElementById('letsencrypt-status').textContent = letsEncryptMode;
+
+      // Update certificates table
+      const container = document.getElementById('certificates-container');
+      
+      if (!certificates || certificates.length === 0) {
+        container.innerHTML = '<div class="no-data">No certificates found</div>';
+        return;
+      }
+
+      const letsEncryptInfo = `
+        <div class="letsencrypt-info">
+          <h4>🔒 Let's Encrypt Configuration</h4>
+          <div class="letsencrypt-details">
+            <div class="letsencrypt-detail">
+              <span class="label">Email:</span>
+              <span class="value">${letsEncryptStatus.email}</span>
+            </div>
+            <div class="letsencrypt-detail">
+              <span class="label">Environment:</span>
+              <span class="value">${letsEncryptStatus.staging ? 'Staging' : 'Production'}</span>
+            </div>
+            <div class="letsencrypt-detail">
+              <span class="label">Certificate Directory:</span>
+              <span class="value">${letsEncryptStatus.certDir}</span>
+            </div>
+            <div class="letsencrypt-detail">
+              <span class="label">Total Certificates:</span>
+              <span class="value">${letsEncryptStatus.totalCertificates}</span>
+            </div>
+            <div class="letsencrypt-detail">
+              <span class="label">Valid:</span>
+              <span class="value">${letsEncryptStatus.validCertificates}</span>
+            </div>
+            <div class="letsencrypt-detail">
+              <span class="label">Expiring Soon:</span>
+              <span class="value">${letsEncryptStatus.expiringSoon}</span>
+            </div>
+            <div class="letsencrypt-detail">
+              <span class="label">Expired:</span>
+              <span class="value">${letsEncryptStatus.expired}</span>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const certificatesHtml = certificates.map(cert => {
+        const now = new Date();
+        const expiryDate = new Date(cert.expiresAt);
+        const daysUntilExpiry = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+        
+        let status = 'valid';
+        let statusText = 'Valid';
+        
+        if (expiryDate < now) {
+          status = 'expired';
+          statusText = 'Expired';
+        } else if (daysUntilExpiry <= 30) {
+          status = 'expiring-soon';
+          statusText = `Expires in ${daysUntilExpiry} days`;
+        }
+        
+        return `
+          <div class="certificate-card">
+            <div class="certificate-header">
+              <div class="certificate-name">${cert.domain}</div>
+              <div class="certificate-status ${status}">${statusText}</div>
+            </div>
+            <div class="certificate-details">
+              <div class="certificate-detail">
+                <div class="certificate-detail-label">Domain</div>
+                <div class="certificate-detail-value">${cert.domain}</div>
+              </div>
+              <div class="certificate-detail">
+                <div class="certificate-detail-label">Valid Until</div>
+                <div class="certificate-detail-value">${new Date(cert.expiresAt).toLocaleString()}</div>
+              </div>
+              <div class="certificate-detail">
+                <div class="certificate-detail-label">Days Until Expiry</div>
+                <div class="certificate-detail-value">${daysUntilExpiry}</div>
+              </div>
+              <div class="certificate-detail">
+                <div class="certificate-detail-label">Status</div>
+                <div class="certificate-detail-value">${cert.isValid ? 'Valid' : 'Invalid'}</div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      
+      container.innerHTML = letsEncryptInfo + certificatesHtml;
+    }
+
     // Utility functions
     function formatUptime(milliseconds) {
       const seconds = Math.floor(milliseconds / 1000);
@@ -1056,6 +1725,23 @@
       if (count === 0) return 'success';
       if (count <= 3) return 'warning';
       return 'error';
+    }
+
+    function formatNumber(num) {
+      if (num >= 1000000) {
+        return (num / 1000000).toFixed(1) + 'M';
+      } else if (num >= 1000) {
+        return (num / 1000).toFixed(1) + 'K';
+      }
+      return num.toString();
+    }
+
+    function formatResponseTime(ms) {
+      if (ms < 1000) {
+        return ms.toFixed(0) + 'ms';
+      } else {
+        return (ms / 1000).toFixed(2) + 's';
+      }
     }
 
     function showNotification(message, type) {
@@ -1081,6 +1767,13 @@
 
     // Cleanup on page unload
     window.addEventListener('beforeunload', cleanupLiveUpdates);
+
+    // Handle window resize for ECharts
+    window.addEventListener('resize', () => {
+      if (geoHeatmapChart) {
+        geoHeatmapChart.resize();
+      }
+    });
 
     // Initialize WebSocket connection
     connectWebSocket();

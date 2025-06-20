@@ -1,24 +1,22 @@
+import cookieParser from 'cookie-parser';
+import cors from 'cors';
 import express from 'express';
+import * as fs from 'fs-extra';
+import helmet from 'helmet';
 import http from 'http';
 import https from 'https';
-import * as fs from 'fs-extra';
-import * as path from 'path';
-import * as url from 'url';
-import helmet from 'helmet';
-import cors from 'cors';
 import mime from 'mime-types';
-import cookieParser from 'cookie-parser';
-import { ProxyRoute, ServerConfig, CertificateInfo, CSPConfig, CSPDirectives, GeolocationFilter, CorsConfig, ProcessConfig, ProcessManagementConfig } from '../types';
+import * as path from 'path';
+import { CertificateInfo, CSPConfig, CSPDirectives, GeolocationFilter, ProcessConfig, ProcessManagementConfig, ProxyRoute, ServerConfig } from '../types';
 import { logger } from '../utils/logger';
+import { GeolocationInfo, geolocationService } from './geolocation';
 import { LetsEncryptService } from './letsencrypt';
 import { OAuth2Service } from './oauth2';
-import { geolocationService, GeolocationInfo } from './geolocation';
 import { processManager } from './process-manager';
-import { createProxyMiddleware, fixRequestBody } from 'http-proxy-middleware';
 import { statisticsService } from './statistics';
-import { WebSocketService } from './websocket';
+import { WebSocketService, WebSocketServiceInterface } from './websocket';
 
-export class ProxyServer {
+export class ProxyServer implements WebSocketServiceInterface {
   private app: express.Application;
   private managementApp: express.Application;
   private httpServer: http.Server | null = null;
@@ -212,7 +210,7 @@ export class ProxyServer {
       const method = req.method;
       const userAgent = req.get('user-agent') || 'Unknown';
       
-      statisticsService.recordRequest(clientIP, geolocation, route, method, userAgent);
+      // Note: Detailed statistics are now recorded in handleProxyRequest with response times and route info
 
       next();
     });
@@ -289,28 +287,52 @@ export class ProxyServer {
         const processes = processManager.getProcessStatus();
         const availableProcesses = this.config.processManagement?.processes || {};
         
-        const processList = Object.keys(availableProcesses).map(processId => {
+        // Create a set of all process IDs (both configured and managed)
+        const allProcessIds = new Set([
+          ...Object.keys(availableProcesses),
+          ...processes.map(p => p.id)
+        ]);
+        
+        const processList = Array.from(allProcessIds).map(processId => {
           const processConfig = availableProcesses[processId];
           const runningProcess = processes.find(p => p.id === processId);
           
+          // If process is not in current config but exists in process manager, it's been removed
+          const isRemoved = !processConfig && runningProcess;
+          
+          // Convert isRunning to status string for HTML compatibility
+          let status = 'stopped';
+          if (runningProcess?.isRunning) {
+            status = 'running';
+          } else if (runningProcess?.isStopped) {
+            status = 'stopped';
+          } else if (runningProcess?.isReconnected) {
+            status = 'starting';
+          }
+          
           return {
             id: processId,
-            name: processConfig.name || `proxy-${processId}`,
-            enabled: processConfig.enabled,
-            command: processConfig.command,
-            args: processConfig.args,
-            cwd: processConfig.cwd,
-            env: processConfig.env,
+            name: processConfig?.name || runningProcess?.name || `proxy-${processId}`,
+            description: `Process ${processId}`,
+            status: status,
+            enabled: processConfig?.enabled ?? true,
+            command: processConfig?.command,
+            args: processConfig?.args,
+            cwd: processConfig?.cwd,
+            env: processConfig?.env,
             isRunning: runningProcess?.isRunning || false,
             pid: runningProcess?.pid,
             restartCount: runningProcess?.restartCount || 0,
             startTime: runningProcess?.startTime,
             lastRestartTime: runningProcess?.lastRestartTime,
             uptime: runningProcess?.uptime,
+            memoryUsage: 'N/A',
             healthCheckFailures: runningProcess?.healthCheckFailures || 0,
             pidFile: runningProcess?.pidFile,
             logFile: runningProcess?.logFile,
             isReconnected: runningProcess?.isReconnected || false,
+            isStopped: runningProcess?.isStopped || false,
+            isRemoved: isRemoved || runningProcess?.isRemoved || false,
           };
         });
         
@@ -330,26 +352,28 @@ export class ProxyServer {
         const { id } = req.params;
         const availableProcesses = this.config.processManagement?.processes || {};
         const processConfig = availableProcesses[id];
-        
-        if (!processConfig) {
-          return res.status(404).json({ success: false, error: 'Process not found' });
-        }
-        
         const processes = processManager.getProcessStatus();
         const runningProcess = processes.find(p => p.id === id);
         
+        // If process is not in current config but exists in process manager, it's been removed
+        const isRemoved = !processConfig && runningProcess;
+        
+        if (!processConfig && !runningProcess) {
+          return res.status(404).json({ success: false, error: 'Process not found' });
+        }
+        
         const processInfo = {
           id,
-          name: processConfig.name || `proxy-${id}`,
-          enabled: processConfig.enabled,
-          command: processConfig.command,
-          args: processConfig.args,
-          cwd: processConfig.cwd,
-          env: processConfig.env,
-          restartOnExit: processConfig.restartOnExit,
-          restartDelay: processConfig.restartDelay,
-          maxRestarts: processConfig.maxRestarts,
-          healthCheck: processConfig.healthCheck,
+          name: processConfig?.name || runningProcess?.name || `proxy-${id}`,
+          enabled: processConfig?.enabled ?? true,
+          command: processConfig?.command,
+          args: processConfig?.args,
+          cwd: processConfig?.cwd,
+          env: processConfig?.env,
+          restartOnExit: processConfig?.restartOnExit,
+          restartDelay: processConfig?.restartDelay,
+          maxRestarts: processConfig?.maxRestarts,
+          healthCheck: processConfig?.healthCheck,
           isRunning: runningProcess?.isRunning || false,
           pid: runningProcess?.pid,
           restartCount: runningProcess?.restartCount || 0,
@@ -360,6 +384,8 @@ export class ProxyServer {
           pidFile: runningProcess?.pidFile,
           logFile: runningProcess?.logFile,
           isReconnected: runningProcess?.isReconnected || false,
+          isStopped: runningProcess?.isStopped || false,
+          isRemoved: isRemoved || runningProcess?.isRemoved || false,
         };
         
         return res.json({ 
@@ -469,57 +495,19 @@ export class ProxyServer {
           return res.json({ success: true, data: { logs: [], message: 'Log file not found or empty' } });
         }
 
-        // Use tail to get last N lines
-        const { spawn } = require('child_process');
-        
-        // Wrap the tail process in a Promise
-        const tailPromise = new Promise<{ success: boolean; data?: any; error?: string }>((resolve) => {
-          const tailProcess = spawn('tail', ['-n', lines.toString(), process.logFile]);
-          
-          let logs = '';
-          let errorOutput = '';
+        const logContent = await fs.readFile(process.logFile, 'utf8');
+        const logLines = logContent.split('\n').filter(line => line.trim());
+        const requestedLines = Math.min(parseInt(lines as string) || 100, 1000); // Limit to 1000 lines
+        const recentLogs = logLines.slice(-requestedLines);
 
-          tailProcess.stdout.on('data', (data: Buffer) => {
-            logs += data.toString();
-          });
-
-          tailProcess.stderr.on('data', (data: Buffer) => {
-            errorOutput += data.toString();
-          });
-
-          tailProcess.on('close', (code: number) => {
-            if (code === 0) {
-              const logLines = logs.trim().split('\n').filter(line => line.length > 0);
-              resolve({ 
-                success: true, 
-                data: { 
-                  logs: logLines,
-                  totalLines: logLines.length,
-                  processId: id,
-                  logFile: process.logFile
-                }
-              });
-            } else {
-              logger.error(`Failed to read logs for process ${id}`, { code, error: errorOutput });
-              resolve({ success: false, error: 'Failed to read log file' });
-            }
-          });
-
-          tailProcess.on('error', (error: Error) => {
-            logger.error(`Error reading logs for process ${id}`, error);
-            resolve({ success: false, error: 'Failed to read log file' });
-          });
+        return res.json({ 
+          success: true, 
+          data: { logs: recentLogs },
+          timestamp: new Date().toISOString()
         });
-
-        const result = await tailPromise;
-        if (result.success) {
-          return res.json(result);
-        } else {
-          return res.status(500).json(result);
-        }
       } catch (error) {
         logger.error(`Failed to get logs for process ${req.params.id}`, error);
-        return res.status(500).json({ success: false, error: `Failed to get logs: ${error instanceof Error ? error.message : 'Unknown error'}` });
+        return res.status(500).json({ success: false, error: 'Failed to read log file' });
       }
     });
 
@@ -537,10 +525,49 @@ export class ProxyServer {
       }
     });
 
-    // Statistics endpoints
+    // Let's Encrypt certificates endpoint
+    this.managementApp.get('/api/certificates', (req, res) => {
+      try {
+        const certificates = Array.from(this.certificates.entries()).map(([domain, cert]) => ({
+          domain,
+          expiresAt: cert.expiresAt.toISOString(),
+          isValid: cert.isValid,
+          daysUntilExpiry: Math.floor((cert.expiresAt.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)),
+          certPath: cert.certPath,
+          keyPath: cert.keyPath,
+        }));
+
+        // Get Let's Encrypt service status
+        const letsEncryptStatus = {
+          email: this.config.letsEncrypt.email,
+          staging: this.config.letsEncrypt.staging,
+          certDir: this.config.letsEncrypt.certDir,
+          totalCertificates: certificates.length,
+          validCertificates: certificates.filter(cert => cert.isValid).length,
+          expiringSoon: certificates.filter(cert => cert.daysUntilExpiry <= 30 && cert.daysUntilExpiry > 0).length,
+          expired: certificates.filter(cert => cert.daysUntilExpiry <= 0).length,
+        };
+
+        res.json({ 
+          success: true, 
+          data: {
+            certificates,
+            letsEncryptStatus,
+          },
+          timestamp: new Date().toISOString()
+        });
+      } catch (error) {
+        logger.error('Failed to get certificate status', error);
+        res.status(500).json({ success: false, error: 'Failed to get certificate status' });
+      }
+    });
+
+    // Statistics endpoint
     this.managementApp.get('/api/statistics', (req, res) => {
       try {
-        const stats = statisticsService.getCurrentStats();
+        const { period = '24h' } = req.query;
+        const stats = statisticsService.getTimePeriodStats(period as string);
+        
         res.json({ 
           success: true, 
           data: stats,
@@ -595,6 +622,178 @@ export class ProxyServer {
       } catch (error) {
         logger.error('Failed to generate statistics report', error);
         res.status(500).json({ success: false, error: 'Failed to generate statistics report' });
+      }
+    });
+
+    // Statistics persistence endpoints
+    this.managementApp.post('/api/statistics/save', async (req, res) => {
+      try {
+        await statisticsService.forceSave();
+        res.json({ 
+          success: true, 
+          message: 'Statistics saved successfully',
+          timestamp: new Date().toISOString()
+        });
+      } catch (error) {
+        logger.error('Failed to save statistics', error);
+        res.status(500).json({ success: false, error: 'Failed to save statistics' });
+      }
+    });
+
+    this.managementApp.post('/api/statistics/backup', async (req, res) => {
+      try {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const backupDir = path.resolve(process.cwd(), 'data', 'statistics', 'backups');
+        const backupFile = path.join(backupDir, `stats-backup-${timestamp}.json`);
+        
+        await fs.ensureDir(backupDir);
+        await statisticsService.forceSave();
+        
+        // Copy the current stats file to backup
+        const currentFile = path.resolve(process.cwd(), 'data', 'statistics', 'current-stats.json');
+        if (await fs.pathExists(currentFile)) {
+          await fs.copy(currentFile, backupFile);
+          
+          const stats = await fs.stat(backupFile);
+          res.json({ 
+            success: true, 
+            message: 'Statistics backup created successfully',
+            data: {
+              backupFile,
+              size: stats.size,
+              timestamp: stats.mtime.toISOString()
+            }
+          });
+        } else {
+          res.status(404).json({ success: false, error: 'No current statistics file found' });
+        }
+      } catch (error) {
+        logger.error('Failed to create statistics backup', error);
+        res.status(500).json({ success: false, error: 'Failed to create statistics backup' });
+      }
+    });
+
+    this.managementApp.get('/api/statistics/backups', async (req, res) => {
+      try {
+        const backupDir = path.resolve(process.cwd(), 'data', 'statistics', 'backups');
+        
+        if (!await fs.pathExists(backupDir)) {
+          res.json({ success: true, data: { backups: [] } });
+        } else {
+        
+        const files = await fs.readdir(backupDir);
+        const backups = [];
+        
+        for (const file of files) {
+          if (file.endsWith('.json')) {
+            const filepath = path.join(backupDir, file);
+            const stats = await fs.stat(filepath);
+            backups.push({
+              filename: file,
+              filepath,
+              size: stats.size,
+              created: stats.birthtime.toISOString(),
+              modified: stats.mtime.toISOString()
+            });
+          }
+        }
+        
+        // Sort by creation time, newest first
+        backups.sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime());
+        
+        res.json({ 
+          success: true, 
+          data: { backups },
+          timestamp: new Date().toISOString()
+        });
+      }
+      } catch (error) {
+        logger.error('Failed to list statistics backups', error);
+        res.status(500).json({ success: false, error: 'Failed to list statistics backups' });
+      }
+    });
+
+    this.managementApp.post('/api/statistics/restore/:filename', async (req, res) => {
+      try {
+        const { filename } = req.params;
+        const backupDir = path.resolve(process.cwd(), 'data', 'statistics', 'backups');
+        const backupFile = path.join(backupDir, filename);
+        const currentFile = path.resolve(process.cwd(), 'data', 'statistics', 'current-stats.json');
+        
+        if (!await fs.pathExists(backupFile)) {
+           res.status(404).json({ success: false, error: 'Backup file not found' });
+        } else {
+        
+        // Create a backup of current stats before restoring
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const preRestoreBackup = path.join(backupDir, `pre-restore-${timestamp}.json`);
+        
+        if (await fs.pathExists(currentFile)) {
+          await fs.copy(currentFile, preRestoreBackup);
+        }
+        
+        // Restore the backup
+        await fs.copy(backupFile, currentFile);
+        
+        // Reload statistics from the restored file
+        // Note: This requires a service restart to take full effect
+        // For now, we'll just indicate the file was restored
+        
+        res.json({ 
+          success: true, 
+          message: 'Statistics restored successfully',
+          data: {
+            restoredFile: backupFile,
+            preRestoreBackup,
+            note: 'Service restart required for changes to take effect'
+          }
+        });
+      }
+      } catch (error) {
+        logger.error('Failed to restore statistics backup', error);
+        res.status(500).json({ success: false, error: 'Failed to restore statistics backup' });
+      }
+    });
+
+    this.managementApp.delete('/api/statistics/backups/:filename', async (req, res) => {
+      try {
+        const { filename } = req.params;
+        const backupDir = path.resolve(process.cwd(), 'data', 'statistics', 'backups');
+        const backupFile = path.join(backupDir, filename);
+        
+        if (!await fs.pathExists(backupFile)) {
+           res.status(404).json({ success: false, error: 'Backup file not found' });
+        } else {
+        
+        await fs.remove(backupFile);
+        
+        res.json({ 
+          success: true, 
+          message: 'Statistics backup deleted successfully',
+          data: { deletedFile: backupFile }
+        });
+      }
+      } catch (error) {
+        logger.error('Failed to delete statistics backup', error);
+        res.status(500).json({ success: false, error: 'Failed to delete statistics backup' });
+      }
+    });
+
+    this.managementApp.post('/api/statistics/cleanup', async (req, res) => {
+      try {
+        const { days = 90 } = req.query;
+        const cutoffDays = parseInt(days as string) || 90;
+        
+        // This would require exposing the cleanup method from the service
+        // For now, we'll just return a message indicating manual cleanup is needed
+        res.json({ 
+          success: true, 
+          message: `Statistics cleanup requested for data older than ${cutoffDays} days`,
+          note: 'Cleanup is performed automatically during daily reports. Manual cleanup requires service restart.'
+        });
+      } catch (error) {
+        logger.error('Failed to cleanup statistics', error);
+        res.status(500).json({ success: false, error: 'Failed to cleanup statistics' });
       }
     });
 
@@ -969,12 +1168,12 @@ export class ProxyServer {
     const currentProcesses = this.config.processManagement?.processes || {};
     const newProcesses = newConfig.processes || {};
     
-    // Stop processes that are no longer in the configuration
+    // Mark processes that are no longer in the configuration as removed
     for (const [processId, currentConfig] of Object.entries(currentProcesses)) {
       if (!newProcesses[processId] || !newProcesses[processId].enabled) {
         if (processManager.isProcessRunning(processId)) {
-          logger.info(`Stopping process ${processId} (removed or disabled in configuration)`);
-          await processManager.stopProcess(processId);
+          logger.info(`Marking process ${processId} as removed (no longer in configuration)`);
+          processManager.markProcessAsRemoved(processId);
         }
       }
     }
@@ -1078,6 +1277,15 @@ export class ProxyServer {
     this.managementServer = http.createServer(this.managementApp);
     this.managementServer.listen(4481, () => {
       logger.info(`Management server listening on port 4481`);
+      
+      // Initialize WebSocket service after server is listening
+      setTimeout(() => {
+        try {
+          this.webSocketService.initialize(this.managementServer);
+        } catch (error) {
+          logger.error('Failed to initialize WebSocket service, continuing without WebSocket support', error);
+        }
+      }, 100);
     });
 
     // Initialize WebSocket service
@@ -1169,8 +1377,8 @@ export class ProxyServer {
     // Stop WebSocket service
     this.webSocketService.close();
 
-    // Stop statistics service
-    statisticsService.shutdown();
+    // Stop statistics service (now async)
+    promises.push(statisticsService.shutdown());
 
     if (this.httpServer) {
       promises.push(
@@ -1690,25 +1898,31 @@ export class ProxyServer {
   private buildProxyHeaders(route: ProxyRoute, req?: express.Request): Record<string, string> {
     const headers: Record<string, string> = { ...route.headers };
     
-    // Forward authorization headers from the client request if available
+    // Forward headers from the client request if available
     if (req) {
-      // Forward Authorization header (Bearer tokens, Basic auth, etc.)
-      if (req.headers.authorization) {
-        headers['Authorization'] = req.headers.authorization as string;
+      // Get forward headers configuration from CORS config
+      const forwardHeaders: string[] = [];
+      
+      if (route.cors && typeof route.cors === 'object' && route.cors.forwardHeaders) {
+        forwardHeaders.push(...route.cors.forwardHeaders);
+      } else {
+        // Default headers to forward if no configuration is provided
+        forwardHeaders.push(
+          'authorization'
+        );
       }
       
-      // Forward BlackBaud API subscription key
-      if (req.headers['bb-api-subscription-key']) {
-        headers['Bb-Api-Subscription-Key'] = req.headers['bb-api-subscription-key'] as string;
-      }
-      
-      // Forward other common authentication headers
-      if (req.headers['x-api-key']) {
-        headers['X-API-Key'] = req.headers['x-api-key'] as string;
-      }
-      
-      if (req.headers['x-auth-token']) {
-        headers['X-Auth-Token'] = req.headers['x-auth-token'] as string;
+      // Forward configured headers
+      for (const headerName of forwardHeaders) {
+        const headerValue = req.headers[headerName.toLowerCase()];
+        if (headerValue) {
+          // Preserve original header name casing if it exists in the request
+          const originalHeaderName = Object.keys(req.headers).find(
+            key => key.toLowerCase() === headerName.toLowerCase()
+          );
+          const finalHeaderName = originalHeaderName || headerName;
+          headers[finalHeaderName] = headerValue as string;
+        }
       }
     }
     
@@ -1810,6 +2024,9 @@ export class ProxyServer {
     }
   ): Promise<void> {
     const { route, target, routeIdentifier, secure, timeouts, logRequests, logErrors, customErrorResponse } = config;
+    
+    // Start timing the request
+    const startTime = Date.now();
     
     // Capture request body for potential error logging
     let requestBodyForLogging: string | null = null;
@@ -1923,16 +2140,70 @@ export class ProxyServer {
 
     // Create the proxy request
     const proxyRequest = httpModule.request(requestOptions, (proxyResponse) => {
+      const responseTime = Date.now() - startTime;
+      
+      // Record request with response time and route information
+      const clientIP = this.getClientIP(req);
+      const geolocation = geolocationService.getGeolocation(clientIP);
+      const userAgent = req.get('user-agent') || 'Unknown';
+      
+      statisticsService.recordRequest(
+        clientIP, 
+        geolocation, 
+        req.url || '/', 
+        req.method, 
+        userAgent,
+        responseTime,
+        route.domain,
+        target
+      );
+      
       this.handleProxyResponse(proxyResponse, req, res, route, routeIdentifier, target, logRequests);
     });
 
     // Set up error handling
     proxyRequest.on('error', (error) => {
+      const responseTime = Date.now() - startTime;
+      
+      // Record request with response time and route information even for errors
+      const clientIP = this.getClientIP(req);
+      const geolocation = geolocationService.getGeolocation(clientIP);
+      const userAgent = req.get('user-agent') || 'Unknown';
+      
+      statisticsService.recordRequest(
+        clientIP, 
+        geolocation, 
+        req.url || '/', 
+        req.method, 
+        userAgent,
+        responseTime,
+        route.domain,
+        target
+      );
+      
       this.handleProxyError(error, req, res, routeIdentifier, target, route, logErrors, customErrorResponse);
     });
 
     // Set up timeout
     proxyRequest.on('timeout', () => {
+      const responseTime = Date.now() - startTime;
+      
+      // Record request with response time and route information for timeouts
+      const clientIP = this.getClientIP(req);
+      const geolocation = geolocationService.getGeolocation(clientIP);
+      const userAgent = req.get('user-agent') || 'Unknown';
+      
+      statisticsService.recordRequest(
+        clientIP, 
+        geolocation, 
+        req.url || '/', 
+        req.method, 
+        userAgent,
+        responseTime,
+        route.domain,
+        target
+      );
+      
       proxyRequest.destroy();
       const timeoutError = new Error(`Request timeout after ${timeouts.request}ms`);
       this.handleProxyError(timeoutError, req, res, routeIdentifier, target, route, logErrors, customErrorResponse);
@@ -2197,6 +2468,11 @@ export class ProxyServer {
 
   private async broadcastProcessUpdates(): Promise<void> {
     try {
+      // Check if WebSocket service is available
+      if (!this.webSocketService) {
+        return;
+      }
+
       const processes = await this.getProcesses();
       this.webSocketService.broadcastProcessUpdate(processes);
       
