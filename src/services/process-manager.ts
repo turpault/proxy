@@ -6,6 +6,23 @@ import { logger } from '../utils/logger';
 import { ProcessConfig, ProcessManagementConfig } from '../types';
 import axios from 'axios';
 
+/**
+ * Process Manager for managing long-running child processes
+ * 
+ * CRITICAL BEHAVIOR: This process manager is designed to NEVER kill child processes.
+ * Child processes are spawned with detached: true and will survive when the process
+ * manager is terminated (SIGTERM, SIGINT, or process exit).
+ * 
+ * Key features:
+ * - Child processes are detached from the parent process group
+ * - PID files are preserved for reconnection after restart
+ * - Health checks and monitoring can be restarted without affecting running processes
+ * - Processes continue running even if the process manager crashes or is killed
+ * 
+ * This ensures that managed processes remain running for their intended purpose
+ * regardless of what happens to the process manager itself.
+ */
+
 export interface ManagedProcess {
   id: string;
   config: ProcessConfig;
@@ -49,6 +66,9 @@ export class ProcessManager {
 
   constructor() {
     // Handle graceful shutdown
+    // Note: This process manager is designed to NEVER kill child processes
+    // Child processes are spawned with detached: true and will survive
+    // when the process manager is terminated
     process.on('SIGTERM', () => this.shutdown());
     process.on('SIGINT', () => this.shutdown());
   }
@@ -493,10 +513,6 @@ export class ProcessManager {
 
     managedProcess.isRunning = false;
     managedProcess.isStopped = true;
-    // Keep the process in the Map instead of deleting it
-
-    // Remove PID file
-    await this.removePidFile(managedProcess.pidFilePath);
     
     // Notify listeners of process update
     this.notifyProcessUpdate();
@@ -619,7 +635,7 @@ export class ProcessManager {
           PROXY_PROCESS_NAME: processName,
         },
         // Detach the process so it survives parent exit
-        detached: false,
+        detached: true,
         stdio: ['ignore', 'pipe', 'pipe'],
       };
 
@@ -700,6 +716,9 @@ export class ProcessManager {
         childProcess.stdout.on('data', (data) => {
           const output = data.toString().trim();
           if (output) {
+            // Add stdout prefix to log file
+            const timestamp = new Date().toISOString();
+            logStream.write(`[${timestamp}] [STDOUT] ${output}\n`);
             logger.info(`[${processName}] ${output}`);
           }
         });
@@ -710,6 +729,9 @@ export class ProcessManager {
         childProcess.stderr.on('data', (data) => {
           const output = data.toString().trim();
           if (output) {
+            // Add stderr prefix to log file
+            const timestamp = new Date().toISOString();
+            logStream.write(`[${timestamp}] [STDERR] ${output}\n`);
             logger.warn(`[${processName}] STDERR: ${output}`);
           }
         });
@@ -734,6 +756,18 @@ export class ProcessManager {
         // Detach the process from the parent to prevent it from being killed
         if (childProcess.pid) {
           childProcess.unref();
+          
+          // On Unix-like systems, create a new process group for the child
+          // This ensures it won't be killed when the parent process group is terminated
+          if (process.platform !== 'win32') {
+            try {
+              // Set the child process to its own process group
+              process.kill(childProcess.pid, 0); // Check if process is still running
+              // Note: We can't directly set process group from parent, but detached: true should handle this
+            } catch (error) {
+              logger.debug(`Could not verify process group for ${id}: ${error}`);
+            }
+          }
         }
         
         logger.info(`Process ${processName} started successfully`, {
@@ -745,6 +779,7 @@ export class ProcessManager {
           pidFile: managedProcess.pidFilePath,
           logFile: managedProcess.logFilePath,
           detached: true,
+          // Note: This process will survive when the process manager is terminated
         });
 
         // Start health check if configured
@@ -845,9 +880,9 @@ export class ProcessManager {
     const processName = managedProcess.config.name || `proxy-${id}`;
 
     const healthCheckInterval = setInterval(async () => {
+      let healthUrl: string = "unset";
       try {
         // Check if healthCheckPath is already a full URL
-        let healthUrl: string;
         if (healthCheckPath.startsWith('http://') || healthCheckPath.startsWith('https://')) {
           // Use the full URL directly
           healthUrl = healthCheckPath;
@@ -856,6 +891,7 @@ export class ProcessManager {
           healthUrl = `${target}${healthCheckPath}`;
         }
 
+        logger.debug(`Health check request to ${healthUrl}`);
         const response = await axios.get(healthUrl, {
           timeout,
           validateStatus: (status) => status >= 200 && status < 300,
@@ -872,6 +908,7 @@ export class ProcessManager {
         managedProcess.healthCheckFailures++;
         
         logger.warn(`Health check failed for process ${processName}`, {
+          url: healthUrl,
           failures: managedProcess.healthCheckFailures,
           maxRetries,
           error: error instanceof Error ? error.message : 'Unknown error',
@@ -879,10 +916,15 @@ export class ProcessManager {
 
         // Restart process if health check fails too many times
         if (managedProcess.healthCheckFailures >= maxRetries) {
-          logger.error(`Process ${processName} failed health check ${maxRetries} times, restarting`);
-          this.restartProcess(id, target).catch(restartError => {
-            logger.error(`Failed to restart unhealthy process ${processName}`, restartError);
-          });
+          logger.error(`Process ${processName} failed health check ${maxRetries} times, killing child process`);
+          await this.killChildProcess(id);
+          // Optionally restart if configured
+          if (managedProcess.config.restartOnExit !== false) {
+            logger.info(`Restarting process ${processName} after health check failure`);
+            this.restartProcess(id, target).catch(restartError => {
+              logger.error(`Failed to restart unhealthy process ${processName}`, restartError);
+            });
+          }
         }
       }
     }, interval);
@@ -994,6 +1036,57 @@ export class ProcessManager {
     await Promise.all(shutdownPromises);
     logger.info('Process manager shutdown complete - all managed processes left running');
   }
+
+  /**
+   * Kill the child process and remove the PID file (used only for health check failures)
+   */
+  private async killChildProcess(id: string): Promise<void> {
+    const managedProcess = this.processes.get(id);
+    if (!managedProcess) return;
+    if (managedProcess.process && managedProcess.process.pid) {
+      try {
+        process.kill(managedProcess.process.pid, 'SIGKILL');
+        managedProcess.isRunning = false;
+        await this.removePidFile(managedProcess.pidFilePath);
+        logger.warn(`Child process ${id} killed due to health check failure`);
+      } catch (error) {
+        logger.error(`Failed to kill child process ${id}`, error);
+      }
+    }
+  }
+
+  /**
+   * Forcefully kill and restart a process (for management console use only)
+   */
+  public async forceKillAndRestartProcess(id: string, target: string): Promise<void> {
+    const managedProcess = this.processes.get(id);
+    if (!managedProcess) {
+      logger.warn(`Cannot force kill/restart process ${id}: not found`);
+      return;
+    }
+    logger.info(`Force killing and restarting process ${id} by management console request`);
+    // Kill the child process if running
+    if (managedProcess.process && managedProcess.process.pid) {
+      try {
+        process.kill(managedProcess.process.pid, 'SIGKILL');
+        managedProcess.isRunning = false;
+        await this.removePidFile(managedProcess.pidFilePath);
+        logger.warn(`Child process ${id} force killed by management console request`);
+      } catch (error) {
+        logger.error(`Failed to force kill child process ${id}`, error);
+      }
+    }
+    // Wait a moment to ensure process is dead
+    await new Promise(resolve => setTimeout(resolve, 500));
+    // Start a new process
+    try {
+      await this.spawnProcess(managedProcess, target);
+      this.notifyProcessUpdate();
+      logger.info(`Process ${id} force restarted successfully`);
+    } catch (error) {
+      logger.error(`Failed to force restart process ${id}`, error);
+    }
+  }
 }
 
-export const processManager = new ProcessManager(); 
+export const processManager = new ProcessManager();

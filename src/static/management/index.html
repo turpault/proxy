@@ -9,7 +9,7 @@
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/extension/dataTool.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/extension/bmap.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/extension/world.js"></script>
+  <!-- Removed world.js due to MIME type issues - will use built-in world map data -->
   <style>
     * {
       margin: 0;
@@ -484,11 +484,11 @@
       color: #e2e8f0;
       border-radius: 6px;
       padding: 1rem;
-      max-height: 310px;
+      max-height: 400px;
       overflow-y: auto;
       font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-      font-size: 0.9rem;
-      line-height: 1.4;
+      font-size: 0.85rem;
+      line-height: 1.3;
       position: relative;
     }
 
@@ -504,6 +504,91 @@
     .logs-title {
       font-weight: bold;
       color: #e2e8f0;
+    }
+
+    .logs-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+    }
+
+    .logs-controls select {
+      background: #2d3748;
+      color: #e2e8f0;
+      border: 1px solid #4a5568;
+      border-radius: 3px;
+      padding: 0.25rem 0.5rem;
+      font-size: 0.8rem;
+    }
+
+    .logs-filter-buttons {
+      display: flex;
+      gap: 0.25rem;
+    }
+
+    .logs-filter-btn {
+      background: #2d3748;
+      color: #e2e8f0;
+      border: 1px solid #4a5568;
+      border-radius: 3px;
+      padding: 0.25rem 0.5rem;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .logs-filter-btn:hover {
+      background: #4a5568;
+    }
+
+    .logs-filter-btn.active {
+      background: #4299e1;
+      border-color: #4299e1;
+    }
+
+    .logs-filter-btn.all {
+      background: #48bb78;
+      border-color: #48bb78;
+    }
+
+    .logs-filter-btn.all.active {
+      background: #38a169;
+      border-color: #38a169;
+    }
+
+    .logs-filter-btn.stdout {
+      background: #4299e1;
+      border-color: #4299e1;
+    }
+
+    .logs-filter-btn.stdout.active {
+      background: #3182ce;
+      border-color: #3182ce;
+    }
+
+    .logs-filter-btn.stderr {
+      background: #f56565;
+      border-color: #f56565;
+    }
+
+    .logs-filter-btn.stderr.active {
+      background: #e53e3e;
+      border-color: #e53e3e;
+    }
+
+    .logs-since-restart {
+      background: #805ad5;
+      border-color: #805ad5;
+    }
+
+    .logs-since-restart.active {
+      background: #6b46c1;
+      border-color: #6b46c1;
+    }
+
+    .logs-since-restart:hover {
+      background: #6b46c1;
     }
 
     .live-indicator {
@@ -529,37 +614,75 @@
     }
 
     .log-line {
-      margin-bottom: 0.25rem;
+      margin-bottom: 0.1rem;
       word-wrap: break-word;
-      padding: 0.1rem 0;
+      padding: 0.05rem 0;
+      white-space: pre-wrap;
     }
 
     .log-line:hover {
       background: rgba(255, 255, 255, 0.05);
     }
 
+    .log-line.stdout {
+      border-left: 3px solid #4299e1;
+      padding-left: 0.5rem;
+    }
+
+    .log-line.stderr {
+      border-left: 3px solid #f56565;
+      padding-left: 0.5rem;
+      background: rgba(245, 101, 101, 0.1);
+    }
+
+    .log-line.stderr:hover {
+      background: rgba(245, 101, 101, 0.15);
+    }
+
+    .log-line.hidden {
+      display: none;
+    }
+
     .logs-content {
-      max-height: 250px;
+      max-height: 320px;
       overflow-y: auto;
       padding-right: 0.5rem;
     }
 
     .logs-content::-webkit-scrollbar {
-      width: 6px;
+      width: 8px;
     }
 
     .logs-content::-webkit-scrollbar-track {
       background: #2d3748;
-      border-radius: 3px;
+      border-radius: 4px;
     }
 
     .logs-content::-webkit-scrollbar-thumb {
       background: #4a5568;
-      border-radius: 3px;
+      border-radius: 4px;
     }
 
     .logs-content::-webkit-scrollbar-thumb:hover {
       background: #718096;
+    }
+
+    .logs-loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      color: #718096;
+      font-style: italic;
+    }
+
+    .logs-error {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      color: #f56565;
+      font-weight: 500;
     }
 
     /* Time filter styles */
@@ -907,6 +1030,267 @@
         gap: 0.25rem;
       }
     }
+
+    /* Process tabs styles */
+    .process-tabs {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      border: 1px solid #e2e8f0;
+      overflow: hidden;
+    }
+
+    .process-tabs-header {
+      display: flex;
+      background: #f7fafc;
+      border-bottom: 1px solid #e2e8f0;
+      overflow-x: auto;
+    }
+
+    .process-tab {
+      padding: 1rem 1.5rem;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-weight: 500;
+      color: #4a5568;
+      border-bottom: 3px solid transparent;
+      white-space: nowrap;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      min-width: 120px;
+    }
+
+    .process-tab:hover {
+      background: #edf2f7;
+      color: #2d3748;
+    }
+
+    .process-tab.active {
+      background: white;
+      color: #2d3748;
+      border-bottom-color: #4299e1;
+    }
+
+    .process-tab-status {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .process-tab-status.running {
+      background: #48bb78;
+    }
+
+    .process-tab-status.stopped {
+      background: #f56565;
+    }
+
+    .process-tab-status.warning {
+      background: #ed8936;
+    }
+
+    .process-tab-content {
+      display: none;
+      padding: 1rem 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .process-tab-content.active {
+      display: block;
+    }
+
+    .process-tab-actions {
+      display: flex;
+      gap: 0.25rem;
+      margin-bottom: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .process-tab-actions .btn {
+      min-width: 70px;
+      font-size: 0.85rem;
+      padding: 0.3rem 0.7rem;
+      height: 2rem;
+    }
+
+    .process-tab-info {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .process-tab-info-item {
+      background: #f7fafc;
+      padding: 0.5rem 0.75rem;
+      border-radius: 4px;
+      border: 1px solid #e2e8f0;
+      min-width: 120px;
+      font-size: 0.85rem;
+    }
+
+    .process-tab-section {
+      margin-bottom: 1rem;
+    }
+
+    .process-tab-section.collapsible {
+      display: none;
+    }
+
+    .process-tab-section.collapsible.open {
+      display: block;
+    }
+
+    .process-tab-info-label {
+      font-size: 0.8rem;
+      color: #718096;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.5rem;
+    }
+
+    .process-tab-info-value {
+      font-weight: 500;
+      color: #2d3748;
+      font-size: 0.9rem;
+    }
+
+    .process-tab-info-value.success {
+      color: #38a169;
+    }
+
+    .process-tab-info-value.warning {
+      color: #d69e2e;
+    }
+
+    .process-tab-info-value.error {
+      color: #e53e3e;
+    }
+
+    .process-tab-info-value.time-display {
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 0.85rem;
+      color: #4a5568;
+      background: #f7fafc;
+      padding: 0.25rem 0.5rem;
+      border-radius: 3px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .process-tab-info-value.relative-time {
+      font-style: italic;
+      color: #718096;
+      font-size: 0.8rem;
+    }
+
+    .process-tab-section {
+      margin-bottom: 2rem;
+    }
+
+    .process-tab-section h3 {
+      color: #2d3748;
+      margin-bottom: 1rem;
+      font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .no-processes-tab {
+      padding: 3rem;
+      text-align: center;
+      color: #718096;
+    }
+
+    .no-processes-tab h3 {
+      color: #4a5568;
+      margin-bottom: 0.5rem;
+    }
+
+    .process-tab-scroll {
+      overflow-x: auto;
+      scrollbar-width: thin;
+      scrollbar-color: #cbd5e0 #f7fafc;
+    }
+
+    .process-tab-scroll::-webkit-scrollbar {
+      height: 6px;
+    }
+
+    .process-tab-scroll::-webkit-scrollbar-track {
+      background: #f7fafc;
+    }
+
+    .process-tab-scroll::-webkit-scrollbar-thumb {
+      background: #cbd5e0;
+      border-radius: 3px;
+    }
+
+    .process-tab-scroll::-webkit-scrollbar-thumb:hover {
+      background: #a0aec0;
+    }
+
+    .live-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      color: #48bb78;
+    }
+
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      background: #48bb78;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    .follow-btn {
+      background: #2d3748;
+      color: #e2e8f0;
+      border: 1px solid #4a5568;
+      border-radius: 3px;
+      padding: 0.25rem 0.5rem;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .follow-btn:hover {
+      background: #4a5568;
+    }
+
+    .follow-btn.active {
+      background: #48bb78;
+      border-color: #48bb78;
+      color: white;
+    }
+
+    .follow-btn.inactive {
+      background: #f56565;
+      border-color: #f56565;
+      color: white;
+    }
+
+    .live-indicator.following {
+      color: #48bb78;
+    }
+
+    .live-indicator.not-following {
+      color: #f56565;
+    }
+
+    .live-indicator.not-following .live-dot {
+      background: #f56565;
+    }
   </style>
 </head>
 
@@ -921,39 +1305,39 @@
     <!-- Processes Tab -->
     <div id="content-processes" class="tab-content active">
       <div class="header">
-        <h1>🚀 Proxy Server Management</h1>
-        <p>Monitor and control your managed processes</p>
-        <div id="connection-status" class="connection-status">🟡 Connecting...</div>
+        <h1>⚙️ Process Management</h1>
+        <p>Monitor and control managed processes</p>
       </div>
 
-      <div class="status-cards">
-        <div class="card">
-          <h3>Total Processes</h3>
+      <div class="stats-overview">
+        <div class="stat-card">
+          <h4>Total Processes</h4>
           <div class="value" id="processes-count">-</div>
         </div>
-        <div class="card">
-          <h3>Active Processes</h3>
+        <div class="stat-card">
+          <h4>Running</h4>
           <div class="value" id="running-count">-</div>
         </div>
-        <div class="card">
-          <h3>Inactive Processes</h3>
+        <div class="stat-card">
+          <h4>Stopped</h4>
           <div class="value" id="stopped-count">-</div>
         </div>
-        <div class="card">
-          <h3>Server Uptime</h3>
+        <div class="stat-card">
+          <h4>Uptime</h4>
           <div class="value" id="uptime">-</div>
         </div>
-        <div class="card">
-          <h3>Last Updated</h3>
+        <div class="stat-card">
+          <h4>Last Updated</h4>
           <div class="value" id="last-updated">-</div>
         </div>
       </div>
 
-      <div class="processes-section">
-        <h2>All Managed Processes</h2>
-        <p class="section-description">Showing all configured processes including running and stopped instances</p>
-        <div id="processes-container">
-          <div class="loading">Loading processes...</div>
+      <div class="process-tabs" id="process-tabs">
+        <div class="process-tabs-header process-tab-scroll" id="process-tabs-header">
+          <!-- Process tabs will be generated here -->
+        </div>
+        <div id="process-tabs-content">
+          <!-- Process tab content will be generated here -->
         </div>
       </div>
     </div>
@@ -1051,6 +1435,79 @@
   </div>
 
   <script>
+    // Utility function to format timestamps in local time
+    function formatLocalTime(timestamp) {
+      if (!timestamp) return 'N/A';
+      
+      try {
+        const date = new Date(timestamp);
+        if (isNaN(date.getTime())) return 'Invalid Date';
+        
+        // Format the date in local region format
+        const localDate = date.toLocaleString(undefined, {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        });
+        
+        // Calculate elapsed time
+        const now = new Date();
+        const diffMs = now.getTime() - date.getTime();
+        const diffSeconds = Math.floor(diffMs / 1000);
+        const diffMinutes = Math.floor(diffSeconds / 60);
+        const diffHours = Math.floor(diffMinutes / 60);
+        const diffDays = Math.floor(diffHours / 24);
+        
+        let elapsedText = '';
+        if (diffDays > 0) {
+          elapsedText = ` (${diffDays} day${diffDays > 1 ? 's' : ''} ago)`;
+        } else if (diffHours > 0) {
+          elapsedText = ` (${diffHours} hour${diffHours > 1 ? 's' : ''} ago)`;
+        } else if (diffMinutes > 0) {
+          elapsedText = ` (${diffMinutes} minute${diffMinutes > 1 ? 's' : ''} ago)`;
+        } else {
+          elapsedText = ' (just now)';
+        }
+        
+        return `${localDate}${elapsedText}`;
+      } catch (error) {
+        return 'Invalid Date';
+      }
+    }
+
+    // Utility function to format relative time (e.g., "2 hours ago")
+    function formatRelativeTime(timestamp) {
+      if (!timestamp) return 'N/A';
+      
+      try {
+        const date = new Date(timestamp);
+        if (isNaN(date.getTime())) return 'Invalid Date';
+        
+        const now = new Date();
+        const diffMs = now.getTime() - date.getTime();
+        const diffSeconds = Math.floor(diffMs / 1000);
+        const diffMinutes = Math.floor(diffSeconds / 60);
+        const diffHours = Math.floor(diffMinutes / 60);
+        const diffDays = Math.floor(diffHours / 24);
+        
+        if (diffDays > 0) {
+          return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+        } else if (diffHours > 0) {
+          return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+        } else if (diffMinutes > 0) {
+          return `${diffMinutes} minute${diffMinutes > 1 ? 's' : ''} ago`;
+        } else {
+          return 'Just now';
+        }
+      } catch (error) {
+        return 'Invalid Date';
+      }
+    }
+
     // Global variables
     let ws = null;
     let reconnectAttempts = 0;
@@ -1063,9 +1520,17 @@
     let geoHeatmapChart = null;
     let geoHeatmapLoaded = false;
     let certificatesData = {};
+    let currentLogLines = 100;
+    let logUpdateIntervals = {};
+    let activeProcessTab = null;
+    let currentLogFilter = 'all'; // 'all', 'stdout', 'stderr'
+    let processLogs = {}; // Store logs for each process with stream info
+    let showLogsSinceRestart = false; // Track if we should show logs since last restart
+    let processLastRestartTimes = {}; // Store last restart times for each process
+    let isAtBottom = true; // Track if user is at bottom of logs for auto-follow
 
     // Tab switching logic
-    function showTab(tab) {
+    function showTab(tab, pushState = true) {
       // Hide all tabs
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -1083,7 +1548,100 @@
       } else if (tab === 'certificates') {
         loadCertificates();
       }
+
+      // Update history state
+      if (pushState) {
+        const state = { tab, process: activeProcessTab };
+        const url = `#${tab}` + (activeProcessTab ? `-${activeProcessTab}` : '');
+        window.history.pushState(state, '', url);
+      }
     }
+
+    function switchProcessTab(processId, pushState = true) {
+      // Remove active class from all tabs
+      document.querySelectorAll('.process-tab').forEach(tab => {
+        tab.classList.remove('active');
+      });
+
+      // Hide all tab content
+      document.querySelectorAll('.process-tab-content').forEach(content => {
+        content.classList.remove('active');
+      });
+
+      // Activate the selected tab
+      const selectedTab = document.querySelector(`[data-process-id="${processId}"]`);
+      if (selectedTab) {
+        selectedTab.classList.add('active');
+      }
+
+      // Show the corresponding content
+      const selectedContent = document.getElementById(`process-content-${processId}`);
+      if (selectedContent) {
+        selectedContent.classList.add('active');
+      }
+
+      // Update active process tab
+      activeProcessTab = processId;
+
+      // Reset "since restart" state when switching tabs
+      showLogsSinceRestart = false;
+
+      // Request logs for the active tab
+      requestLogs(processId, currentLogLines);
+
+      // Set up live updates for this process
+      setupLiveUpdates(processId);
+
+      // Update history state
+      if (pushState) {
+        // Find the currently active main tab
+        const activeTab = document.querySelector('.tab.active');
+        const tab = activeTab ? activeTab.id.replace('tab-', '') : 'processes';
+        const state = { tab, process: processId };
+        const url = `#${tab}-${processId}`;
+        window.history.pushState(state, '', url);
+      }
+    }
+
+    // Handle browser navigation (back/forward)
+    window.addEventListener('popstate', (event) => {
+      const state = event.state;
+      if (state) {
+        // Restore tab
+        showTab(state.tab || 'processes', false);
+        // Restore process tab if present
+        if (state.tab === 'processes' && state.process) {
+          switchProcessTab(state.process, false);
+        }
+      } else {
+        // Default to processes tab
+        showTab('processes', false);
+      }
+    });
+
+    // On page load, restore state from URL hash or default
+    window.addEventListener('DOMContentLoaded', () => {
+      let tab = 'processes';
+      let process = null;
+      if (window.location.hash) {
+        const hash = window.location.hash.replace('#', '');
+        const parts = hash.split('-');
+        if (parts.length > 0) tab = parts[0];
+        if (parts.length > 1) process = parts.slice(1).join('-');
+      }
+      showTab(tab, false);
+      if (tab === 'processes' && process) {
+        // Wait for processesData to be loaded, then switch
+        const trySwitch = () => {
+          if (processesData && processesData.find(p => p.id === process)) {
+            switchProcessTab(process, false);
+          } else {
+            setTimeout(trySwitch, 100);
+          }
+        };
+        trySwitch();
+      }
+    });
 
     // WebSocket connection management
     function connectWebSocket() {
@@ -1138,8 +1696,18 @@
     function handleWebSocketMessage(message) {
       switch (message.type) {
         case 'processes':
+          const oldProcessesData = processesData;
           processesData = message.data;
-          updateProcessesDisplay();
+          
+          // If this is the first load, update the entire display
+          if (!oldProcessesData || oldProcessesData.length === 0) {
+            updateProcessesDisplay();
+          } else {
+            // Update individual process information without regenerating HTML
+            processesData.forEach(process => {
+              updateProcessInfo(process.id, process);
+            });
+          }
           break;
         case 'status':
           statusData = message.data;
@@ -1160,12 +1728,41 @@
       }
     }
 
-    function requestLogs(processId) {
+    function requestLogs(processId, lines = currentLogLines) {
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({
           type: 'request_logs',
-          processId: processId
+          processId: processId,
+          lines: lines
         }));
+      }
+    }
+
+    function setLogLines(lines) {
+      if (lines === 'all') {
+        currentLogLines = 'all';
+      } else {
+        currentLogLines = parseInt(lines);
+      }
+      // Update active process tab with new line count
+      if (activeProcessTab) {
+        requestLogs(activeProcessTab, currentLogLines);
+      }
+    }
+
+    function setLogFilter(filter) {
+      currentLogFilter = filter;
+      // Update active process tab with new filter
+      if (activeProcessTab && processLogs[activeProcessTab]) {
+        updateProcessLogsDisplay(activeProcessTab, processLogs[activeProcessTab]);
+      }
+    }
+
+    function setLogsSinceRestart(enabled) {
+      showLogsSinceRestart = enabled;
+      // Update active process tab with new setting
+      if (activeProcessTab && processLogs[activeProcessTab]) {
+        updateProcessLogsDisplay(activeProcessTab, processLogs[activeProcessTab]);
       }
     }
 
@@ -1175,7 +1772,7 @@
       const runningCount = statusData.processes?.filter(p => p.status === 'running').length || 0;
       const stoppedCount = processesCount - runningCount;
       const uptime = statusData.uptime || 0;
-      const timestamp = statusData.timestamp ? new Date(statusData.timestamp).toLocaleString() : 'N/A';
+      const timestamp = statusData.timestamp ? formatLocalTime(statusData.timestamp) : 'N/A';
 
       document.getElementById('processes-count').textContent = processesCount;
       document.getElementById('running-count').textContent = runningCount;
@@ -1184,134 +1781,256 @@
       document.getElementById('last-updated').textContent = timestamp;
     }
 
+    // Update process information fields without regenerating entire HTML
+    function updateProcessInfo(processId, processData) {
+      const processContent = document.getElementById(`process-content-${processId}`);
+      if (!processContent) return;
+
+      // Update status
+      const statusElement = processContent.querySelector('.process-tab-info-item:first-child .process-tab-info-value');
+      if (statusElement) {
+        const statusClass = processData.status === 'running' ? 'success' : 'error';
+        const statusText = processData.status === 'running' ? 'Running' : 'Stopped';
+        statusElement.className = `process-tab-info-value ${statusClass}`;
+        statusElement.textContent = statusText;
+      }
+
+      // Update PID
+      const pidElement = processContent.querySelector('.process-tab-info-item:nth-child(2) .process-tab-info-value');
+      if (pidElement) {
+        pidElement.textContent = processData.pid || 'N/A';
+      }
+
+      // Update port
+      const portElement = processContent.querySelector('.process-tab-info-item:nth-child(3) .process-tab-info-value');
+      if (portElement) {
+        portElement.textContent = processData.port || 'N/A';
+      }
+
+      // Update restart count
+      const restartElement = processContent.querySelector('.process-tab-info-item:nth-child(4) .process-tab-info-value');
+      if (restartElement) {
+        restartElement.className = `process-tab-info-value ${getRestartCountClass(processData.restartAttempts || 0)}`;
+        restartElement.textContent = processData.restartAttempts || 0;
+      }
+
+      // Update health failures
+      const healthElement = processContent.querySelector('.process-tab-info-item:nth-child(5) .process-tab-info-value');
+      if (healthElement) {
+        healthElement.className = `process-tab-info-value ${getRestartCountClass(processData.healthFailures || 0)}`;
+        healthElement.textContent = processData.healthFailures || 0;
+      }
+
+      // Update start time
+      const startTimeElement = processContent.querySelector('.process-tab-info-item:nth-child(6) .process-tab-info-value');
+      if (startTimeElement) {
+        startTimeElement.textContent = processData.startTime ? formatLocalTime(processData.startTime) : 'N/A';
+      }
+
+      // Update last restart time
+      const lastRestartElement = processContent.querySelector('.process-tab-info-item:nth-child(7) .process-tab-info-value');
+      if (lastRestartElement) {
+        lastRestartElement.textContent = processData.lastRestartTime ? formatLocalTime(processData.lastRestartTime) : 'N/A';
+      }
+
+      // Update uptime
+      const uptimeElement = processContent.querySelector('.process-tab-info-item:nth-child(4) .process-tab-info-value');
+      if (uptimeElement) {
+        uptimeElement.textContent = processData.uptime ? formatUptime(processData.uptime) : 'N/A';
+      }
+
+      // Update restart history section
+      const restartHistorySection = processContent.querySelector('.process-tab-section:first-of-type .process-tab-info');
+      if (restartHistorySection) {
+        // Update current session restarts
+        const currentSessionElement = restartHistorySection.querySelector('.process-tab-info-item:first-child .process-tab-info-value');
+        if (currentSessionElement) {
+          currentSessionElement.textContent = `${processData.restartAttempts || 0} restarts`;
+        }
+
+        // Update last restart time in history section
+        const lastRestartHistoryElement = restartHistorySection.querySelector('.process-tab-info-item:nth-child(2) .process-tab-info-value');
+        if (lastRestartHistoryElement && processData.lastRestartTime) {
+          lastRestartHistoryElement.textContent = formatLocalTime(processData.lastRestartTime);
+        }
+
+        // Update reconnected status
+        const reconnectedElement = restartHistorySection.querySelector('.process-tab-info-item:last-child .process-tab-info-value');
+        if (reconnectedElement && processData.isReconnected) {
+          reconnectedElement.textContent = `Existing PID: ${processData.pid}`;
+        }
+      }
+
+      // Update tab header status indicator
+      const tabButton = document.querySelector(`[data-process-id="${processId}"]`);
+      if (tabButton) {
+        const statusIndicator = tabButton.querySelector('.process-tab-status');
+        if (statusIndicator) {
+          statusIndicator.className = `process-tab-status ${processData.status === 'running' ? 'running' : 'stopped'}`;
+        }
+      }
+
+      // Update action buttons
+      const startButton = processContent.querySelector('.btn-start');
+      const stopButton = processContent.querySelector('.btn-stop');
+      
+      if (startButton) {
+        startButton.disabled = processData.status === 'running';
+      }
+      if (stopButton) {
+        stopButton.disabled = processData.status !== 'running';
+      }
+    }
+
     // Update processes display
     function updateProcessesDisplay() {
-      const container = document.getElementById('processes-container');
+      const tabsHeader = document.getElementById('process-tabs-header');
+      const tabsContent = document.getElementById('process-tabs-content');
       
       if (!processesData || processesData.length === 0) {
-        container.innerHTML = '<div class="no-processes">No processes configured</div>';
+        tabsHeader.innerHTML = '';
+        tabsContent.innerHTML = `
+          <div class="no-processes-tab">
+            <h3>No Processes Configured</h3>
+            <p>No processes are currently configured or available.</p>
+          </div>
+        `;
         return;
       }
 
-      container.innerHTML = processesData.map(process => {
+      // Preserve current active tab
+      const currentActiveTab = activeProcessTab || (processesData.length > 0 ? processesData[0].id : null);
+
+      // Generate tab headers
+      const tabHeaders = processesData.map((process) => {
+        const statusClass = process.status === 'running' ? 'running' : 'stopped';
+        const isActive = process.id === currentActiveTab ? 'active' : '';
+        
+        return `
+          <button class="process-tab ${isActive}" data-process-id="${process.id}" onclick="switchProcessTab('${process.id}')">
+            <div class="process-tab-status ${statusClass}"></div>
+            <span>${process.name || process.id}</span>
+          </button>
+        `;
+      }).join('');
+
+      // Generate tab content
+      const tabContents = processesData.map((process) => {
+        const isActive = process.id === currentActiveTab ? 'active' : '';
         const statusClass = process.status === 'running' ? 'success' : 'error';
         const statusText = process.status === 'running' ? 'Running' : 'Stopped';
         
         return `
-          <div class="process">
-            <div class="process-header" onclick="toggleProcess('${process.id}')">
-              <div class="process-info">
-                <div class="process-name">${process.name || process.id}</div>
-                <div class="process-details">
-                  <span class="status-badge ${statusClass}">${statusText}</span>
-                  ${process.pid ? `<span>PID: ${process.pid}</span>` : ''}
-                  ${process.port ? `<span>Port: ${process.port}</span>` : ''}
-                  <span>Restarts: ${process.restartAttempts || 0}</span>
-                  <span class="health-badge ${process.healthFailures > 0 ? 'warning' : 'success'}">Health: ${process.healthFailures || 0}</span>
-                </div>
+          <div class="process-tab-content ${isActive}" id="process-content-${process.id}">
+            <div class="process-tab-actions">
+              <button onclick="startProcess('${process.id}')" class="btn btn-start" ${process.status === 'running' ? 'disabled' : ''}>
+                Start
+              </button>
+              <button onclick="stopProcess('${process.id}')" class="btn btn-stop" ${process.status !== 'running' ? 'disabled' : ''}>
+                Stop
+              </button>
+              <button onclick="restartProcess('${process.id}')" class="btn btn-restart">
+                Restart
+              </button>
+            </div>
+            <div class="process-tab-info">
+              <div class="process-tab-info-item">
+                <span class="process-tab-info-label">Status</span>
+                <span class="process-tab-info-value ${statusClass}">${statusText}</span>
               </div>
-              <div class="process-actions">
-                <button onclick="event.stopPropagation(); startProcess('${process.id}')" class="btn btn-start" ${process.status === 'running' ? 'disabled' : ''}>
-                  Start
-                </button>
-                <button onclick="event.stopPropagation(); stopProcess('${process.id}')" class="btn btn-stop" ${process.status !== 'running' ? 'disabled' : ''}>
-                  Stop
-                </button>
-                <button onclick="event.stopPropagation(); restartProcess('${process.id}')" class="btn btn-restart">
-                  Restart
-                </button>
-                <button onclick="event.stopPropagation(); showLogs('${process.id}')" class="btn btn-logs">
-                  Logs
-                </button>
+              <div class="process-tab-info-item">
+                <span class="process-tab-info-label">PID</span>
+                <span class="process-tab-info-value">${process.pid || 'N/A'}</span>
+              </div>
+              <div class="process-tab-info-item">
+                <span class="process-tab-info-label">Port</span>
+                <span class="process-tab-info-value">${process.port || 'N/A'}</span>
+              </div>
+              <div class="process-tab-info-item">
+                <span class="process-tab-info-label">Uptime</span>
+                <span class="process-tab-info-value">${process.uptime ? formatUptime(process.uptime) : 'N/A'}</span>
+              </div>
+              <button class="btn btn-xs" onclick="toggleDetails('${process.id}')" style="margin-left: 1rem;">Details</button>
+            </div>
+            <div class="process-tab-section collapsible" id="details-${process.id}">
+              <div class="process-tab-info">
+                <div class="process-tab-info-item">
+                  <span class="process-tab-info-label">Restart Count</span>
+                  <span class="process-tab-info-value ${getRestartCountClass(process.restartAttempts || 0)}">${process.restartAttempts || 0}</span>
+                </div>
+                <div class="process-tab-info-item">
+                  <span class="process-tab-info-label">Health Failures</span>
+                  <span class="process-tab-info-value ${getRestartCountClass(process.healthFailures || 0)}">${process.healthFailures || 0}</span>
+                </div>
+                <div class="process-tab-info-item">
+                  <span class="process-tab-info-label">Start Time</span>
+                  <span class="process-tab-info-value time-display">${process.startTime ? formatLocalTime(process.startTime) : 'N/A'}</span>
+                </div>
+                <div class="process-tab-info-item">
+                  <span class="process-tab-info-label">Last Restart</span>
+                  <span class="process-tab-info-value time-display">${process.lastRestartTime ? formatLocalTime(process.lastRestartTime) : 'N/A'}</span>
+                </div>
+                <div class="process-tab-info-item">
+                  <span class="process-tab-info-label">Log File</span>
+                  <span class="process-tab-info-value" style="font-size: 0.8rem;">${process.logFile || 'N/A'}</span>
+                </div>
+                <div class="process-tab-info-item">
+                  <span class="process-tab-info-label">PID File</span>
+                  <span class="process-tab-info-value" style="font-size: 0.8rem;">${process.pidFile || 'N/A'}</span>
+                </div>
               </div>
             </div>
-            <div class="process-body" id="process-${process.id}">
-              <div class="process-metrics">
-                <div class="metric">
-                  <div class="metric-label">Start Time</div>
-                  <div class="metric-value">${process.startTime ? new Date(process.startTime).toLocaleString() : 'N/A'}</div>
-                </div>
-                <div class="metric">
-                  <div class="metric-label">Last Restart</div>
-                  <div class="metric-value">${process.lastRestartTime ? new Date(process.lastRestartTime).toLocaleString() : 'N/A'}</div>
-                </div>
-                <div class="metric">
-                  <div class="metric-label">Uptime</div>
-                  <div class="metric-value">${process.uptime ? formatUptime(process.uptime * 1000) : 'N/A'}</div>
-                </div>
-                <div class="metric">
-                  <div class="metric-label">Restart Count</div>
-                  <div class="metric-value ${getRestartCountClass(process.restartAttempts || 0)}">${process.restartAttempts || 0}</div>
-                </div>
-                <div class="metric">
-                  <div class="metric-label">Health Failures</div>
-                  <div class="metric-value ${getRestartCountClass(process.healthFailures || 0)}">${process.healthFailures || 0}</div>
-                </div>
-                <div class="metric">
-                  <div class="metric-label">Process State</div>
-                  <div class="metric-value ${process.status === 'running' ? 'success' : 'error'}">${process.status === 'running' ? 'Active' : 'Inactive'}</div>
-                </div>
-              </div>
-              
-              <div class="restart-history">
-                <h4>🔄 Restart History</h4>
-                <div class="restart-item">
-                  <span class="restart-time">Current Session</span>
-                  <span class="restart-count">${process.restartAttempts || 0} restarts</span>
-                </div>
-                ${process.lastRestartTime ? `
-                <div class="restart-item">
-                  <span class="restart-time">Last Restart</span>
-                  <span class="restart-count">${new Date(process.lastRestartTime).toLocaleString()}</span>
-                </div>
-                ` : ''}
-                ${process.isReconnected ? `
-                <div class="restart-item">
-                  <span class="restart-time">Process Reconnected</span>
-                  <span class="restart-count">Existing PID: ${process.pid}</span>
-                </div>
-                ` : ''}
-              </div>
-
-              <div class="process-metrics">
-                <div class="metric">
-                  <div class="metric-label">Log File</div>
-                  <div class="metric-value" style="font-size: 0.8rem;">${process.logFile || 'N/A'}</div>
-                </div>
-                <div class="metric">
-                  <div class="metric-label">PID File</div>
-                  <div class="metric-value" style="font-size: 0.8rem;">${process.pidFile || 'N/A'}</div>
-                </div>
-              </div>
-              
+            <div class="process-tab-section">
+              <h3>📋 Process Logs</h3>
               <div class="logs-container" id="logs-${process.id}">
-                <div class="loading">Click "Logs" to load recent log entries</div>
+                <div class="logs-header">
+                  <div class="logs-title">Process Logs</div>
+                  <div class="logs-controls">
+                    <select onchange="setLogLines(this.value)" title="Number of log lines to display">
+                      <option value="100">100 lines</option>
+                      <option value="500">500 lines</option>
+                      <option value="1000">1,000 lines</option>
+                      <option value="5000">5,000 lines</option>
+                      <option value="10000">10,000 lines</option>
+                      <option value="all">All logs</option>
+                    </select>
+                    <div class="logs-filter-buttons">
+                      <button class="logs-filter-btn all active" onclick="setLogFilter('all')" title="Show all logs">All</button>
+                      <button class="logs-filter-btn stdout" onclick="setLogFilter('stdout')" title="Show stdout only">STDOUT</button>
+                      <button class="logs-filter-btn stderr" onclick="setLogFilter('stderr')" title="Show stderr only">STDERR</button>
+                      <button class="logs-filter-btn logs-since-restart" onclick="setLogsSinceRestart(!showLogsSinceRestart)" title="Show logs since last restart">Since Restart</button>
+                    </div>
+                    <button class="follow-btn active" onclick="scrollToBottom('${process.id}')" title="Follow logs (scroll to bottom)">
+                      <span>📋</span>
+                      <span>Follow</span>
+                    </button>
+                    <div class="live-indicator following">
+                      <div class="live-dot"></div>
+                      <span>Live</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="logs-loading">Click tab to load recent log entries</div>
               </div>
             </div>
           </div>
         `;
       }).join('');
-    }
 
-    // Toggle process details
-    function toggleProcess(processId) {
-      const processBody = document.getElementById(`process-${processId}`);
-      const processHeader = processBody?.parentElement?.querySelector('.process-header');
-      
-      if (processBody) {
-        const isExpanding = !processBody.classList.contains('expanded');
-        processBody.classList.toggle('expanded');
-        if (processHeader) {
-          processHeader.classList.toggle('expanded');
+      tabsHeader.innerHTML = tabHeaders;
+      tabsContent.innerHTML = tabContents;
+
+      // Update active process tab if it changed
+      if (currentActiveTab && currentActiveTab !== activeProcessTab) {
+        activeProcessTab = currentActiveTab;
+        // Request logs for the active tab if it's the first time
+        if (!processLogs[currentActiveTab]) {
+          requestLogs(currentActiveTab, currentLogLines);
+          setupLiveUpdates(currentActiveTab);
         }
-        
-        // Automatically load logs when expanding
-        if (isExpanding) {
-          requestLogs(processId);
-          startLiveLogUpdates(processId);
-        } else {
-          stopLiveLogUpdates(processId);
-        }
+      } else if (!activeProcessTab && processesData.length > 0) {
+        // Set the first process as active if no active tab
+        switchProcessTab(processesData[0].id);
       }
     }
 
@@ -1354,80 +2073,274 @@
         return;
       }
 
+      // Store last restart time for this process
+      const process = processesData.find(p => p.id === processId);
+      if (process && process.lastRestartTime) {
+        processLastRestartTimes[processId] = new Date(process.lastRestartTime).getTime();
+      }
+
       if (!logs || logs.length === 0) {
         logsContainer.innerHTML = `
           <div class="logs-header">
             <div class="logs-title">Process Logs</div>
-            <div class="live-indicator">
-              <div class="live-dot"></div>
-              <span>Live</span>
+            <div class="logs-controls">
+              <select onchange="setLogLines(this.value)" title="Number of log lines to display">
+                <option value="100">100 lines</option>
+                <option value="500">500 lines</option>
+                <option value="1000">1,000 lines</option>
+                <option value="5000">5,000 lines</option>
+                <option value="10000">10,000 lines</option>
+                <option value="all">All logs</option>
+              </select>
+              <div class="logs-filter-buttons">
+                <button class="logs-filter-btn all active" onclick="setLogFilter('all')" title="Show all logs">All</button>
+                <button class="logs-filter-btn stdout" onclick="setLogFilter('stdout')" title="Show stdout only">STDOUT</button>
+                <button class="logs-filter-btn stderr" onclick="setLogFilter('stderr')" title="Show stderr only">STDERR</button>
+                <button class="logs-filter-btn logs-since-restart" onclick="setLogsSinceRestart(!showLogsSinceRestart)" title="Show logs since last restart">Since Restart</button>
+              </div>
+              <button class="follow-btn active" onclick="scrollToBottom('${processId}')" title="Follow logs (scroll to bottom)">
+                <span>📋</span>
+                <span>Follow</span>
+              </button>
+              <div class="live-indicator following">
+                <div class="live-dot"></div>
+                <span>Live</span>
+              </div>
             </div>
           </div>
-          <div class="loading">No logs available</div>
+          <div class="logs-loading">No logs available</div>
         `;
         return;
       }
 
-      const logLines = logs.map(log => {
-        // Logs are already parsed as HTML from the server
-        return `<div class="log-line">${log}</div>`;
-      }).join('');
+      // Store logs with stream information
+      const logsWithStreams = logs.map(log => {
+        // Parse log line to determine stream type
+        // Look for explicit stream prefixes first
+        if (log.includes('[STDOUT]')) {
+          return {
+            content: log,
+            stream: 'stdout'
+          };
+        }
+        
+        if (log.includes('[STDERR]')) {
+          return {
+            content: log,
+            stream: 'stderr'
+          };
+        }
+        
+        // Fallback to pattern matching for logs without explicit prefixes
+        const isStderr = log.includes('ERROR') || 
+                        log.includes('WARN') ||
+                        log.includes('FATAL') ||
+                        log.toLowerCase().includes('error') ||
+                        log.toLowerCase().includes('warning') ||
+                        log.toLowerCase().includes('fail') ||
+                        log.toLowerCase().includes('exception');
+        
+        return {
+          content: log,
+          stream: isStderr ? 'stderr' : 'stdout'
+        };
+      });
 
-      logsContainer.innerHTML = `
-        <div class="logs-header">
-          <div class="logs-title">Process Logs (${logs.length} lines)</div>
-          <div class="live-indicator">
-            <div class="live-dot"></div>
-            <span>Live</span>
-          </div>
-        </div>
-        <div class="logs-content">
-          ${logLines}
-        </div>
-      `;
+      // Store logs for this process
+      processLogs[processId] = logsWithStreams;
+
+      // Update display with current filter
+      updateProcessLogsDisplay(processId, logsWithStreams);
+    }
+
+    // Update process logs display with filtering
+    function updateProcessLogsDisplay(processId, logsWithStreams) {
+      const logsContainer = document.getElementById(`logs-${processId}`);
+      if (!logsContainer) {
+        return;
+      }
+
+      // Filter logs based on current filter
+      let filteredLogs = logsWithStreams.filter(log => {
+        if (currentLogFilter === 'all') return true;
+        return log.stream === currentLogFilter;
+      });
+
+      // Apply "since last restart" filter if enabled
+      if (showLogsSinceRestart && processLastRestartTimes[processId]) {
+        const lastRestartTime = processLastRestartTimes[processId];
+        filteredLogs = filteredLogs.filter(log => {
+          // Try to extract timestamp from log line
+          const timestampMatch = log.content.match(/\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\]/);
+          if (timestampMatch) {
+            const logTime = new Date(timestampMatch[1]).getTime();
+            return logTime >= lastRestartTime;
+          }
+          // If no timestamp found, include the log (better to show than hide)
+          return true;
+        });
+      }
+
+      // Update filter button states
+      const filterButtons = logsContainer.querySelectorAll('.logs-filter-btn');
+      filterButtons.forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.textContent.toLowerCase() === currentLogFilter || 
+            (currentLogFilter === 'all' && btn.textContent === 'All')) {
+          btn.classList.add('active');
+        }
+        // Handle "Since Restart" button state
+        if (btn.textContent === 'Since Restart') {
+          if (showLogsSinceRestart) {
+            btn.classList.add('active');
+          }
+        }
+      });
+
+      // Use DocumentFragment for better performance with large log volumes
+      const fragment = document.createDocumentFragment();
+      const logLinesContainer = document.createElement('div');
+      logLinesContainer.className = 'logs-content';
+
+      // Process logs in chunks to avoid blocking the UI
+      const chunkSize = 1000;
+      const processLogsInChunks = (startIndex) => {
+        const endIndex = Math.min(startIndex + chunkSize, filteredLogs.length);
+        
+        for (let i = startIndex; i < endIndex; i++) {
+          const logLine = document.createElement('div');
+          logLine.className = `log-line ${filteredLogs[i].stream}`;
+          logLine.innerHTML = filteredLogs[i].content;
+          logLinesContainer.appendChild(logLine);
+        }
+
+        if (endIndex < filteredLogs.length) {
+          // Process next chunk asynchronously
+          setTimeout(() => processLogsInChunks(endIndex), 0);
+        } else {
+          // All chunks processed, update the container
+          const header = logsContainer.querySelector('.logs-header');
+          logsContainer.innerHTML = '';
+          logsContainer.appendChild(header);
+          logsContainer.appendChild(logLinesContainer);
+          
+          // Only scroll to bottom if user was at bottom before update
+          if (isAtBottom) {
+            logLinesContainer.scrollTop = logLinesContainer.scrollHeight;
+          }
+          
+          // Setup scroll listener for this log container
+          setupLogScrollListener(processId);
+        }
+      };
+
+      // Update header with log count
+      const header = logsContainer.querySelector('.logs-header');
+      if (header) {
+        const title = header.querySelector('.logs-title');
+        if (title) {
+          const totalLogs = logsWithStreams.length;
+          const filteredCount = filteredLogs.length;
+          let filterText = '';
+          if (currentLogFilter !== 'all') {
+            filterText += ` (${currentLogFilter.toUpperCase()})`;
+          }
+          if (showLogsSinceRestart) {
+            filterText += ' (since restart)';
+          }
+          
+          // Add indicator for "all logs" mode
+          let lineCountText = '';
+          if (currentLogLines === 'all') {
+            lineCountText = ` (All ${filteredCount.toLocaleString()}/${totalLogs.toLocaleString()} lines)`;
+          } else {
+            lineCountText = ` (${filteredCount.toLocaleString()}/${totalLogs.toLocaleString()} lines)`;
+          }
+          
+          title.textContent = `Process Logs${filterText}${lineCountText}`;
+        }
+        
+        // Update follow button and live indicator
+        const followBtn = header.querySelector('.follow-btn');
+        const liveIndicator = header.querySelector('.live-indicator');
+        
+        if (followBtn) {
+          if (isAtBottom) {
+            followBtn.className = 'follow-btn active';
+            followBtn.title = 'Following logs (scroll to bottom)';
+            followBtn.innerHTML = '<span>📋</span><span>Follow</span>';
+          } else {
+            followBtn.className = 'follow-btn inactive';
+            followBtn.title = 'Not following - click to follow logs';
+            followBtn.innerHTML = '<span>⏸️</span><span>Paused</span>';
+          }
+        }
+        
+        if (liveIndicator) {
+          if (isAtBottom) {
+            liveIndicator.className = 'live-indicator following';
+            liveIndicator.innerHTML = '<div class="live-dot"></div><span>Live</span>';
+          } else {
+            liveIndicator.className = 'live-indicator not-following';
+            liveIndicator.innerHTML = '<div class="live-dot"></div><span>Paused</span>';
+          }
+        }
+        
+        // Update dropdown selection
+        const lineCountSelect = header.querySelector('select');
+        if (lineCountSelect) {
+          lineCountSelect.value = currentLogLines;
+        }
+      }
+
+      // Start processing logs
+      processLogsInChunks(0);
       
-      // Scroll to bottom for new logs
-      const logsContent = logsContainer.querySelector('.logs-content');
-      if (logsContent) {
-        logsContent.scrollTop = logsContent.scrollHeight;
+      // Show performance warning for very large log files
+      if (currentLogLines === 'all' && filteredLogs.length > 50000) {
+        setTimeout(() => {
+          const warningDiv = document.createElement('div');
+          warningDiv.className = 'logs-warning';
+          warningDiv.innerHTML = `
+            <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 4px; padding: 0.75rem; margin: 0.5rem 0; color: #92400e;">
+              <strong>⚠️ Performance Notice:</strong> Displaying ${filteredLogs.length.toLocaleString()} log lines. 
+              Large log files may impact browser performance. Consider using a smaller line count for better performance.
+            </div>
+          `;
+          logsContainer.insertBefore(warningDiv, logsContainer.firstChild);
+        }, 100);
       }
     }
 
     // Start live log updates for a process
+    function setupLiveUpdates(processId) {
+      // Stop live updates for other processes
+      Object.keys(logUpdateIntervals).forEach(pid => {
+        if (pid !== processId) {
+          stopLiveLogUpdates(pid);
+        }
+      });
+
+      // Start live updates for the current process
+      startLiveLogUpdates(processId);
+    }
+
     function startLiveLogUpdates(processId) {
       // Stop any existing interval for this process
       stopLiveLogUpdates(processId);
       
       // Request logs every 5 seconds via WebSocket
-      liveUpdateIntervals[processId] = setInterval(() => {
-        requestLogs(processId);
+      logUpdateIntervals[processId] = setInterval(() => {
+        requestLogs(processId, currentLogLines);
       }, 5000);
     }
 
     // Stop live log updates for a process
     function stopLiveLogUpdates(processId) {
-      if (liveUpdateIntervals[processId]) {
-        clearInterval(liveUpdateIntervals[processId]);
-        delete liveUpdateIntervals[processId];
+      if (logUpdateIntervals[processId]) {
+        clearInterval(logUpdateIntervals[processId]);
+        delete logUpdateIntervals[processId];
       }
-    }
-
-    // Show logs (now uses WebSocket)
-    async function showLogs(processId) {
-      // First expand the process details if not already expanded
-      const processBody = document.getElementById(`process-${processId}`);
-      const processHeader = processBody?.parentElement?.querySelector('.process-header');
-      
-      if (processBody && !processBody.classList.contains('expanded')) {
-        processBody.classList.add('expanded');
-        if (processHeader) {
-          processHeader.classList.add('expanded');
-        }
-      }
-
-      // Request logs via WebSocket and start live updates
-      requestLogs(processId);
-      startLiveLogUpdates(processId);
     }
 
     // Statistics functions
@@ -1760,7 +2673,7 @@
 
     // Clean up all live updates
     function cleanupLiveUpdates() {
-      Object.keys(liveUpdateIntervals).forEach(processId => {
+      Object.keys(logUpdateIntervals).forEach(processId => {
         stopLiveLogUpdates(processId);
       });
     }
@@ -1775,8 +2688,62 @@
       }
     });
 
+    // Check if user is at bottom of logs
+    function checkIfAtBottom(logsContainer) {
+      if (!logsContainer) return true;
+      
+      const logLinesContainer = logsContainer.querySelector('.logs-content');
+      if (!logLinesContainer) return true;
+      
+      const scrollTop = logLinesContainer.scrollTop;
+      const scrollHeight = logLinesContainer.scrollHeight;
+      const clientHeight = logLinesContainer.clientHeight;
+      
+      // Consider "at bottom" if within 5 pixels of the bottom
+      return (scrollHeight - scrollTop - clientHeight) <= 5;
+    }
+
+    // Add scroll event listener to track when user scrolls away from bottom
+    function setupLogScrollListener(processId) {
+      const logsContainer = document.getElementById(`logs-${processId}`);
+      if (!logsContainer) return;
+      
+      const logLinesContainer = logsContainer.querySelector('.logs-content');
+      if (!logLinesContainer) return;
+      
+      // Remove existing listener if any
+      logLinesContainer.removeEventListener('scroll', logLinesContainer._scrollHandler);
+      
+      // Add new scroll listener
+      logLinesContainer._scrollHandler = () => {
+        isAtBottom = checkIfAtBottom(logsContainer);
+      };
+      
+      logLinesContainer.addEventListener('scroll', logLinesContainer._scrollHandler);
+    }
+
+    // Manually scroll to bottom and enable auto-follow
+    function scrollToBottom(processId) {
+      const logsContainer = document.getElementById(`logs-${processId}`);
+      if (!logsContainer) return;
+      
+      const logLinesContainer = logsContainer.querySelector('.logs-content');
+      if (!logLinesContainer) return;
+      
+      logLinesContainer.scrollTop = logLinesContainer.scrollHeight;
+      isAtBottom = true;
+    }
+
     // Initialize WebSocket connection
     connectWebSocket();
+
+    // Add toggleDetails function for collapsible details
+    function toggleDetails(processId) {
+      const details = document.getElementById(`details-${processId}`);
+      if (details) {
+        details.classList.toggle('open');
+      }
+    }
   </script>
 </body>
 

@@ -11,7 +11,7 @@ export interface WebSocketMessage {
 export interface WebSocketServiceInterface {
   getProcesses(): Promise<any[]>;
   getStatusData(): Promise<any>;
-  getProcessLogs(processId: string, lines: number): Promise<string[]>;
+  getProcessLogs(processId: string, lines: number | string): Promise<string[]>;
 }
 
 export class WebSocketService {
@@ -125,7 +125,7 @@ export class WebSocketService {
   private handleMessage(ws: WebSocket, message: any): void {
     switch (message.type) {
       case 'request_logs':
-        this.handleLogsRequest(ws, message.processId);
+        this.handleLogsRequest(ws, message.processId, message.lines);
         break;
       case 'ping':
         this.sendToClient(ws, { type: 'pong', data: {}, timestamp: new Date().toISOString() });
@@ -135,9 +135,20 @@ export class WebSocketService {
     }
   }
 
-  private async handleLogsRequest(ws: WebSocket, processId: string): Promise<void> {
+  private async handleLogsRequest(ws: WebSocket, processId: string, lines: number | 'all' = 100): Promise<void> {
     try {
-      const logs = await this.proxyService.getProcessLogs(processId, 50);
+      let maxLines: number;
+      
+      if (lines === 'all') {
+        // For "all" logs, we'll use a very high number to get all available logs
+        // We'll still apply a reasonable upper limit to prevent memory issues
+        maxLines = 100000; // 100k lines as a reasonable upper limit for "all"
+      } else {
+        // For numeric values, limit to a reasonable maximum (10,000) to prevent memory issues
+        maxLines = Math.min(lines || 100, 10000);
+      }
+      
+      const logs = await this.proxyService.getProcessLogs(processId, maxLines);
       const parsedLogs = logs.map(log => parseAnsiToHtml(log));
       this.sendToClient(ws, {
         type: 'logs',
