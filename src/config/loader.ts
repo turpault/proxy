@@ -95,37 +95,15 @@ const geolocationFilterSchema = Joi.object({
 
 // CORS Configuration schema
 const corsConfigSchema = Joi.object({
-  enabled: Joi.boolean().default(true),
-  origin: Joi.alternatives().try(
-    Joi.boolean(),
-    Joi.string(),
-    Joi.array().items(Joi.string())
-  ).default(true),
-  methods: Joi.array().items(Joi.string()).default(['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE']),
+  enabled: Joi.boolean().optional(),
+  origin: Joi.alternatives().try(Joi.boolean(), Joi.string(), Joi.array().items(Joi.string())).optional(),
+  credentials: Joi.boolean().optional(),
+  methods: Joi.array().items(Joi.string()).optional(),
   allowedHeaders: Joi.array().items(Joi.string()).optional(),
   exposedHeaders: Joi.array().items(Joi.string()).optional(),
-  credentials: Joi.boolean().default(false),
   maxAge: Joi.number().optional(),
-  preflightContinue: Joi.boolean().default(false),
-  optionsSuccessStatus: Joi.number().default(204),
-  forwardHeaders: Joi.array().items(Joi.string()).optional(),
-});
-
-// Dynamic CORS Proxy Configuration schema
-const dynamicTargetSchema = Joi.object({
-  enabled: Joi.boolean().default(true),
-  allowedDomains: Joi.array().items(Joi.string()).required(),
-  httpsOnly: Joi.boolean().default(true),
-  urlParameter: Joi.string().default('url'),
-  timeouts: Joi.object({
-    request: Joi.number().default(30000),
-    proxy: Joi.number().default(30000),
-  }).optional(),
-  logging: Joi.object({
-    logRequests: Joi.boolean().default(true),
-    logBlocked: Joi.boolean().default(true),
-    logErrors: Joi.boolean().default(true),
-  }).optional(),
+  preflightContinue: Joi.boolean().optional(),
+  optionsSuccessStatus: Joi.number().optional(),
 });
 
 // Process Management Configuration schema
@@ -170,7 +148,7 @@ const configSchema = Joi.object({
       headers: Joi.object().pattern(Joi.string(), Joi.string()).optional(),
       rewrite: Joi.object().pattern(Joi.string(), Joi.string()).optional(),
       path: Joi.string().optional(),
-      type: Joi.string().valid('proxy', 'static', 'redirect').default('proxy'),
+      type: Joi.string().valid('proxy', 'static', 'redirect', 'cors-forwarder').default('proxy'),
       staticPath: Joi.string().when('type', {
         is: 'static',
         then: Joi.string().required(),
@@ -191,7 +169,6 @@ const configSchema = Joi.object({
         Joi.boolean(),
         corsConfigSchema
       ).optional(),
-      dynamicTarget: dynamicTargetSchema.optional(),
     })
   ).required(),
   letsEncrypt: Joi.object({
@@ -220,7 +197,6 @@ const configSchema = Joi.object({
     rateLimitWindowMs: 900000,
     rateLimitMaxRequests: 100,
   }),
-  dynamicTarget: dynamicTargetSchema.optional(),
 });
 
 export class ConfigLoader {

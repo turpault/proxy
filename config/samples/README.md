@@ -160,10 +160,13 @@ oauth2:
 Customize CORS for your needs:
 ```yaml
 cors:
-  origin: ["https://yourdomain.com"]
+  enabled: true
+  origin: ["https://app.example.com"]
   credentials: true
   methods: ["GET", "POST", "PUT", "DELETE"]
-  forwardHeaders: ["authorization", "x-api-key"]
+  allowedHeaders: ["Content-Type", "Authorization", "X-API-Key"]
+  exposedHeaders: ["X-Total-Count", "X-Page-Count"]
+  maxAge: 3600
 ```
 
 ## Testing Your Configuration

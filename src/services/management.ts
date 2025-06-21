@@ -8,6 +8,7 @@ import { logger } from '../utils/logger';
 import { ServerConfig } from '../types';
 import { processManager } from './process-manager';
 import { statisticsService } from './statistics';
+import { cacheService } from './cache';
 
 export function registerManagementEndpoints(
   managementApp: express.Application,
@@ -412,6 +413,237 @@ export function registerManagementEndpoints(
     } catch (error) {
       logger.error('Failed to create statistics backup', error);
       res.status(500).json({ success: false, error: 'Failed to create statistics backup' });
+    }
+  });
+
+  // Cache management endpoints
+  managementApp.get('/api/cache/stats', async (req, res) => {
+    try {
+      const stats = await cacheService.getStats();
+      res.json({ 
+        success: true, 
+        data: {
+          ...stats,
+          oldestEntry: stats.oldestEntry ? new Date(stats.oldestEntry).toISOString() : undefined,
+          newestEntry: stats.newestEntry ? new Date(stats.newestEntry).toISOString() : undefined,
+          maxAge: '24 hours',
+          cacheDir: cacheService['cacheDir'] // Access private property for display
+        },
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error('Failed to get cache stats', error);
+      res.status(500).json({ success: false, error: 'Failed to get cache stats' });
+    }
+  });
+
+  managementApp.get('/api/cache/entries', async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const userId = req.query.userId as string;
+      const inMRU = req.query.inMRU as string;
+      
+      let entries = await cacheService.getAllEntries();
+      
+      // Filter by user if specified
+      if (userId) {
+        entries = entries.filter(entry => entry.userId === userId);
+      }
+      
+      // Filter by MRU status if specified
+      if (inMRU !== undefined) {
+        const mruFilter = inMRU === 'true';
+        entries = entries.filter(entry => entry.inMRU === mruFilter);
+      }
+      
+      // Apply pagination
+      const total = entries.length;
+      const paginatedEntries = entries.slice(offset, offset + limit);
+      
+      res.json({ 
+        success: true, 
+        data: {
+          entries: paginatedEntries.map(entry => ({
+            ...entry,
+            timestamp: new Date(entry.timestamp).toISOString(),
+            lastAccessed: entry.lastAccessed ? new Date(entry.lastAccessed).toISOString() : undefined,
+          })),
+          pagination: {
+            total,
+            limit,
+            offset,
+            hasMore: offset + limit < total
+          }
+        },
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error('Failed to get cache entries', error);
+      res.status(500).json({ success: false, error: 'Failed to get cache entries' });
+    }
+  });
+
+  managementApp.get('/api/cache/users', async (req, res) => {
+    try {
+      const entries = await cacheService.getAllEntries();
+      
+      // Group entries by user
+      const userStats = new Map<string, {
+        userId: string;
+        entryCount: number;
+        mruCount: number;
+        totalSize: number;
+        lastActivity: number;
+        userTypes: Set<string>;
+      }>();
+      
+      for (const entry of entries) {
+        const userId = entry.userId || 'anonymous';
+        const userType = entry.userId ? entry.userId.split(':')[0] : 'ip';
+        
+        if (!userStats.has(userId)) {
+          userStats.set(userId, {
+            userId,
+            entryCount: 0,
+            mruCount: 0,
+            totalSize: 0,
+            lastActivity: 0,
+            userTypes: new Set(),
+          });
+        }
+        
+        const stats = userStats.get(userId)!;
+        stats.entryCount++;
+        stats.totalSize += entry.bodySize;
+        stats.userTypes.add(userType);
+        
+        if (entry.inMRU) {
+          stats.mruCount++;
+        }
+        
+        if (entry.lastAccessed && entry.lastAccessed > stats.lastActivity) {
+          stats.lastActivity = entry.lastAccessed;
+        } else if (entry.timestamp > stats.lastActivity) {
+          stats.lastActivity = entry.timestamp;
+        }
+      }
+      
+      const users = Array.from(userStats.values()).map(stats => ({
+        ...stats,
+        userTypes: Array.from(stats.userTypes),
+        lastActivity: new Date(stats.lastActivity).toISOString(),
+      }));
+      
+      // Sort by last activity (most recent first)
+      users.sort((a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime());
+      
+      res.json({ 
+        success: true, 
+        data: users,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error('Failed to get cache users', error);
+      res.status(500).json({ success: false, error: 'Failed to get cache users' });
+    }
+  });
+
+  managementApp.get('/api/cache/users/:userId', async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const entries = await cacheService.getUserEntries(userId);
+      
+      const userStats = {
+        userId,
+        entryCount: entries.length,
+        mruCount: entries.filter(e => e.inMRU).length,
+        totalSize: entries.reduce((sum, e) => sum + e.bodySize, 0),
+        lastActivity: entries.length > 0 ? Math.max(...entries.map(e => e.lastAccessed || e.timestamp)) : 0,
+        userTypes: new Set(entries.map(e => e.userId?.split(':')[0] || 'ip')),
+      };
+      
+      res.json({ 
+        success: true, 
+        data: {
+          stats: {
+            ...userStats,
+            lastActivity: new Date(userStats.lastActivity).toISOString(),
+            userTypes: Array.from(userStats.userTypes),
+          },
+          entries: entries.map(entry => ({
+            ...entry,
+            timestamp: new Date(entry.timestamp).toISOString(),
+            lastAccessed: entry.lastAccessed ? new Date(entry.lastAccessed).toISOString() : undefined,
+          }))
+        },
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error('Failed to get user cache entries', error);
+      res.status(500).json({ success: false, error: 'Failed to get user cache entries' });
+    }
+  });
+
+  managementApp.post('/api/cache/clear', async (req, res) => {
+    try {
+      await cacheService.clear();
+      res.json({ 
+        success: true, 
+        message: 'Cache cleared successfully',
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error('Failed to clear cache', error);
+      res.status(500).json({ success: false, error: 'Failed to clear cache' });
+    }
+  });
+
+  managementApp.post('/api/cache/cleanup', async (req, res) => {
+    try {
+      await cacheService.cleanup();
+      res.json({ 
+        success: true, 
+        message: 'Cache cleanup completed',
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error('Failed to cleanup cache', error);
+      res.status(500).json({ success: false, error: 'Failed to cleanup cache' });
+    }
+  });
+
+  managementApp.post('/api/cache/users/:userId/clear', async (req, res) => {
+    try {
+      const { userId } = req.params;
+      await cacheService.clearUserCache(userId);
+      res.json({ 
+        success: true, 
+        message: `Cache cleared for user ${userId}`,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error('Failed to clear user cache', error);
+      res.status(500).json({ success: false, error: 'Failed to clear user cache' });
+    }
+  });
+
+  managementApp.delete('/api/cache/:target', async (req, res) => {
+    try {
+      const { target } = req.params;
+      const method = req.query.method as string || 'GET';
+      const userId = req.query.userId as string;
+      const userIP = req.query.userIP as string;
+      
+      await cacheService.delete(target, method, userId, userIP);
+      res.json({ 
+        success: true, 
+        message: `Cache entry for ${method} ${target} deleted successfully`,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error('Failed to delete cache entry', error);
+      res.status(500).json({ success: false, error: 'Failed to delete cache entry' });
     }
   });
 } 

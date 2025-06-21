@@ -246,8 +246,6 @@ routes:
       credentials: true
       methods: ["GET", "POST", "PUT", "DELETE"]
       allowedHeaders: ["Content-Type", "Authorization", "X-API-Key"]
-      # Configure which headers to forward from client to target
-      forwardHeaders: ["authorization", "x-api-key", "x-auth-token", "x-custom-header"]
     ssl: true
 ```
 
@@ -356,67 +354,80 @@ For support and questions:
 
 **Note**: This is a production-ready reverse proxy server with enterprise-grade features. Make sure to properly configure security settings and monitor the server in production environments.
 
-### CORS Configuration Options
+## CORS Configuration
 
-The `cors` configuration supports the following options:
+The `cors` option allows you to configure Cross-Origin Resource Sharing (CORS) for your proxy routes. You can enable CORS with default settings or provide a detailed configuration.
+
+### Simple CORS (Boolean)
+
+```yaml
+routes:
+  - domain: api.example.com
+    target: http://localhost:3000
+    cors: true  # Enable CORS with default settings
+```
+
+### Advanced CORS Configuration
+
+```yaml
+routes:
+  - domain: api.example.com
+    target: http://localhost:3000
+    cors:
+      enabled: true
+      origin: ["https://app.example.com", "https://admin.example.com"]
+      credentials: true
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+      allowedHeaders: ["Content-Type", "Authorization", "X-API-Key"]
+      exposedHeaders: ["X-Total-Count", "X-Page-Count"]
+      maxAge: 86400
+```
+
+### CORS Configuration Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `enabled` | boolean | `true` | Enable/disable CORS |
-| `origin` | string/array/boolean | `true` | Allowed origins |
-| `credentials` | boolean | `false` | Allow credentials |
-| `methods` | string[] | `["GET", "POST", "PUT", "DELETE", "OPTIONS"]` | Allowed HTTP methods |
-| `allowedHeaders` | string[] | `["Content-Type", "Authorization"]` | Headers allowed in requests |
-| `exposedHeaders` | string[] | `[]` | Headers exposed in responses |
-| `maxAge` | number | `86400` | Preflight cache duration |
-| `forwardHeaders` | string[] | See below | Headers to forward from client to target |
+| `enabled` | boolean | true | Whether CORS is enabled |
+| `origin` | boolean/string/string[] | true | Allowed origins (true = all origins) |
+| `credentials` | boolean | false | Allow credentials (cookies, authorization headers) |
+| `methods` | string[] | See below | Allowed HTTP methods |
+| `allowedHeaders` | string[] | See below | Headers allowed in requests |
+| `exposedHeaders` | string[] | See below | Headers exposed to client |
+| `maxAge` | number | 86400 | Preflight cache duration in seconds |
+| `preflightContinue` | boolean | false | Continue preflight requests |
+| `optionsSuccessStatus` | number | 204 | Status code for OPTIONS requests |
 
-#### Header Forwarding
+### Default Values
 
-The `forwardHeaders` option allows you to specify which headers from the client request should be forwarded to the target server. If not specified, the following headers are forwarded by default:
+If not specified, the following defaults are used:
 
-- `authorization` - Bearer tokens, Basic auth, etc.
+- **Methods**: `["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"]`
+- **Allowed Headers**: `["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"]`
+- **Exposed Headers**: `["Content-Length", "Content-Type"]`
 
-**Example configurations:**
+### Examples
 
+**Allow specific origins:**
 ```yaml
-# Forward only authorization header
 cors:
-  forwardHeaders: ["authorization"]
-
-# Forward custom headers
-cors:
-  forwardHeaders: ["authorization", "x-api-key", "x-custom-auth", "x-user-id"]
-
-# Forward no headers (empty array)
-cors:
-  forwardHeaders: []
+  origin: ["https://app.example.com", "https://admin.example.com"]
 ```
 
-### Testing Header Forwarding
-
-You can test the header forwarding functionality using the included test script:
-
-```bash
-# Run the test script
-node test-header-forwarding.js
+**Allow all origins:**
+```yaml
+cors:
+  origin: true
 ```
 
-The test script will:
-1. Make a request with various test headers
-2. Verify the proxy server receives the request
-3. Check that headers are properly forwarded to the target server
-
-Make sure you have a test route configured in your `proxy.yaml`:
-
+**Disable CORS:**
 ```yaml
-# Test route for header forwarding
-- domain: "localhost"
-  path: "/api/test-headers"
-  target: "http://localhost:3006"
-  cors:
-    enabled: true
-    origin: true
-    forwardHeaders: ["authorization", "x-api-key", "x-custom-auth", "x-user-id"]
-  ssl: false
+cors:
+  enabled: false
+```
+
+**Custom headers:**
+```yaml
+cors:
+  allowedHeaders: ["Content-Type", "Authorization", "X-API-Key", "X-Custom-Header"]
+  exposedHeaders: ["X-Total-Count", "X-Page-Count"]
 ``` 

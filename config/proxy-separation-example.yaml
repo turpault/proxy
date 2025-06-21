@@ -1,0 +1,179 @@
+# Proxy Separation Example Configuration
+# Demonstrates the difference between Classic Proxy and CORS Proxy
+
+port: 3000
+httpsPort: 4443
+
+letsEncrypt:
+  email: "admin@example.com"
+  staging: true
+  certDir: "./certificates"
+
+routes:
+  # ============================================================================
+  # CLASSIC PROXY EXAMPLES
+  # ============================================================================
+  
+  # Example 1: Internal API with OAuth2 authentication
+  - domain: "api.internal.com"
+    type: "classic-proxy"
+    target: "http://backend-service:8080"
+    oauth2:
+      enabled: true
+      provider: "google"
+      clientId: "${GOOGLE_CLIENT_ID}"
+      clientSecret: "${GOOGLE_CLIENT_SECRET}"
+      authorizationEndpoint: "https://accounts.google.com/oauth/authorize"
+      tokenEndpoint: "https://oauth2.googleapis.com/token"
+      callbackUrl: "https://api.internal.com/oauth/callback"
+      scopes: ["openid", "email", "profile"]
+    headers:
+      X-API-Version: "v1"
+      X-Service-Name: "internal-api"
+
+  # Example 2: Load balancer for multiple backend instances
+  - domain: "load-balanced.com"
+    type: "classic-proxy"
+    target: "http://backend-cluster:8080"
+    headers:
+      X-Forwarded-For: "${client_ip}"
+      X-Real-IP: "${client_ip}"
+
+  # Example 3: SSL termination (HTTPS to HTTP)
+  - domain: "secure.example.com"
+    type: "classic-proxy"
+    target: "http://internal-service:3000"
+    ssl: true
+
+  # ============================================================================
+  # CORS PROXY EXAMPLES
+  # ============================================================================
+  
+  # Example 4: External API with CORS bypass
+  - domain: "api.external.com"
+    type: "cors-proxy"
+    target: "https://external-api.com"
+    cors:
+      enabled: true
+      origin: ["https://myapp.com", "https://dev.myapp.com"]
+      credentials: true
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+      allowedHeaders: ["Content-Type", "Authorization", "X-API-Key"]
+      exposedHeaders: ["X-Total-Count", "X-Page-Count"]
+      maxAge: 86400
+
+  # Example 5: Development proxy for frontend
+  - domain: "dev-api.com"
+    type: "cors-proxy"
+    target: "https://jsonplaceholder.typicode.com"
+    cors:
+      enabled: true
+      origin: "*"
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+      allowedHeaders: ["Content-Type", "Authorization"]
+
+  # Example 6: Dynamic target with CORS
+  - domain: "proxy.example.com"
+    type: "cors-proxy"
+    target: "http://localhost:3000"
+    dynamicTarget:
+      enabled: true
+      allowedDomains: ["api.github.com", "jsonplaceholder.typicode.com"]
+      httpsOnly: true
+      urlParameter: "url"
+      timeouts:
+        request: 30000
+        proxy: 30000
+      logging:
+        logRequests: true
+        logBlocked: true
+        logErrors: true
+    cors:
+      enabled: true
+      origin: "*"
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+
+  # ============================================================================
+  # AUTO-DETECTION EXAMPLES
+  # ============================================================================
+  
+  # Example 7: Auto-detects as CORS proxy (has CORS config)
+  - domain: "auto-cors.com"
+    type: "proxy"  # Will auto-detect as CORS proxy
+    target: "https://external-api.com"
+    cors:
+      enabled: true
+      origin: "*"
+
+  # Example 8: Auto-detects as Classic proxy (no CORS config)
+  - domain: "auto-classic.com"
+    type: "proxy"  # Will auto-detect as Classic proxy
+    target: "http://internal-service:8080"
+    # No CORS config = Classic proxy
+
+  # ============================================================================
+  # STATIC AND REDIRECT EXAMPLES
+  # ============================================================================
+  
+  # Example 9: Static file serving
+  - domain: "static.example.com"
+    type: "static"
+    path: "/"
+    staticPath: "./public"
+    spaFallback: true
+    csp:
+      enabled: true
+      directives:
+        defaultSrc: ["'self'"]
+        scriptSrc: ["'self'", "'unsafe-inline'"]
+        styleSrc: ["'self'", "'unsafe-inline'"]
+        imgSrc: ["'self'", "data:", "https:"]
+
+  # Example 10: Redirect
+  - domain: "old.example.com"
+    type: "redirect"
+    path: "/"
+    redirectTo: "https://new.example.com"
+
+# Process Management (optional)
+processManagement:
+  processes:
+    backend-service:
+      enabled: true
+      name: "Backend Service"
+      command: "node"
+      args: ["server.js"]
+      cwd: "./backend"
+      env:
+        NODE_ENV: "production"
+        PORT: "8080"
+      restartOnExit: true
+      restartDelay: 5000
+      maxRestarts: 10
+      healthCheck:
+        enabled: true
+        path: "/health"
+        interval: 30000
+        timeout: 5000
+        retries: 3
+
+# Security Configuration
+security:
+  csp:
+    enabled: true
+    reportOnly: false
+    directives:
+      defaultSrc: ["'self'"]
+      scriptSrc: ["'self'", "'unsafe-inline'"]
+      styleSrc: ["'self'", "'unsafe-inline'"]
+      imgSrc: ["'self'", "data:", "https:"]
+      connectSrc: ["'self'", "https:"]
+      fontSrc: ["'self'", "https:"]
+      objectSrc: ["'none'"]
+      mediaSrc: ["'self'"]
+      frameSrc: ["'none'"]
+
+# Logging Configuration
+logging:
+  level: "info"
+  file: "./logs/proxy.log" 

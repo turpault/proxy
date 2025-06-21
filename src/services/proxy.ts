@@ -17,6 +17,9 @@ import { statisticsService } from './statistics';
 import { WebSocketService, WebSocketServiceInterface } from './websocket';
 import { registerManagementEndpoints } from './management';
 import { inspect } from 'util';
+import { cacheService } from './cache';
+import { ClassicProxy } from './classic-proxy';
+import { CorsProxy } from './cors-proxy';
 
 export class ProxyServer implements WebSocketServiceInterface {
   private app: express.Application;
@@ -29,6 +32,8 @@ export class ProxyServer implements WebSocketServiceInterface {
   private oauth2Service: OAuth2Service;
   private certificates: Map<string, CertificateInfo> = new Map();
   private webSocketService: WebSocketService;
+  private classicProxy: ClassicProxy;
+  private corsProxy: CorsProxy;
 
   constructor(config: ServerConfig) {
     this.config = config;
@@ -46,6 +51,8 @@ export class ProxyServer implements WebSocketServiceInterface {
     });
     this.oauth2Service = new OAuth2Service();
     this.webSocketService = new WebSocketService(this);
+    this.classicProxy = new ClassicProxy();
+    this.corsProxy = new CorsProxy();
     
     // Set up process update callback for WebSocket broadcasts
     processManager.setProcessUpdateCallback(() => {
@@ -77,56 +84,99 @@ export class ProxyServer implements WebSocketServiceInterface {
     logger.info(`Redirect route configured: ${routePath} -> ${route.redirectTo}`);
   }
 
-  private setupPathProxyRoute(route: ProxyRoute, routePath: string): void {
-    if (!route.target) {
-      logger.error(`Target not configured for proxy route ${routePath}`);
-      return;
-    }
 
-    // Check if dynamic target is enabled for this route
-    if (route.dynamicTarget && route.dynamicTarget.enabled) {
-      this.setupDynamicTargetRoute(route, routePath);
-      return;
-    }
-
-    const proxy = this.createCustomProxy(route, route.target!, `path ${routePath}`);
+  private setupClassicProxyRoute(route: ProxyRoute, routePath: string): void {
+    const proxy = this.createClassicProxy(route, route.target!, `classic ${routePath}`);
     
-    // Apply CORS middleware if enabled for this route
-    if (route.cors) {
-      this.app.use(routePath, this.createCorsMiddleware(route.cors));
+    if (route.path) {
+      // Path-based routing
+      this.app.use(routePath, proxy);
+      logger.info(`Classic proxy route configured: ${routePath} -> ${route.target}`);
+    } else {
+      // Domain-based routing
+      this.app.use((req, res, next) => {
+        const host = req.get('host');
+        if (host === route.domain || host === `www.${route.domain}`) {
+          proxy(req, res, next);
+        } else {
+          next();
+        }
+      });
+      logger.info(`Classic proxy route configured: ${route.domain} -> ${route.target}`);
     }
-    
-    this.app.use(routePath, proxy);
-
-    const corsStatus = route.cors ? ' (with CORS)' : '';
-    logger.info(`Path proxy route configured: ${routePath} -> ${route.target}${corsStatus}`);
   }
 
-  private setupProxyRoute(route: ProxyRoute): void {
-    const proxy = this.createCustomProxy(route, route.target!, route.domain);
-
-    // Setup route with domain-based routing
-    this.app.use((req, res, next) => {
-      const host = req.get('host');
-      if (host === route.domain || host === `www.${route.domain}`) {
-        // Apply CORS middleware if enabled for this route
-        if (route.cors) {
-          debugger;
-          const corsMiddleware = this.createCorsMiddleware(route.cors);
-          corsMiddleware(req, res, () => {
-            debugger;
-            proxy(req, res, next);
-          });
-        } else {
-          proxy(req, res, next);
-        }
-      } else {
-        next();
+  private setupCorsForwarderRoute(route: ProxyRoute, routePath: string): void {
+    // For cors-forwarder routes, the target comes from the base64-encoded 'url' query parameter
+    const proxy = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+      const encodedUrl = req.query.url;
+      if (!encodedUrl || typeof encodedUrl !== 'string') {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Missing base64-encoded url query parameter'
+        });
       }
-    });
-
-    const corsStatus = route.cors ? ' (with CORS)' : '';
-    logger.info(`Proxy route configured: ${route.domain} -> ${route.target}${corsStatus}`);
+      let target: string;
+      try {
+        target = Buffer.from(encodedUrl, 'base64').toString('utf-8');
+      } catch {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Invalid base64 encoding in url parameter'
+        });
+      }
+      // Validate target URL
+      try {
+        new URL(target);
+      } catch {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Decoded url is not a valid URL'
+        });
+      }
+      logger.info(`[CORS FORWARDER] ${req.method} ${req.originalUrl} -> ${target}`);
+      try {
+        await this.corsProxy.handleProxyRequest(req, res, {
+          route,
+          target,
+          routeIdentifier: `cors-forwarder ${routePath}`,
+          secure: false,
+          timeouts: { request: 30000, proxy: 30000 },
+          logRequests: true,
+          logErrors: true
+        });
+      } catch (error) {
+        logger.error(`[CORS FORWARDER] Error in proxy request for ${routePath}`, error);
+        this.handleProxyErrorDirectly(error as Error, req, res, `cors-forwarder ${routePath}`, target, route, true);
+      }
+    };
+    
+    if (route.path) {
+      // Path-based routing
+      if (route.cors) {
+        this.app.use(routePath, this.corsProxy.createCorsMiddleware(route.cors));
+      }
+      this.app.use(routePath, proxy);
+      const corsStatus = route.cors ? ' (with CORS)' : '';
+      logger.info(`CORS forwarder route configured: ${routePath} -> dynamic target via base64 url param${corsStatus}`);
+    } else {
+      // Domain-based routing
+      this.app.use((req, res, next) => {
+        const host = req.get('host');
+        if (host === route.domain || host === `www.${route.domain}`) {
+          if (route.cors) {
+            const corsMiddleware = this.corsProxy.createCorsMiddleware(route.cors);
+            corsMiddleware(req, res, () => proxy(req, res, next));
+          } else {
+            proxy(req, res, next);
+          }
+        } else {
+          next();
+        }
+      });
+      const corsStatus = route.cors ? ' (with CORS)' : '';
+      logger.info(`CORS forwarder route configured: ${route.domain} -> dynamic target via base64 url param${corsStatus}`);
+    }
   }
 
   private setupPathRoute(route: ProxyRoute): void {
@@ -139,9 +189,12 @@ export class ProxyServer implements WebSocketServiceInterface {
       case 'redirect':
         this.setupRedirectRoute(route, routePath);
         break;
+      case 'cors-forwarder':
+        this.setupCorsForwarderRoute(route, routePath);
+        break;
       case 'proxy':
       default:
-        this.setupPathProxyRoute(route, routePath);
+        this.setupClassicProxyRoute(route, routePath);
         break;
     }
   }
@@ -323,6 +376,7 @@ export class ProxyServer implements WebSocketServiceInterface {
 
     logger.info(`Static route configured: ${routePath} -> ${route.staticPath} (with enhanced MIME types and index.html support)`);
   }
+
   private getClientIP(req: express.Request): string {
     // Get real IP address, considering proxies
     const xForwardedFor = req.headers['x-forwarded-for'] as string;
@@ -344,6 +398,47 @@ export class ProxyServer implements WebSocketServiceInterface {
     
     // Fall back to connection remote address or req.ip
     return req.ip || req.socket?.remoteAddress || 'unknown';
+  }
+
+  private getUserId(req: express.Request): string | undefined {
+    // Try to get user ID from various sources in order of preference
+    
+    // 1. OAuth2 session cookie
+    const oauthSessionId = req.cookies?.['oauth2-session'];
+    if (oauthSessionId) {
+      return `oauth:${oauthSessionId}`;
+    }
+    
+    // 2. Authorization header (for API tokens)
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+      // Extract token from Bearer token or API key
+      const token = authHeader.replace(/^(Bearer|ApiKey)\s+/i, '');
+      if (token && token !== authHeader) {
+        return `token:${token.substring(0, 8)}`; // Use first 8 chars for privacy
+      }
+    }
+    
+    // 3. Custom user header
+    const userHeader = req.headers['x-user-id'] || req.headers['x-user'];
+    if (userHeader) {
+      return `header:${userHeader}`;
+    }
+    
+    // 4. Session ID from cookies
+    const sessionId = req.cookies?.sessionid || req.cookies?.sid;
+    if (sessionId) {
+      return `session:${sessionId}`;
+    }
+    
+    // 5. IP-based identification (fallback)
+    const clientIP = this.getClientIP(req);
+    if (clientIP && clientIP !== 'unknown') {
+      return `ip:${clientIP}`;
+    }
+    
+    // No user identification available
+    return undefined;
   }
 
   private setupMiddleware(): void {
@@ -557,6 +652,9 @@ export class ProxyServer implements WebSocketServiceInterface {
 
       // Start managed processes for routes that have process configuration
       await this.startManagedProcesses();
+
+      // Initialize cache cleanup scheduling
+      this.setupCacheCleanup();
 
       logger.info('Proxy server initialized successfully');
     } catch (error) {
@@ -859,6 +957,23 @@ export class ProxyServer implements WebSocketServiceInterface {
         }
       }
     }, 24 * 60 * 60 * 1000); // 24 hours
+  }
+
+  private setupCacheCleanup(): void {
+    // Run initial cleanup
+    cacheService.cleanup().catch(error => {
+      logger.error('Failed to run initial cache cleanup', error);
+    });
+
+    // Schedule cache cleanup every 6 hours
+    setInterval(async () => {
+      logger.info('Running scheduled cache cleanup...');
+      try {
+        await cacheService.cleanup();
+      } catch (error) {
+        logger.error('Failed to run scheduled cache cleanup', error);
+      }
+    }, 6 * 60 * 60 * 1000); // 6 hours
   }
 
   async stop(): Promise<void> {
@@ -1202,278 +1317,23 @@ export class ProxyServer implements WebSocketServiceInterface {
     }
   }
 
-  private setupDynamicTargetRoute(route: ProxyRoute, routePath: string): void {
-    const dynamicConfig = route.dynamicTarget!;
-    const allowedDomains = dynamicConfig.allowedDomains;
-    const httpsOnly = dynamicConfig.httpsOnly !== false; // Default to true
-    const urlParameter = dynamicConfig.urlParameter || 'url';
-    const timeouts = dynamicConfig.timeouts || { request: 30000, proxy: 30000 };
-    const logging = dynamicConfig.logging || { logRequests: true, logBlocked: true, logErrors: true };
+  private setupProxyRoute(route: ProxyRoute): void {
+    // Determine which proxy to use based on route type and CORS configuration
+    const proxyType = route.type || 'proxy';
+    const useCorsProxy = proxyType === 'cors-forwarder' || (proxyType === 'proxy' && route.cors);
+    const useClassicProxy = proxyType === 'proxy' && !route.cors;
 
-    // Helper function to validate target URL
-    const validateTargetUrl = (targetUrl: string): boolean => {
-      try {
-        const url = new URL(targetUrl);
-        
-        // Check if the domain is in the allowed list
-        const isAllowed = allowedDomains.some(domain => {
-          // Handle wildcard domains
-          if (domain.startsWith('*.')) {
-            const baseDomain = domain.substring(2);
-            return url.hostname === baseDomain || url.hostname.endsWith(`.${baseDomain}`);
-          }
-          // Support exact match or subdomain match for non-wildcard domains
-          return url.hostname === domain || url.hostname.endsWith(`.${domain}`);
-        });
-        
-        // Check protocol if httpsOnly is enabled
-        const isSecure = !httpsOnly || url.protocol === 'https:';
-        
-        return isAllowed && isSecure;
-      } catch (error) {
-        return false;
-      }
-    };
-
-    // Apply CORS middleware if enabled for this route
-    if (route.cors) {
-      this.app.use(routePath, this.createCorsMiddleware(route.cors));
+    if (useCorsProxy) {
+      this.setupCorsForwarderRoute(route, route.domain);
+    } else if (useClassicProxy) {
+      this.setupClassicProxyRoute(route, route.domain);
+    } else {
+      // Default to classic proxy for backward compatibility
+      this.setupClassicProxyRoute(route, route.domain);
     }
-
-    // Add utility endpoint for encoding URLs to base64
-    this.app.get(`${routePath}/encode`, (req, res) => {
-      const urlToEncode = req.query.url as string;
-      
-      if (!urlToEncode) {
-        return res.status(400).json({
-          error: 'Bad Request',
-          message: 'Missing "url" query parameter',
-          usage: `${routePath}/encode?url=https://example.com/api`,
-          example: `${routePath}/encode?url=https://jsonplaceholder.typicode.com/posts`
-        });
-      }
-
-      try {
-        // Validate that it's a proper URL
-        new URL(urlToEncode);
-        
-        // Encode to base64
-        const encodedUrl = Buffer.from(urlToEncode, 'utf-8').toString('base64');
-        
-        return res.json({
-          originalUrl: urlToEncode,
-          encodedUrl,
-          proxyUrl: `${req.protocol}://${req.get('host')}${routePath}?${urlParameter}=${encodedUrl}`,
-          usage: `Use the encodedUrl as the ${urlParameter} parameter`
-        });
-      } catch (error) {
-        return res.status(400).json({
-          error: 'Bad Request',
-          message: 'Invalid URL provided',
-          url: urlToEncode
-        });
-      }
-    });
-
-    // Helper function to decode target URL (supports both plain and base64)
-    const decodeTargetUrl = (rawUrl: string): { url: string; isBase64: boolean } => {
-      if (!rawUrl) {
-        return { url: '', isBase64: false };
-      }
-
-      // Check if the URL looks like base64 (no protocol, contains base64 characters)
-      const base64Regex = /^[A-Za-z0-9+/=]+$/;
-      
-      if (!rawUrl.includes('://') && base64Regex.test(rawUrl)) {
-        try {
-          const decodedUrl = Buffer.from(rawUrl, 'base64').toString('utf-8');
-          // Validate that the decoded string is a valid URL
-          new URL(decodedUrl);
-          return { url: decodedUrl, isBase64: true };
-        } catch (error) {
-          // If base64 decode fails or doesn't result in valid URL, treat as plain URL
-          return { url: rawUrl, isBase64: false };
-        }
-      }
-      
-      return { url: rawUrl, isBase64: false };
-    };
-
-    // Dynamic target proxy endpoint
-    this.app.use(routePath, (req: express.Request, res: express.Response) => {
-      logger.info(`[DYNAMIC TARGET] ${req.method} ${req.originalUrl}`);
-      // Get target URL from query parameter
-      const rawTargetUrl = req.query[urlParameter] as string;
-      
-      // If no URL parameter provided, fall back to default target
-      if (!rawTargetUrl) {
-        // Use the default target from route config
-        const proxy = this.createCustomProxy(
-          route, 
-          route.target!, 
-          `path ${routePath}`,
-          {
-            secure: false,
-            timeouts: { request: timeouts.request || 30000, proxy: timeouts.proxy || 30000 },
-            logRequests: logging.logRequests,
-            logErrors: logging.logErrors
-          }
-        );
-
-        return proxy(req, res, () => {});
-      }
-
-      // Decode the target URL (supports both plain and base64)
-      const { url: targetUrl, isBase64 } = decodeTargetUrl(rawTargetUrl);
-      
-      // Validate the dynamic target URL
-      if (!validateTargetUrl(targetUrl)) {
-        if (logging.logBlocked) {
-          logger.warn(`Dynamic target proxy: Blocked request to unauthorized domain`, {
-            targetUrl,
-            rawTargetUrl,
-            isBase64Encoded: isBase64,
-            allowedDomains,
-            httpsOnly,
-            route: routePath,
-            clientIP: this.getClientIP(req),
-            userAgent: req.get('user-agent')
-          });
-        }
-
-        return res.status(403).json({
-          error: 'Forbidden',
-          message: httpsOnly ? 
-            'Target domain is not allowed. Only HTTPS URLs from pre-approved domains are permitted.' :
-            'Target domain is not allowed. Only URLs from pre-approved domains are permitted.',
-          code: 'DOMAIN_NOT_ALLOWED',
-          allowedDomains
-        });
-      }
-
-      // Log the proxied request
-      if (logging.logRequests) {
-        logger.info(`Dynamic target proxy: Forwarding request`, {
-          targetUrl,
-          rawTargetUrl,
-          isBase64Encoded: isBase64,
-          route: routePath,
-          method: req.method,
-          clientIP: this.getClientIP(req),
-          userAgent: req.get('user-agent')
-        });
-      }
-
-      // Create dynamic proxy options
-      const proxy = this.createCustomProxy(
-        route, 
-        targetUrl, 
-        `dynamic target ${routePath}`,
-        {
-          secure: true,
-          timeouts: { request: timeouts.request || 30000, proxy: timeouts.proxy || 30000 },
-          logRequests: logging.logRequests,
-          logErrors: logging.logErrors,
-          customErrorResponse: { 
-            code: 'PROXY_ERROR', 
-            message: 'The target server is not responding' 
-          }
-        }
-      );
-
-      // Create and execute the proxy
-      return proxy(req, res, () => {});
-    });
-
-    const corsStatus = route.cors ? ' (with CORS)' : '';
-    logger.info(`Dynamic target proxy route configured: ${routePath} -> ${route.target} (dynamic)${corsStatus}`, {
-      allowedDomains,
-      httpsOnly,
-      urlParameter,
-      timeouts
-    });
   }
 
-  private buildProxyHeaders(route: ProxyRoute, req?: express.Request): Record<string, string> {
-    const headers: Record<string, string> = { ...route.headers };
-    
-    
-    // Forward headers from the client request if available
-    if (req) {
-      // Get forward headers configuration from CORS config
-      const forwardHeaders: string[] = [];
-      
-      if (route.cors && typeof route.cors === 'object' && route.cors.forwardHeaders) {
-        forwardHeaders.push(...route.cors.forwardHeaders);
-      } else {
-        // Default headers to forward if no configuration is provided
-        forwardHeaders.push(
-          'Authorization'
-        );
-      }
-      
-      // Forward configured headers
-      for (const headerName of forwardHeaders) {
-        const headerValue = req.headers[headerName.toLowerCase()];
-        if (headerValue) {
-          // Special handling for Authorization header to ensure correct casing
-          let finalHeaderName: string;
-          if (headerName.toLowerCase() === 'authorization') {
-            finalHeaderName = 'Authorization';
-          } else {
-            // Preserve original header name casing if it exists in the request
-            const originalHeaderName = Object.keys(req.headers).find(
-              key => key.toLowerCase() === headerName.toLowerCase()
-            );
-            finalHeaderName = originalHeaderName || headerName;
-          }
-          headers[finalHeaderName] = headerValue as string;
-        }
-      }
-    }
-    
-    return headers;
-  }
-
-  private maskSensitiveHeaders(headers: any): Record<string, string> {
-    const maskedHeaders: Record<string, string> = {};
-    const sensitiveHeaderPatterns = [
-      /^authorization$/i,
-      /^cookie$/i,
-      /^set-cookie$/i,
-      /^x-api-key$/i,
-      /^x-auth-token$/i,
-      /^Bb-Api-Subscription-Key$/i,
-      /^api-key$/i,
-      /^apikey$/i,
-      /^access-token$/i,
-      /^refresh-token$/i,
-      /^session-id$/i,
-      /^session-token$/i,
-    ];
-
-    for (const [key, value] of Object.entries(headers)) {
-      const stringValue = Array.isArray(value) ? value.join(', ') : String(value || '');
-      
-      // Check if this header should be masked
-      const shouldMask = sensitiveHeaderPatterns.some(pattern => pattern.test(key));
-      
-      if (shouldMask && stringValue) {
-        // Show only first 4 and last 4 characters for sensitive headers
-        if (stringValue.length > 8) {
-          maskedHeaders[key] = `${stringValue.substring(0, 4)}...${stringValue.substring(stringValue.length - 4)}`;
-        } else {
-          maskedHeaders[key] = '*'.repeat(stringValue.length);
-        }
-      } else {
-        maskedHeaders[key] = stringValue;
-      }
-    }
-
-    return maskedHeaders;
-  }
-
-  private createCustomProxy(
+  private createClassicProxy(
     route: ProxyRoute, 
     target: string, 
     routeIdentifier: string,
@@ -1494,9 +1354,9 @@ export class ProxyServer implements WebSocketServiceInterface {
     } = options;
 
     return async (req: express.Request, res: express.Response, next?: express.NextFunction) => {
-      logger.info(`[PROXY] ${req.method} ${req.originalUrl}`);
+      logger.info(`[CLASSIC PROXY] ${req.method} ${req.originalUrl}`);
       try {
-        await this.handleProxyRequest(req, res, {
+        await this.classicProxy.handleProxyRequest(req, res, {
           route,
           target,
           routeIdentifier,
@@ -1507,415 +1367,63 @@ export class ProxyServer implements WebSocketServiceInterface {
           customErrorResponse
         });
       } catch (error) {
-        logger.error(`[PROXY] Error in proxy request for ${routeIdentifier}`, error);
+        logger.error(`[CLASSIC PROXY] Error in proxy request for ${routeIdentifier}`, error);
         if (next) {
           next(error);
         } else {
-          this.handleProxyError(error as Error, req, res, routeIdentifier, target, route, logErrors, customErrorResponse);
+          // Handle error directly since we can't access protected method
+          this.handleProxyErrorDirectly(error as Error, req, res, routeIdentifier, target, route, logErrors, customErrorResponse);
         }
       }
     };
   }
 
-  private async handleProxyRequest(
-    req: express.Request,
-    res: express.Response,
-    config: {
-      route: ProxyRoute;
-      target: string;
-      routeIdentifier: string;
-      secure: boolean;
-      timeouts: { request: number; proxy: number };
-      logRequests: boolean;
-      logErrors: boolean;
-      customErrorResponse?: { code?: string; message?: string };
-    }
-  ): Promise<void> {
-    logger.info(`[PROXY] handleProxyRequest ${req.method} ${req.originalUrl}`);
-    const { route, target, routeIdentifier, secure, timeouts, logRequests, logErrors, customErrorResponse } = config;
-    
-    
-    // Start timing the request
-    const startTime = Date.now();
-    
-    logger.info(`[PROXY] Starting proxy request for ${routeIdentifier}`, {
-      target,
-      originalUrl: req.originalUrl,
-      method: req.method,
-      clientIP: this.getClientIP(req),
-      timestamp: new Date().toISOString()
-    });
-    
-    // Capture request body for potential error logging
-    let requestBodyForLogging: string | null = null;
-    if (logErrors) {
-      try {
-        // Limit request body size for logging (max 2KB)
-        const maxBodySize = 2048;
-        
-        if (req.body) {
-          // Body has been parsed by express middleware
-          let bodyStr = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-          
-          if (bodyStr.length > maxBodySize) {
-            bodyStr = bodyStr.substring(0, maxBodySize) + '... [truncated]';
-          }
-          requestBodyForLogging = bodyStr;
-        } else if (req.readable) {
-          // For requests with raw/unparsed bodies, indicate they exist
-          const contentLength = req.headers['content-length'];
-          const contentType = req.headers['content-type'];
-          
-          if (contentLength && parseInt(contentLength) > 0) {
-            requestBodyForLogging = `[Raw body: ${contentLength} bytes, type: ${contentType || 'unknown'}]`;
-          }
-        }
-      } catch (error) {
-        requestBodyForLogging = '[unable to serialize request body]';
-      }
-    }
-    
-    // Store request body on request object for error logging
-    (req as any).__requestBodyForLogging = requestBodyForLogging;
-    
-    // Store start time on request object for duration calculation
-    (req as any).__startTime = startTime;
-    
-    // Parse target URL
-    const targetUrl = new URL(target);
-    const isHttps = targetUrl.protocol === 'https:';
-    const httpModule = isHttps ? https : http;
-
-    logger.debug(`[PROXY] Target URL parsed for ${routeIdentifier}`, {
-      targetUrl: targetUrl.toString(),
-      protocol: targetUrl.protocol,
-      hostname: targetUrl.hostname,
-      port: targetUrl.port,
-      isHttps
-    });
-
-    // Build request path with rewrite rules
-    let requestPath = req.url;
-    if (route.rewrite) {
-      for (const [pattern, replacement] of Object.entries(route.rewrite)) {
-        const regex = new RegExp(pattern);
-        requestPath = requestPath.replace(regex, replacement);
-      }
-    }
-
-    // Remove base path if this is a path-based route
-    if (route.path && requestPath.startsWith(route.path)) {
-      requestPath = requestPath.substring(route.path.length) || '/';
-    }
-
-    // Ensure path starts with /
-    if (!requestPath.startsWith('/')) {
-      requestPath = '/' + requestPath;
-    }
-
-    // Add target path if it exists
-    if (targetUrl.pathname && targetUrl.pathname !== '/') {
-      requestPath = targetUrl.pathname.replace(/\/$/, '') + requestPath;
-    }
-
-    // Add query parameters
-    if (targetUrl.search) {
-      const separator = requestPath.includes('?') ? '&' : '?';
-      requestPath += separator + targetUrl.search.substring(1);
-    }
-
-    logger.debug(`[PROXY] Request path built for ${routeIdentifier}`, {
-      originalUrl: req.url,
-      finalPath: requestPath,
-      routePath: route.path,
-      targetPathname: targetUrl.pathname,
-      hasRewrite: !!route.rewrite
-    });
-
-    // Build headers
-    const proxyHeaders = this.buildProxyHeaders(route, req);
-    logger.debug(`[PROXY] Proxy headers built for ${routeIdentifier}`, {
-      proxyHeaders
-    });
-    
-    // Copy request headers, excluding hop-by-hop headers
-    const hopByHopHeaders = new Set([
-      'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization',
-      'te', 'trailers', 'transfer-encoding', 'upgrade'
-    ]);
-
-    const requestHeaders: Record<string, string> = { ...proxyHeaders };
-    for (const [key, value] of Object.entries(req.headers)) {
-      if (!hopByHopHeaders.has(key.toLowerCase()) && !requestHeaders[key]) {
-        requestHeaders[key] = Array.isArray(value) ? value.join(', ') : String(value);
-      }
-    }
-    logger.debug(`[PROXY] Request headers built for ${routeIdentifier}`, {
-      requestHeaders
-    });
-
-    // Set Host header to target host
-    requestHeaders['host'] = targetUrl.host;
-
-
-    // Log request headers being sent to the target server
-    if (logRequests) {
-      const maskedHeaders = this.maskSensitiveHeaders(requestHeaders);
-      logger.debug('Proxy request headers', {
-        url: `${targetUrl.protocol}//${targetUrl.host}${requestPath}`,
-        method: req.method,
-        headers: maskedHeaders,
-        clientIP: this.getClientIP(req),
-        originalUrl: req.originalUrl,
-        routeIdentifier,
-      });
-    }
-
-    // Create request options
-    const requestOptions: http.RequestOptions & https.RequestOptions = {
-      hostname: targetUrl.hostname,
-      port: targetUrl.port || (isHttps ? 443 : 80),
-      path: requestPath,
-      method: req.method,
-      headers: requestHeaders,
-      timeout: timeouts.request,
-      rejectUnauthorized: secure,
-    };
-
-    logger.debug(`[PROXY] Creating proxy request for ${routeIdentifier}`, {
-      hostname: requestOptions.hostname,
-      port: requestOptions.port,
-      path: requestOptions.path,
-      method: requestOptions.method,
-      timeout: requestOptions.timeout
-    });
-
-    // Create the proxy request
-    logger.info(`[PROXY] Creating proxy request for ${routeIdentifier}, options: ${inspect(requestOptions, { depth: null, colors: true, breakLength: 300 })}`);
-    const proxyRequest = httpModule.request(requestOptions, (proxyResponse) => {
-      const responseTime = Date.now() - startTime;
-      
-      logger.debug(`[PROXY] Received response from backend for ${routeIdentifier}`, {
-        statusCode: proxyResponse.statusCode,
-        headers: Object.keys(proxyResponse.headers),
-        responseTime,
-        contentLength: proxyResponse.headers['content-length']        
-      });
-      
-      // Record request with response time and route information
-      const clientIP = this.getClientIP(req);
-      const geolocation = geolocationService.getGeolocation(clientIP);
-      const userAgent = req.get('user-agent') || 'Unknown';
-      
-      statisticsService.recordRequest(
-        clientIP, 
-        geolocation, 
-        req.url || '/', 
-        req.method, 
-        userAgent,
-        responseTime,
-        route.domain,
-        target
-      );
-      
-      this.handleProxyResponse(proxyResponse, req, res, route, routeIdentifier, target, logRequests);
-    });
-
-    // Set up error handling
-    proxyRequest.on('error', (error) => {
-      const responseTime = Date.now() - startTime;
-      
-      logger.error(`[PROXY] Error in proxy request for ${routeIdentifier}`, {
-        error: error.message,
-        errorCode: (error as any).code,
-        syscall: (error as any).syscall,
-        errno: (error as any).errno,
-        responseTime,
-        target,
-        originalUrl: req.originalUrl
-      });
-      
-      // Record request with response time and route information even for errors
-      const clientIP = this.getClientIP(req);
-      const geolocation = geolocationService.getGeolocation(clientIP);
-      const userAgent = req.get('user-agent') || 'Unknown';
-      
-      statisticsService.recordRequest(
-        clientIP, 
-        geolocation, 
-        req.url || '/', 
-        req.method, 
-        userAgent,
-        responseTime,
-        route.domain,
-        target
-      );
-      
-      this.handleProxyError(error, req, res, routeIdentifier, target, route, logErrors, customErrorResponse);
-    });
-
-    // Set up timeout
-    proxyRequest.on('timeout', () => {
-      const responseTime = Date.now() - startTime;
-      
-      logger.error(`[PROXY] Timeout in proxy request for ${routeIdentifier}`, {
-        timeout: timeouts.request,
-        responseTime,
-        target,
-        originalUrl: req.originalUrl
-      });
-      
-      // Record request with response time and route information for timeouts
-      const clientIP = this.getClientIP(req);
-      const geolocation = geolocationService.getGeolocation(clientIP);
-      const userAgent = req.get('user-agent') || 'Unknown';
-      
-      statisticsService.recordRequest(
-        clientIP, 
-        geolocation, 
-        req.url || '/', 
-        req.method, 
-        userAgent,
-        responseTime,
-        route.domain,
-        target
-      );
-      
-      proxyRequest.destroy();
-      const timeoutError = new Error(`Request timeout after ${timeouts.request}ms`);
-      this.handleProxyError(timeoutError, req, res, routeIdentifier, target, route, logErrors, customErrorResponse);
-    });
-
-    logger.debug(`[PROXY] About to pipe request body for ${routeIdentifier}`);
-
-    // Pipe request body
-    req.pipe(proxyRequest);
-
-    logger.debug(`[PROXY] Request body piped for ${routeIdentifier}`);
-
-    proxyRequest.on('close', () => {
-      logger.debug(`[PROXY] Proxy request closed for ${routeIdentifier}`);
-    });
-
-    logger.debug(`[PROXY] Proxy request setup completed for ${routeIdentifier}`);
-  }
-
-  private handleProxyResponse(
-    proxyResponse: http.IncomingMessage,
-    req: express.Request,
-    res: express.Response,
-    route: ProxyRoute,
+  private createCorsProxy(
+    route: ProxyRoute, 
+    target: string, 
     routeIdentifier: string,
-    target: string,
-    logRequests: boolean
-  ): void {
-    logger.debug(`[PROXY] Starting to handle response for ${routeIdentifier}`, {
-      statusCode: proxyResponse.statusCode,
-      contentLength: proxyResponse.headers['content-length'],
-      contentType: proxyResponse.headers['content-type']
-    });
+    options: {
+      secure?: boolean;
+      timeouts?: { request: number; proxy: number };
+      logRequests?: boolean;
+      logErrors?: boolean;
+      customErrorResponse?: { code?: string; message?: string };
+    } = {}
+  ) {
+    const {
+      secure = false,
+      timeouts = { request: 30000, proxy: 30000 },
+      logRequests = true,
+      logErrors = true,
+      customErrorResponse
+    } = options;
 
-    // Handle CORS headers if CORS is enabled for this route
-    if (route.cors) {
-      logger.debug(`[PROXY] Applying CORS headers for ${routeIdentifier}`);
-      this.handleCorsProxyResponse(proxyResponse, req, res, route.cors);
-    }
-
-    // Copy response headers, excluding hop-by-hop headers
-    const hopByHopHeaders = new Set([
-      'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization',
-      'te', 'trailers', 'transfer-encoding', 'upgrade'
-    ]);
-
-    for (const [key, value] of Object.entries(proxyResponse.headers)) {
-      if (!hopByHopHeaders.has(key.toLowerCase())) {
-        res.setHeader(key, value as string | string[]);
+    return async (req: express.Request, res: express.Response, next?: express.NextFunction) => {
+      logger.info(`[CORS PROXY] ${req.method} ${req.originalUrl}`);
+      try {
+        await this.corsProxy.handleProxyRequest(req, res, {
+          route,
+          target,
+          routeIdentifier,
+          secure,
+          timeouts,
+          logRequests,
+          logErrors,
+          customErrorResponse
+        });
+      } catch (error) {
+        logger.error(`[CORS PROXY] Error in proxy request for ${routeIdentifier}`, error);
+        if (next) {
+          next(error);
+        } else {
+          // Handle error directly since we can't access protected method
+          this.handleProxyErrorDirectly(error as Error, req, res, routeIdentifier, target, route, logErrors, customErrorResponse);
+        }
       }
-    }
-
-    // Set status code
-    res.statusCode = proxyResponse.statusCode || 200;
-
-    logger.debug(`[PROXY] Response headers set for ${routeIdentifier}`, {
-      statusCode: res.statusCode,
-      headersSet: Object.keys(res.getHeaders())
-    });
-
-    // Calculate response time (duration)
-    const responseTime = Date.now() - (req as any).__startTime || 0;
-
-    // Log request summary for all requests
-    this.logRequestSummary(req, res, routeIdentifier, target, proxyResponse.statusCode || 200, proxyResponse.headers, responseTime, logRequests);
-
-    if (logRequests) {
-      const responseDetails: any = {
-        statusCode: proxyResponse.statusCode,
-        target,
-        url: req.url,
-        method: req.method,
-        responseHeaders: this.maskSensitiveHeaders(proxyResponse.headers),
-        clientIP: this.getClientIP(req),
-        routeIdentifier,
-        duration: responseTime,
-        contentLength: proxyResponse.headers['content-length'],
-        contentType: proxyResponse.headers['content-type'],
-        userAgent: req.get('user-agent'),
-        timestamp: new Date().toISOString(),
-      };
-
-      // Log successful responses at debug level
-      if (proxyResponse.statusCode && proxyResponse.statusCode < 400) {
-        logger.debug(`Proxy response for ${routeIdentifier}`, responseDetails);
-      } else {
-        // For error responses, just log the headers and status - don't interfere with streaming
-        logger.error(`Proxy error response for ${routeIdentifier}`, responseDetails);
-      }
-    }
-
-    logger.debug(`[PROXY] About to pipe response body for ${routeIdentifier}`);
-
-    // Log response body if status is not 200    
-    if (proxyResponse.statusCode !== 200) {
-      // Get body as string
-      // Collect body in chunks
-      const bodyChunks: Buffer[] = [];
-      proxyResponse.on('data', (chunk) => {
-        bodyChunks.push(chunk);
-      });
-      proxyResponse.on('end', () => {
-        const body = bodyChunks.join('');
-        res.write(body);
-        logger.debug(`[PROXY] Response body for ${routeIdentifier}`, {
-          statusCode: proxyResponse.statusCode,
-          body
-        });  
-      });
-    } else {
-
-      // Pipe response body to client - this should always happen regardless of status code
-      proxyResponse.pipe(res);
-
-      logger.debug(`[PROXY] Response body piped for ${routeIdentifier}`);
-
-      // Add event listeners to track response completion
-      proxyResponse.on('end', () => {
-        logger.debug(`[PROXY] Backend response ended for ${routeIdentifier}`);
-      });
-    }
-
-    res.on('finish', () => {
-      logger.debug(`[PROXY] Client response finished for ${routeIdentifier}`, {
-        statusCode: res.statusCode,
-        headersSent: res.headersSent
-      });
-    });
-
-    res.on('close', () => {
-      logger.debug(`[PROXY] Client response closed for ${routeIdentifier}`);
-    });
+    };
   }
 
-  private handleProxyError(
+  private handleProxyErrorDirectly(
     error: Error,
     req: express.Request,
     res: express.Response,
@@ -2043,6 +1551,100 @@ export class ProxyServer implements WebSocketServiceInterface {
     }
   }
 
+  private maskSensitiveHeaders(headers: any): Record<string, string> {
+    const maskedHeaders: Record<string, string> = {};
+    const sensitiveHeaderPatterns = [
+      /^authorization$/i,
+      /^cookie$/i,
+      /^set-cookie$/i,
+      /^x-api-key$/i,
+      /^x-auth-token$/i,
+      /^Bb-Api-Subscription-Key$/i,
+      /^api-key$/i,
+      /^access-token$/i,
+      /^refresh-token$/i,
+      /^session-id$/i,
+      /^session-token$/i,
+    ];
+
+    for (const [key, value] of Object.entries(headers)) {
+      const stringValue = Array.isArray(value) ? value.join(', ') : String(value || '');
+      
+      // Check if this header should be masked
+      const shouldMask = sensitiveHeaderPatterns.some(pattern => pattern.test(key));
+      
+      if (shouldMask && stringValue) {
+        // Show only first 4 and last 4 characters for sensitive headers
+        if (stringValue.length > 8) {
+          maskedHeaders[key] = `${stringValue.substring(0, 4)}...${stringValue.substring(stringValue.length - 4)}`;
+        } else {
+          maskedHeaders[key] = '*'.repeat(stringValue.length);
+        }
+      } else {
+        maskedHeaders[key] = stringValue;
+      }
+    }
+
+    return maskedHeaders;
+  }
+
+  private logRequestSummary(
+    req: express.Request,
+    res: express.Response,
+    routeIdentifier: string,
+    target: string,
+    statusCode: number,
+    responseHeaders: any,
+    duration: number,
+    logRequests: boolean
+  ): void {
+    if (!logRequests) return;
+
+    const summary = {
+      method: req.method,
+      url: req.url,
+      originalUrl: req.originalUrl,
+      target,
+      routeIdentifier,
+      statusCode,
+      duration,
+      contentLength: responseHeaders['content-length'],
+      contentType: responseHeaders['content-type'],
+      clientIP: this.getClientIP(req),
+      userAgent: req.get('user-agent'),
+      timestamp: new Date().toISOString(),
+      // Include key response headers for debugging
+      responseHeaders: {
+        'cache-control': responseHeaders['cache-control'],
+        'content-encoding': responseHeaders['content-encoding'],
+        'content-type': responseHeaders['content-type'],
+        'content-length': responseHeaders['content-length'],
+        'last-modified': responseHeaders['last-modified'],
+        'etag': responseHeaders['etag'],
+        'server': responseHeaders['server'],
+        'x-powered-by': responseHeaders['x-powered-by'],
+        'x-frame-options': responseHeaders['x-frame-options'],
+        'x-content-type-options': responseHeaders['x-content-type-options'],
+        'x-xss-protection': responseHeaders['x-xss-protection'],
+        'strict-transport-security': responseHeaders['strict-transport-security'],
+        'access-control-allow-origin': responseHeaders['access-control-allow-origin'],
+        'access-control-allow-methods': responseHeaders['access-control-allow-methods'],
+        'access-control-allow-headers': responseHeaders['access-control-allow-headers'],
+      }
+    };
+
+    // Log at different levels based on status code
+    if (statusCode >= 500) {
+      logger.error(`Proxy request summary - Server Error (${statusCode})`, summary);
+    } else if (statusCode >= 400) {
+      logger.warn(`Proxy request summary - Client Error (${statusCode})`, summary);
+    } else if (statusCode >= 300) {
+      logger.info(`Proxy request summary - Redirect (${statusCode})`, summary);
+    } else {
+      logger.info(`Proxy request summary - Success (${statusCode})`, summary);
+    }
+  }
+
   // WebSocket service interface methods
   async getProcesses(): Promise<any[]> {
     const processes = processManager.getProcessStatus();
@@ -2120,63 +1722,6 @@ export class ProxyServer implements WebSocketServiceInterface {
       this.webSocketService.broadcastStatusUpdate(status);
     } catch (error) {
       logger.error('Failed to broadcast process updates', error);
-    }
-  }
-
-  private logRequestSummary(
-    req: express.Request,
-    res: express.Response,
-    routeIdentifier: string,
-    target: string,
-    statusCode: number,
-    responseHeaders: any,
-    duration: number,
-    logRequests: boolean
-  ): void {
-    if (!logRequests) return;
-
-    const summary = {
-      method: req.method,
-      url: req.url,
-      originalUrl: req.originalUrl,
-      target,
-      routeIdentifier,
-      statusCode,
-      duration,
-      contentLength: responseHeaders['content-length'],
-      contentType: responseHeaders['content-type'],
-      clientIP: this.getClientIP(req),
-      userAgent: req.get('user-agent'),
-      timestamp: new Date().toISOString(),
-      // Include key response headers for debugging
-      responseHeaders: {
-        'cache-control': responseHeaders['cache-control'],
-        'content-encoding': responseHeaders['content-encoding'],
-        'content-type': responseHeaders['content-type'],
-        'content-length': responseHeaders['content-length'],
-        'last-modified': responseHeaders['last-modified'],
-        'etag': responseHeaders['etag'],
-        'server': responseHeaders['server'],
-        'x-powered-by': responseHeaders['x-powered-by'],
-        'x-frame-options': responseHeaders['x-frame-options'],
-        'x-content-type-options': responseHeaders['x-content-type-options'],
-        'x-xss-protection': responseHeaders['x-xss-protection'],
-        'strict-transport-security': responseHeaders['strict-transport-security'],
-        'access-control-allow-origin': responseHeaders['access-control-allow-origin'],
-        'access-control-allow-methods': responseHeaders['access-control-allow-methods'],
-        'access-control-allow-headers': responseHeaders['access-control-allow-headers'],
-      }
-    };
-
-    // Log at different levels based on status code
-    if (statusCode >= 500) {
-      logger.error(`Proxy request summary - Server Error (${statusCode})`, summary);
-    } else if (statusCode >= 400) {
-      logger.warn(`Proxy request summary - Client Error (${statusCode})`, summary);
-    } else if (statusCode >= 300) {
-      logger.info(`Proxy request summary - Redirect (${statusCode})`, summary);
-    } else {
-      logger.info(`Proxy request summary - Success (${statusCode})`, summary);
     }
   }
 } 

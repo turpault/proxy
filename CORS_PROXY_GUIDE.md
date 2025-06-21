@@ -12,93 +12,53 @@ A CORS proxy solves this by:
 - Handling preflight OPTIONS requests
 - Allowing your frontend to make requests to the proxy, which then forwards them to the external API
 
-## Configuration Options
+## CORS Configuration Options
 
-### Simple CORS Configuration
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | boolean | true | Whether CORS is enabled |
+| `origin` | boolean/string/string[] | true | Allowed origins (true = all origins) |
+| `credentials` | boolean | false | Allow credentials (cookies, authorization headers) |
+| `methods` | string[] | See below | Allowed HTTP methods |
+| `allowedHeaders` | string[] | See below | Headers allowed in requests |
+| `exposedHeaders` | string[] | See below | Headers exposed to client |
+| `maxAge` | number | 86400 | Preflight cache duration in seconds |
+| `preflightContinue` | boolean | false | Continue preflight requests |
+| `optionsSuccessStatus` | number | 204 | Status code for OPTIONS requests |
 
-For basic CORS support that allows all origins:
+### Default Values
 
+If not specified, the following defaults are used:
+
+- **Methods**: `["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"]`
+- **Allowed Headers**: `["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"]`
+- **Exposed Headers**: `["Content-Length", "Content-Type"]`
+
+### Examples
+
+**Allow specific origins:**
 ```yaml
-routes:
-  - domain: "yourdomain.com"
-    type: "proxy"
-    path: "/api/external"
-    target: "https://external-api.com"
-    cors: true  # Simple CORS - allows all origins
-    rewrite:
-      "^/api/external/": "/"
+cors:
+  origin: ["https://app.example.com", "https://admin.example.com"]
 ```
 
-This configuration:
-- Allows requests from any origin
-- Supports standard HTTP methods (GET, POST, PUT, DELETE, etc.)
-- Includes common headers like `Content-Type` and `Authorization`
-- Sets a 24-hour cache for preflight requests
-
-### Advanced CORS Configuration
-
-For fine-grained control over CORS behavior:
-
+**Allow all origins:**
 ```yaml
-routes:
-  - domain: "yourdomain.com"
-    type: "proxy"
-    path: "/api/restricted"
-    target: "https://external-api.com"
-    cors:
-      enabled: true
-      origin: ["https://yourdomain.com", "http://localhost:3000"]
-      credentials: true
-      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-      allowedHeaders: ["Content-Type", "Authorization", "X-API-Key"]
-      exposedHeaders: ["X-RateLimit-Limit", "X-RateLimit-Remaining"]
-      maxAge: 3600  # 1 hour
-    rewrite:
-      "^/api/restricted/": "/"
+cors:
+  origin: true
 ```
 
-### CORS Configuration Properties
-
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `enabled` | boolean | `true` | Enable/disable CORS |
-| `origin` | boolean \| string \| string[] | `true` | Allowed origins |
-| `credentials` | boolean | `false` | Allow credentials (cookies, auth headers) |
-| `methods` | string[] | `['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS']` | Allowed HTTP methods |
-| `allowedHeaders` | string[] | `['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']` | Headers clients can send |
-| `exposedHeaders` | string[] | `['Content-Length', 'Content-Type']` | Headers clients can access |
-| `maxAge` | number | `86400` | Preflight cache time (seconds) |
-| `preflightContinue` | boolean | `false` | Pass control to next handler for OPTIONS |
-| `optionsSuccessStatus` | number | `204` | Status code for successful OPTIONS requests |
-| `forwardHeaders` | string[] | See below | Headers to forward from client to target |
-
-#### Header Forwarding Configuration
-
-The `forwardHeaders` option allows you to specify which headers from the client request should be forwarded to the target server. This is useful for authentication and API keys that need to be passed through the proxy.
-
-**Default Headers Forwarded:**
-If `forwardHeaders` is not specified, the following headers are automatically forwarded:
-- `authorization` - Bearer tokens, Basic auth, etc.
-
-**Example Configurations:**
-
+**Disable CORS:**
 ```yaml
-# Forward only authorization header
 cors:
-  forwardHeaders: ["authorization"]
+  enabled: false
+```
 
-# Forward custom headers for specific API
+**Custom headers:**
+```yaml
 cors:
-  forwardHeaders: ["authorization", "x-api-key", "x-custom-auth", "x-user-id"]
-
-# Forward no headers (empty array)
-cors:
-  forwardHeaders: []
-
-# Use default headers (don't specify forwardHeaders)
-cors:
-  enabled: true
-  origin: ["https://yourdomain.com"]
+  allowedHeaders: ["Content-Type", "Authorization", "X-API-Key", "X-Custom-Header"]
+  exposedHeaders: ["X-Total-Count", "X-Page-Count"]
 ```
 
 ## Usage Examples

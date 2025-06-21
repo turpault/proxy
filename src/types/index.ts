@@ -49,22 +49,21 @@ export interface ProcessManagementConfig {
 
 export interface ProxyRoute {
   domain: string;
-  target: string;
+  target?: string; // Optional since cors-forwarder routes get target from request
   ssl?: boolean;
-  headers?: Record<string, string>;
-  rewrite?: Record<string, string>;
   path?: string;
-  type?: 'proxy' | 'static' | 'redirect';
+  type?: 'proxy' | 'static' | 'redirect' | 'cors-forwarder';
   staticPath?: string;
   redirectTo?: string;
-  spaFallback?: boolean;
-  csp?: CSPConfig;
+  rewrite?: Record<string, string>;
+  headers?: Record<string, string>;
+  cors?: CORSConfig;
   oauth2?: OAuth2Config;
   requireAuth?: boolean;
   publicPaths?: string[];
+  spaFallback?: boolean;
   geolocationFilter?: GeolocationFilter;
-  cors?: boolean | CorsConfig;
-  dynamicTarget?: DynamicTargetConfig;
+  csp?: CSPConfig;
 }
 
 export interface GeolocationFilter {
@@ -201,17 +200,16 @@ export interface OAuth2Session {
   user?: any;
 }
 
-export interface CorsConfig {
+export interface CORSConfig {
   enabled?: boolean;
-  origin?: string | string[] | boolean;
+  origin?: boolean | string | string[];
+  credentials?: boolean;
   methods?: string[];
   allowedHeaders?: string[];
   exposedHeaders?: string[];
-  credentials?: boolean;
   maxAge?: number;
   preflightContinue?: boolean;
   optionsSuccessStatus?: number;
-  forwardHeaders?: string[]; // List of headers to forward from client request to target
 }
 
 export interface DynamicCorsProxyConfig {
@@ -219,23 +217,7 @@ export interface DynamicCorsProxyConfig {
   path: string;
   allowedDomains: string[];
   httpsOnly?: boolean;
-  cors?: CorsConfig;
-  timeouts?: {
-    request?: number;
-    proxy?: number;
-  };
-  logging?: {
-    logRequests?: boolean;
-    logBlocked?: boolean;
-    logErrors?: boolean;
-  };
-}
-
-export interface DynamicTargetConfig {
-  enabled: boolean;
-  allowedDomains: string[];
-  httpsOnly?: boolean;
-  urlParameter?: string;
+  cors?: CORSConfig;
   timeouts?: {
     request?: number;
     proxy?: number;

@@ -75,7 +75,6 @@ routes:
       credentials: true
       methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
       allowedHeaders: ["Content-Type", "Authorization"]
-      forwardHeaders: ["authorization"]
 
   # Example 3: Custom OAuth2 provider with subscription key
   - domain: "enterprise.example.com"
@@ -156,12 +155,6 @@ routes:
         "X-API-Key",
         "X-User-Role"
       ]
-      # Forward OAuth token and custom headers
-      forwardHeaders: [
-        "authorization", 
-        "x-api-key", 
-        "x-user-role"
-      ]
 
   # Example 5: Public API (no OAuth2 required)
   - domain: "public-api.example.com"
@@ -175,7 +168,6 @@ routes:
       credentials: false
       methods: ["GET", "POST"]
       allowedHeaders: ["Content-Type"]
-      forwardHeaders: []  # No headers forwarded for public API
 
 # Security configuration
 security:

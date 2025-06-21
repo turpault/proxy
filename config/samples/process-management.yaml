@@ -31,19 +31,17 @@ processManagement:
 
 # Routes configuration
 routes:
-  # Example 1: Node.js API server with process management
-  - domain: "api.example.com"
+  # Example 1: Node.js API with process management
+  - domain: "localhost"
     path: "/api"
-    target: "http://localhost:3001"
-    process: "node-api-server"  # Reference to process in processes.yaml
-    ssl: true
+    target: "http://localhost:3000"
     cors:
       enabled: true
-      origin: ["https://app.example.com"]
+      origin: true
       credentials: true
-      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+      methods: ["GET", "POST", "PUT", "DELETE"]
       allowedHeaders: ["Content-Type", "Authorization"]
-      forwardHeaders: ["authorization"]
+    ssl: false
 
   # Example 2: Python Flask application
   - domain: "flask.example.com"

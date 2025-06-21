@@ -1291,6 +1291,308 @@
     .live-indicator.not-following .live-dot {
       background: #f56565;
     }
+
+    /* Cache Management Styles */
+    .cache-controls {
+      margin-bottom: 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .cache-tabs {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      border: 1px solid #e2e8f0;
+      overflow: hidden;
+    }
+
+    .cache-tabs-header {
+      display: flex;
+      background: #f8f9fa;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .cache-tab {
+      flex: 1;
+      padding: 1rem;
+      text-align: center;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 500;
+      color: #4a5568;
+      transition: all 0.2s;
+      border-bottom: 3px solid transparent;
+    }
+
+    .cache-tab:hover {
+      background: #e2e8f0;
+      color: #2d3748;
+    }
+
+    .cache-tab.active {
+      background: white;
+      color: #4299e1;
+      border-bottom-color: #4299e1;
+    }
+
+    .cache-tab-content {
+      display: none;
+      padding: 2rem;
+    }
+
+    .cache-tab-content.active {
+      display: block;
+    }
+
+    .cache-section {
+      margin-bottom: 2rem;
+    }
+
+    .cache-section h2 {
+      color: #2d3748;
+      margin-bottom: 0.5rem;
+      font-size: 1.5rem;
+    }
+
+    .cache-filters {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .filter-group label {
+      font-weight: 500;
+      color: #4a5568;
+      white-space: nowrap;
+    }
+
+    .filter-group select {
+      padding: 0.5rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      background: white;
+      font-size: 0.9rem;
+      min-width: 120px;
+    }
+
+    .cache-pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .cache-pagination button {
+      padding: 0.5rem 1rem;
+      border: 1px solid #e2e8f0;
+      background: white;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+
+    .cache-pagination button:hover:not(:disabled) {
+      background: #f8f9fa;
+    }
+
+    .cache-pagination button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .cache-pagination span {
+      font-weight: 500;
+      color: #4a5568;
+    }
+
+    .cache-entry {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      overflow: hidden;
+      background: white;
+      transition: box-shadow 0.2s;
+    }
+
+    .cache-entry:hover {
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .cache-entry-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem;
+      background: #f8f9fa;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .cache-entry-info {
+      flex: 1;
+    }
+
+    .cache-entry-url {
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 0.25rem;
+      word-break: break-all;
+    }
+
+    .cache-entry-meta {
+      display: flex;
+      gap: 1rem;
+      font-size: 0.85rem;
+      color: #718096;
+      flex-wrap: wrap;
+    }
+
+    .cache-entry-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .cache-entry-body {
+      padding: 1rem;
+    }
+
+    .cache-entry-preview {
+      background: #f8f9fa;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      padding: 1rem;
+      font-family: 'Courier New', monospace;
+      font-size: 0.85rem;
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .cache-user-card {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      background: white;
+      transition: box-shadow 0.2s;
+    }
+
+    .cache-user-card:hover {
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .cache-user-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .cache-user-id {
+      font-weight: 600;
+      color: #2d3748;
+      font-size: 1.1rem;
+    }
+
+    .cache-user-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .cache-user-stat {
+      text-align: center;
+      padding: 0.75rem;
+      background: #f8f9fa;
+      border-radius: 4px;
+    }
+
+    .cache-user-stat-value {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #2d3748;
+    }
+
+    .cache-user-stat-label {
+      font-size: 0.8rem;
+      color: #718096;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .cache-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .cache-stat-item {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 1.5rem;
+      text-align: center;
+    }
+
+    .cache-stat-value {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #2d3748;
+      margin-bottom: 0.5rem;
+    }
+
+    .cache-stat-label {
+      font-size: 0.9rem;
+      color: #718096;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .cache-stat-description {
+      font-size: 0.8rem;
+      color: #a0aec0;
+      margin-top: 0.5rem;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 2rem;
+      color: #718096;
+      font-style: italic;
+    }
+
+    .error-message {
+      background: #fed7d7;
+      border: 1px solid #f5c6cb;
+      color: #721c24;
+      padding: 1rem;
+      border-radius: 4px;
+      margin-bottom: 1rem;
+    }
+
+    .success-message {
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
+      color: #155724;
+      padding: 1rem;
+      border-radius: 4px;
+      margin-bottom: 1rem;
+    }
   </style>
 </head>
 
@@ -1300,6 +1602,7 @@
       <button class="tab active" id="tab-processes" onclick="showTab('processes')">🚀 Processes</button>
       <button class="tab" id="tab-statistics" onclick="showTab('statistics')">📊 Statistics</button>
       <button class="tab" id="tab-certificates" onclick="showTab('certificates')">🔒 Certificates</button>
+      <button class="tab" id="tab-cache" onclick="showTab('cache')">💾 Cache</button>
     </div>
     
     <!-- Processes Tab -->
@@ -1432,6 +1735,116 @@
         </div>
       </div>
     </div>
+
+    <!-- Cache Tab -->
+    <div id="content-cache" class="tab-content">
+      <div class="header">
+        <h1>💾 Response Cache Management</h1>
+        <p>Monitor and manage disk-based cache with in-memory MRU (100 items)</p>
+      </div>
+
+      <div class="stats-overview">
+        <div class="stat-card">
+          <h4>Total Entries</h4>
+          <div class="value" id="cache-total-entries">-</div>
+        </div>
+        <div class="stat-card">
+          <h4>MRU Entries</h4>
+          <div class="value" id="cache-mru-entries">-</div>
+        </div>
+        <div class="stat-card">
+          <h4>Total Size</h4>
+          <div class="value" id="cache-total-size">-</div>
+        </div>
+        <div class="stat-card">
+          <h4>Active Users</h4>
+          <div class="value" id="cache-active-users">-</div>
+        </div>
+        <div class="stat-card">
+          <h4>Cache Hit Rate</h4>
+          <div class="value" id="cache-hit-rate">-</div>
+        </div>
+      </div>
+
+      <div class="cache-controls">
+        <button onclick="loadCacheStats()" class="refresh-btn">🔄 Refresh Stats</button>
+        <button onclick="clearAllCache()" class="btn btn-stop" style="margin-left: 10px;">🗑️ Clear All Cache</button>
+        <button onclick="cleanupExpiredCache()" class="btn btn-restart" style="margin-left: 10px;">🧹 Cleanup Expired</button>
+      </div>
+
+      <div class="cache-tabs">
+        <div class="cache-tabs-header">
+          <button class="cache-tab active" id="cache-tab-overview" onclick="switchCacheTab('overview')">📊 Overview</button>
+          <button class="cache-tab" id="cache-tab-users" onclick="switchCacheTab('users')">👥 Users</button>
+          <button class="cache-tab" id="cache-tab-entries" onclick="switchCacheTab('entries')">📋 Entries</button>
+        </div>
+
+        <!-- Cache Overview Tab -->
+        <div id="cache-content-overview" class="cache-tab-content active">
+          <div class="cache-section">
+            <h2>Cache Statistics</h2>
+            <div id="cache-stats-container">
+              <div class="loading">Loading cache statistics...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cache Users Tab -->
+        <div id="cache-content-users" class="cache-tab-content">
+          <div class="cache-section">
+            <h2>Cache Users</h2>
+            <p class="section-description">Users with cached entries and their activity</p>
+            <div id="cache-users-container">
+              <div class="loading">Loading cache users...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cache Entries Tab -->
+        <div id="cache-content-entries" class="cache-tab-content">
+          <div class="cache-section">
+            <h2>Cache Entries</h2>
+            <p class="section-description">Detailed view of all cache entries with filtering</p>
+            
+            <div class="cache-filters">
+              <div class="filter-group">
+                <label for="cache-user-filter">User:</label>
+                <select id="cache-user-filter" onchange="filterCacheEntries()">
+                  <option value="">All Users</option>
+                </select>
+              </div>
+              <div class="filter-group">
+                <label for="cache-mru-filter">Location:</label>
+                <select id="cache-mru-filter" onchange="filterCacheEntries()">
+                  <option value="">All</option>
+                  <option value="true">MRU Only</option>
+                  <option value="false">Disk Only</option>
+                </select>
+              </div>
+              <div class="filter-group">
+                <label for="cache-entries-limit">Limit:</label>
+                <select id="cache-entries-limit" onchange="loadCacheEntries()">
+                  <option value="25">25</option>
+                  <option value="50" selected>50</option>
+                  <option value="100">100</option>
+                  <option value="200">200</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="cache-pagination">
+              <button id="cache-prev-page" onclick="changeCachePage(-1)" class="btn" disabled>← Previous</button>
+              <span id="cache-page-info">Page 1</span>
+              <button id="cache-next-page" onclick="changeCachePage(1)" class="btn">Next →</button>
+            </div>
+
+            <div id="cache-entries-container">
+              <div class="loading">Loading cache entries...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -1529,6 +1942,18 @@
     let processLastRestartTimes = {}; // Store last restart times for each process
     let isAtBottom = true; // Track if user is at bottom of logs for auto-follow
 
+    // Cache management variables
+    let cacheData = {};
+    let cacheUsers = [];
+    let cacheEntries = [];
+    let currentCachePage = 1;
+    let cacheEntriesPerPage = 50;
+    let activeCacheTab = 'overview';
+    let cacheFilters = {
+      user: '',
+      mru: ''
+    };
+
     // Tab switching logic
     function showTab(tab, pushState = true) {
       // Hide all tabs
@@ -1547,6 +1972,8 @@
         loadStatistics();
       } else if (tab === 'certificates') {
         loadCertificates();
+      } else if (tab === 'cache') {
+        loadCacheStats();
       }
 
       // Update history state
@@ -2743,6 +3170,403 @@
       if (details) {
         details.classList.toggle('open');
       }
+    }
+
+    // Cache Management Functions
+    function switchCacheTab(tab) {
+      // Remove active class from all cache tabs
+      document.querySelectorAll('.cache-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.cache-tab-content').forEach(c => c.classList.remove('active'));
+      
+      // Show selected tab
+      document.getElementById(`cache-tab-${tab}`).classList.add('active');
+      document.getElementById(`cache-content-${tab}`).classList.add('active');
+      
+      activeCacheTab = tab;
+      
+      // Load data for specific cache tabs
+      if (tab === 'overview') {
+        loadCacheStats();
+      } else if (tab === 'users') {
+        loadCacheUsers();
+      } else if (tab === 'entries') {
+        loadCacheEntries();
+      }
+    }
+
+    async function loadCacheStats() {
+      try {
+        const response = await fetch('/api/cache/stats');
+        if (!response.ok) throw new Error('Failed to load cache stats');
+        
+        const stats = await response.json();
+        cacheData = stats;
+        
+        // Update overview stats
+        document.getElementById('cache-total-entries').textContent = stats.totalEntries || 0;
+        document.getElementById('cache-mru-entries').textContent = stats.mruEntries || 0;
+        document.getElementById('cache-total-size').textContent = formatBytes(stats.totalSize || 0);
+        document.getElementById('cache-active-users').textContent = stats.activeUsers || 0;
+        document.getElementById('cache-hit-rate').textContent = `${((stats.hitRate || 0) * 100).toFixed(1)}%`;
+        
+        // Update detailed stats in overview tab
+        if (activeCacheTab === 'overview') {
+          updateCacheStatsDisplay(stats);
+        }
+      } catch (error) {
+        console.error('Failed to load cache stats:', error);
+        showNotification('Failed to load cache statistics', 'error');
+      }
+    }
+
+    async function loadCacheUsers() {
+      try {
+        const response = await fetch('/api/cache/users');
+        if (!response.ok) throw new Error('Failed to load cache users');
+        
+        const users = await response.json();
+        cacheUsers = users;
+        
+        updateCacheUsersDisplay(users);
+      } catch (error) {
+        console.error('Failed to load cache users:', error);
+        showNotification('Failed to load cache users', 'error');
+      }
+    }
+
+    async function loadCacheEntries(page = 1) {
+      try {
+        const limit = document.getElementById('cache-entries-limit')?.value || 50;
+        const userFilter = document.getElementById('cache-user-filter')?.value || '';
+        const mruFilter = document.getElementById('cache-mru-filter')?.value || '';
+        
+        let url = `/api/cache/entries?page=${page}&limit=${limit}`;
+        if (userFilter) url += `&user=${encodeURIComponent(userFilter)}`;
+        if (mruFilter) url += `&mru=${mruFilter}`;
+        
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Failed to load cache entries');
+        
+        const data = await response.json();
+        cacheEntries = data.entries || [];
+        currentCachePage = page;
+        
+        updateCacheEntriesDisplay(data);
+        updateCachePagination(data.totalPages || 1, page);
+      } catch (error) {
+        console.error('Failed to load cache entries:', error);
+        showNotification('Failed to load cache entries', 'error');
+      }
+    }
+
+    function updateCacheStatsDisplay(stats) {
+      const container = document.getElementById('cache-stats-container');
+      if (!container) return;
+      
+      const html = `
+        <div class="cache-stats-grid">
+          <div class="cache-stat-item">
+            <div class="cache-stat-value">${stats.totalEntries || 0}</div>
+            <div class="cache-stat-label">Total Entries</div>
+            <div class="cache-stat-description">All cached responses</div>
+          </div>
+          <div class="cache-stat-item">
+            <div class="cache-stat-value">${stats.mruEntries || 0}</div>
+            <div class="cache-stat-label">MRU Entries</div>
+            <div class="cache-stat-description">In-memory cache (max 100)</div>
+          </div>
+          <div class="cache-stat-item">
+            <div class="cache-stat-value">${formatBytes(stats.totalSize || 0)}</div>
+            <div class="cache-stat-label">Total Size</div>
+            <div class="cache-stat-description">Disk storage used</div>
+          </div>
+          <div class="cache-stat-item">
+            <div class="cache-stat-value">${stats.activeUsers || 0}</div>
+            <div class="cache-stat-label">Active Users</div>
+            <div class="cache-stat-description">Users with cached data</div>
+          </div>
+          <div class="cache-stat-item">
+            <div class="cache-stat-value">${((stats.hitRate || 0) * 100).toFixed(1)}%</div>
+            <div class="cache-stat-label">Hit Rate</div>
+            <div class="cache-stat-description">Cache effectiveness</div>
+          </div>
+          <div class="cache-stat-item">
+            <div class="cache-stat-value">${stats.expiredEntries || 0}</div>
+            <div class="cache-stat-label">Expired Entries</div>
+            <div class="cache-stat-description">Ready for cleanup</div>
+          </div>
+        </div>
+      `;
+      
+      container.innerHTML = html;
+    }
+
+    function updateCacheUsersDisplay(users) {
+      const container = document.getElementById('cache-users-container');
+      if (!container) return;
+      
+      if (users.length === 0) {
+        container.innerHTML = '<div class="loading">No users with cached entries found</div>';
+        return;
+      }
+      
+      const html = users.map(user => `
+        <div class="cache-user-card">
+          <div class="cache-user-header">
+            <div class="cache-user-id">${user.userId}</div>
+            <div class="cache-user-actions">
+              <button onclick="clearUserCache('${user.userId}')" class="btn btn-stop">Clear User Cache</button>
+            </div>
+          </div>
+          <div class="cache-user-stats">
+            <div class="cache-user-stat">
+              <div class="cache-user-stat-value">${user.entries}</div>
+              <div class="cache-user-stat-label">Entries</div>
+            </div>
+            <div class="cache-user-stat">
+              <div class="cache-user-stat-value">${formatBytes(user.size)}</div>
+              <div class="cache-user-stat-label">Size</div>
+            </div>
+            <div class="cache-user-stat">
+              <div class="cache-user-stat-value">${user.mruEntries}</div>
+              <div class="cache-user-stat-label">MRU</div>
+            </div>
+            <div class="cache-user-stat">
+              <div class="cache-user-stat-value">${formatRelativeTime(user.lastAccess)}</div>
+              <div class="cache-user-stat-label">Last Access</div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+      
+      container.innerHTML = html;
+    }
+
+    function updateCacheEntriesDisplay(data) {
+      const container = document.getElementById('cache-entries-container');
+      if (!container) return;
+      
+      const entries = data.entries || [];
+      
+      if (entries.length === 0) {
+        container.innerHTML = '<div class="loading">No cache entries found</div>';
+        return;
+      }
+      
+      const html = entries.map(entry => `
+        <div class="cache-entry">
+          <div class="cache-entry-header">
+            <div class="cache-entry-info">
+              <div class="cache-entry-url">${entry.url}</div>
+              <div class="cache-entry-meta">
+                <span>User: ${entry.userId}</span>
+                <span>Method: ${entry.method}</span>
+                <span>Status: ${entry.status}</span>
+                <span>Size: ${formatBytes(entry.size)}</span>
+                <span>MRU: ${entry.inMru ? 'Yes' : 'No'}</span>
+                <span>Created: ${formatRelativeTime(entry.createdAt)}</span>
+                <span>Expires: ${formatRelativeTime(entry.expiresAt)}</span>
+              </div>
+            </div>
+            <div class="cache-entry-actions">
+              <button onclick="viewCacheEntry('${entry.key}')" class="btn btn-logs">View</button>
+              <button onclick="deleteCacheEntry('${entry.key}')" class="btn btn-stop">Delete</button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+      
+      container.innerHTML = html;
+    }
+
+    function updateCachePagination(totalPages, currentPage) {
+      const prevBtn = document.getElementById('cache-prev-page');
+      const nextBtn = document.getElementById('cache-next-page');
+      const pageInfo = document.getElementById('cache-page-info');
+      
+      if (prevBtn) prevBtn.disabled = currentPage <= 1;
+      if (nextBtn) nextBtn.disabled = currentPage >= totalPages;
+      if (pageInfo) pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+    }
+
+    function changeCachePage(delta) {
+      const newPage = currentCachePage + delta;
+      if (newPage >= 1) {
+        loadCacheEntries(newPage);
+      }
+    }
+
+    function filterCacheEntries() {
+      const userFilter = document.getElementById('cache-user-filter')?.value || '';
+      const mruFilter = document.getElementById('cache-mru-filter')?.value || '';
+      
+      cacheFilters.user = userFilter;
+      cacheFilters.mru = mruFilter;
+      
+      // Reset to first page when filtering
+      loadCacheEntries(1);
+    }
+
+    async function clearAllCache() {
+      if (!confirm('Are you sure you want to clear all cache entries? This action cannot be undone.')) {
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/cache/clear', { method: 'POST' });
+        if (!response.ok) throw new Error('Failed to clear cache');
+        
+        showNotification('All cache entries cleared successfully', 'success');
+        loadCacheStats();
+        if (activeCacheTab === 'users') loadCacheUsers();
+        if (activeCacheTab === 'entries') loadCacheEntries(1);
+      } catch (error) {
+        console.error('Failed to clear cache:', error);
+        showNotification('Failed to clear cache', 'error');
+      }
+    }
+
+    async function cleanupExpiredCache() {
+      try {
+        const response = await fetch('/api/cache/cleanup', { method: 'POST' });
+        if (!response.ok) throw new Error('Failed to cleanup expired cache');
+        
+        const result = await response.json();
+        showNotification(`Cleaned up ${result.cleanedEntries || 0} expired cache entries`, 'success');
+        loadCacheStats();
+        if (activeCacheTab === 'users') loadCacheUsers();
+        if (activeCacheTab === 'entries') loadCacheEntries(1);
+      } catch (error) {
+        console.error('Failed to cleanup expired cache:', error);
+        showNotification('Failed to cleanup expired cache', 'error');
+      }
+    }
+
+    async function clearUserCache(userId) {
+      if (!confirm(`Are you sure you want to clear all cache entries for user "${userId}"?`)) {
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/cache/clear-user/${encodeURIComponent(userId)}`, { method: 'POST' });
+        if (!response.ok) throw new Error('Failed to clear user cache');
+        
+        showNotification(`Cache cleared for user "${userId}"`, 'success');
+        loadCacheStats();
+        if (activeCacheTab === 'users') loadCacheUsers();
+        if (activeCacheTab === 'entries') loadCacheEntries(1);
+      } catch (error) {
+        console.error('Failed to clear user cache:', error);
+        showNotification('Failed to clear user cache', 'error');
+      }
+    }
+
+    async function deleteCacheEntry(key) {
+      if (!confirm('Are you sure you want to delete this cache entry?')) {
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/cache/delete/${encodeURIComponent(key)}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Failed to delete cache entry');
+        
+        showNotification('Cache entry deleted successfully', 'success');
+        loadCacheEntries(currentCachePage);
+      } catch (error) {
+        console.error('Failed to delete cache entry:', error);
+        showNotification('Failed to delete cache entry', 'error');
+      }
+    }
+
+    async function viewCacheEntry(key) {
+      try {
+        const response = await fetch(`/api/cache/entry/${encodeURIComponent(key)}`);
+        if (!response.ok) throw new Error('Failed to load cache entry');
+        
+        const entry = await response.json();
+        
+        // Create a modal to display the cache entry
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(0,0,0,0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+        `;
+        
+        const content = document.createElement('div');
+        content.style.cssText = `
+          background: white;
+          border-radius: 8px;
+          padding: 2rem;
+          max-width: 90%;
+          max-height: 90%;
+          overflow: auto;
+          position: relative;
+        `;
+        
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = '×';
+        closeBtn.style.cssText = `
+          position: absolute;
+          top: 1rem;
+          right: 1rem;
+          background: none;
+          border: none;
+          font-size: 2rem;
+          cursor: pointer;
+          color: #666;
+        `;
+        closeBtn.onclick = () => document.body.removeChild(modal);
+        
+        const preview = entry.body.length > 1000 ? 
+          entry.body.substring(0, 1000) + '... [truncated]' : 
+          entry.body;
+        
+        content.innerHTML = `
+          <h2>Cache Entry: ${entry.url}</h2>
+          <div style="margin-bottom: 1rem;">
+            <strong>User:</strong> ${entry.userId}<br>
+            <strong>Method:</strong> ${entry.method}<br>
+            <strong>Status:</strong> ${entry.status}<br>
+            <strong>Content-Type:</strong> ${entry.contentType}<br>
+            <strong>Size:</strong> ${formatBytes(entry.size)}<br>
+            <strong>Created:</strong> ${formatLocalTime(entry.createdAt)}<br>
+            <strong>Expires:</strong> ${formatLocalTime(entry.expiresAt)}
+          </div>
+          <h3>Response Body Preview:</h3>
+          <div class="cache-entry-preview">${preview}</div>
+        `;
+        
+        content.appendChild(closeBtn);
+        modal.appendChild(content);
+        document.body.appendChild(modal);
+        
+        // Close modal when clicking outside
+        modal.onclick = (e) => {
+          if (e.target === modal) {
+            document.body.removeChild(modal);
+          }
+        };
+        
+      } catch (error) {
+        console.error('Failed to view cache entry:', error);
+        showNotification('Failed to load cache entry', 'error');
+      }
+    }
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
   </script>
 </body>

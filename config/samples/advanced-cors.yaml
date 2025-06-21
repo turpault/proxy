@@ -22,139 +22,110 @@ letsEncrypt:
 
 # Routes configuration
 routes:
-  # Example 1: REST API with full CORS support
+  # Example 1: Public API with CORS
   - domain: "api.example.com"
-    path: "/rest"
-    target: "https://api.external-service.com"
-    ssl: true
-    cors:
-      enabled: true
-      origin: ["https://app.example.com", "http://localhost:3000"]
-      credentials: true
-      methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
-      allowedHeaders: [
-        "Content-Type", 
-        "Authorization", 
-        "X-API-Key", 
-        "X-Requested-With",
-        "Accept",
-        "Origin"
-      ]
-      exposedHeaders: [
-        "X-RateLimit-Limit", 
-        "X-RateLimit-Remaining", 
-        "X-Total-Count"
-      ]
-      maxAge: 3600  # 1 hour preflight cache
-      # Forward specific headers from client to target
-      forwardHeaders: ["authorization", "x-api-key", "x-user-id"]
-    rewrite:
-      "^/rest/": "/"  # Remove /rest prefix when forwarding
-
-  # Example 2: Public API with minimal CORS
-  - domain: "public-api.example.com"
     path: "/public"
-    target: "https://public-api.external.com"
-    ssl: true
+    target: "https://api.public-service.com"
     cors:
       enabled: true
-      origin: true  # Allow all origins
-      credentials: false  # No credentials for public API
+      origin: ["https://app.example.com", "https://admin.example.com"]
+      credentials: false
       methods: ["GET", "POST"]
-      allowedHeaders: ["Content-Type", "Authorization"]
-      # Only forward authorization header
-      forwardHeaders: ["authorization"]
+      allowedHeaders: ["Content-Type", "Authorization", "X-API-Key"]
+      exposedHeaders: ["X-Total-Count", "X-Page-Count"]
+      maxAge: 3600
 
-  # Example 3: Internal API with strict CORS
-  - domain: "internal.example.com"
-    path: "/internal"
-    target: "https://internal-api.company.com"
-    ssl: true
+  # Example 2: Private API with authentication
+  - domain: "api.example.com"
+    path: "/private"
+    target: "https://api.private-service.com"
     cors:
       enabled: true
-      origin: ["https://internal.example.com"]  # Only internal domain
+      origin: ["https://app.example.com"]
       credentials: true
       methods: ["GET", "POST", "PUT", "DELETE"]
+      allowedHeaders: ["Content-Type", "Authorization"]
+      exposedHeaders: ["X-User-Id", "X-Session-Id"]
+
+  # Example 3: Admin API with restricted access
+  - domain: "api.example.com"
+    path: "/admin"
+    target: "https://api.admin-service.com"
+    cors:
+      enabled: true
+      origin: ["https://admin.example.com"]
+      credentials: true
+      methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
       allowedHeaders: [
-        "Content-Type", 
-        "Authorization", 
-        "X-Internal-Key",
+        "Content-Type",
+        "Authorization",
+        "X-Admin-Token",
         "X-User-Role"
       ]
-      # Forward internal authentication headers
-      forwardHeaders: [
-        "authorization", 
-        "x-internal-key", 
-        "x-user-role"
+      exposedHeaders: [
+        "X-Admin-Id",
+        "X-Permissions",
+        "X-Audit-Log"
       ]
+      maxAge: 1800
 
-  # Example 4: Dynamic CORS proxy with URL parameter
-  - domain: "proxy.example.com"
-    path: "/dynamic"
-    target: "https://dynamic-target.com"  # Base target (can be overridden)
-    ssl: true
-    cors:
-      enabled: true
-      origin: ["https://app.example.com"]
-      credentials: true
-      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-      allowedHeaders: ["Content-Type", "Authorization", "X-API-Key"]
-      forwardHeaders: ["authorization", "x-api-key"]
-    # Dynamic target configuration
-    dynamicTarget:
-      enabled: true
-      allowedDomains: [
-        "api1.external.com",
-        "api2.external.com",
-        "*.external.com"  # Wildcard support
-      ]
-      httpsOnly: true
-      urlParameter: "target"  # Use ?target= parameter
-      timeouts:
-        request: 30000   # 30 seconds
-        proxy: 30000     # 30 seconds
-      logging:
-        logRequests: true
-        logBlocked: true
-        logErrors: true
-
-  # Example 5: File upload proxy with specific headers
-  - domain: "upload.example.com"
+  # Example 4: File upload API
+  - domain: "api.example.com"
     path: "/upload"
-    target: "https://upload-service.com"
-    ssl: true
+    target: "https://api.upload-service.com"
     cors:
       enabled: true
       origin: ["https://app.example.com"]
       credentials: true
-      methods: ["POST", "PUT", "OPTIONS"]
-      allowedHeaders: [
-        "Content-Type", 
-        "Authorization", 
-        "X-Upload-Token",
-        "X-File-Name"
-      ]
-      exposedHeaders: ["X-Upload-ID", "X-Upload-Status"]
-      maxAge: 1800  # 30 minutes
-      # Forward upload-specific headers
-      forwardHeaders: [
-        "authorization", 
-        "x-upload-token", 
-        "x-file-name"
-      ]
+      methods: ["POST", "OPTIONS"]
+      allowedHeaders: ["Content-Type", "Authorization", "X-File-Type"]
+      exposedHeaders: ["X-Upload-Id", "X-File-Size"]
+      maxAge: 7200
 
-  # Example 6: WebSocket proxy with CORS
-  - domain: "ws.example.com"
+  # Example 5: WebSocket API
+  - domain: "api.example.com"
     path: "/ws"
-    target: "wss://websocket-service.com"
-    ssl: true
+    target: "wss://api.websocket-service.com"
     cors:
       enabled: true
       origin: ["https://app.example.com"]
       credentials: true
-      methods: ["GET", "POST", "OPTIONS"]
+      methods: ["GET", "POST"]
       allowedHeaders: ["Content-Type", "Authorization"]
-      forwardHeaders: ["authorization"]
+
+  # Example 6: Analytics API with custom headers
+  - domain: "api.example.com"
+    path: "/analytics"
+    target: "https://api.analytics-service.com"
+    cors:
+      enabled: true
+      origin: ["https://app.example.com", "https://dashboard.example.com"]
+      credentials: true
+      methods: ["GET", "POST", "PUT"]
+      allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "X-API-Key",
+        "X-Client-Version",
+        "X-User-Agent"
+      ]
+      exposedHeaders: [
+        "X-Data-Points",
+        "X-Processing-Time",
+        "X-Cache-Status"
+      ]
+      maxAge: 86400
+
+  # Example 7: Mobile API with specific requirements
+  - domain: "api.example.com"
+    path: "/mobile"
+    target: "https://api.mobile-service.com"
+    cors:
+      enabled: true
+      origin: ["https://mobile.example.com"]
+      credentials: true
+      methods: ["GET", "POST", "PUT", "DELETE"]
+      allowedHeaders: ["Content-Type", "Authorization"]
 
 # Security configuration
 security:
