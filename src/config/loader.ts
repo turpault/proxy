@@ -108,6 +108,7 @@ const corsConfigSchema = Joi.object({
   maxAge: Joi.number().optional(),
   preflightContinue: Joi.boolean().default(false),
   optionsSuccessStatus: Joi.number().default(204),
+  forwardHeaders: Joi.array().items(Joi.string()).optional(),
 });
 
 // Dynamic CORS Proxy Configuration schema
