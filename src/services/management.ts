@@ -73,6 +73,11 @@ export function registerManagementEndpoints(
         } else if (runningProcess?.isReconnected) {
           status = 'starting';
         }
+        
+        // Get scheduler information
+        const scheduler = processManager.getScheduler();
+        const scheduledProcess = scheduler.getScheduledProcess(processId);
+        
         return {
           id: processId,
           name: processConfig?.name || runningProcess?.name || `proxy-${processId}`,
@@ -96,6 +101,13 @@ export function registerManagementEndpoints(
           isReconnected: runningProcess?.isReconnected || false,
           isStopped: runningProcess?.isStopped || false,
           isRemoved: isRemoved || runningProcess?.isRemoved || false,
+          schedule: processConfig?.schedule,
+          scheduledInfo: scheduledProcess ? {
+            lastRun: scheduledProcess.lastRun,
+            nextRun: scheduledProcess.nextRun,
+            runCount: scheduledProcess.runCount,
+            lastError: scheduledProcess.lastError
+          } : null
         };
       });
       res.json({ 
@@ -250,9 +262,9 @@ export function registerManagementEndpoints(
     }
   });
 
-  managementApp.get('/api/status', (req, res) => {
+  managementApp.get('/api/status', async (req, res) => {
     try {
-      const status = proxyServer.getStatus();
+      const status = await proxyServer.getStatusData();
       res.json({ 
         success: true, 
         data: status,
@@ -695,6 +707,64 @@ export function registerManagementEndpoints(
     } catch (error) {
       logger.error('Failed to clear statistics', error);
       res.status(500).json({ success: false, error: 'Failed to clear statistics' });
+    }
+  });
+
+  // Scheduler endpoints
+  managementApp.get('/api/scheduler', (req, res) => {
+    try {
+      const scheduler = processManager.getScheduler();
+      const scheduledProcesses = scheduler.getScheduledProcesses();
+      
+      const schedulerInfo = {
+        totalScheduled: scheduledProcesses.length,
+        processes: scheduledProcesses.map(sp => ({
+          id: sp.id,
+          cron: sp.config.schedule?.cron,
+          timezone: sp.config.schedule?.timezone || 'UTC',
+          lastRun: sp.lastRun,
+          nextRun: sp.nextRun,
+          runCount: sp.runCount,
+          lastError: sp.lastError,
+          isRunning: sp.isRunning
+        }))
+      };
+      
+      res.json({ 
+        success: true, 
+        data: schedulerInfo,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error('Failed to get scheduler information', error);
+      res.status(500).json({ success: false, error: 'Failed to get scheduler information' });
+    }
+  });
+
+  managementApp.post('/api/scheduler/validate-cron', (req, res) => {
+    try {
+      const { cronExpression, timezone = 'UTC' } = req.body;
+      
+      if (!cronExpression) {
+        return res.status(400).json({ success: false, error: 'Cron expression is required' });
+      }
+      
+      const scheduler = processManager.getScheduler();
+      const isValid = scheduler.validateCronExpression(cronExpression);
+      const nextRun = isValid ? scheduler.getNextRunTime(cronExpression, timezone) : null;
+      
+      res.json({ 
+        success: true, 
+        data: {
+          isValid,
+          nextRun,
+          cronExpression,
+          timezone
+        }
+      });
+    } catch (error) {
+      logger.error('Failed to validate cron expression', error);
+      res.status(500).json({ success: false, error: 'Failed to validate cron expression' });
     }
   });
 } 

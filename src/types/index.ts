@@ -18,6 +18,14 @@ export interface ProcessConfig {
     timeout?: number; // milliseconds
     retries?: number;
   };
+  schedule?: {
+    enabled?: boolean;
+    cron?: string; // Cron expression (e.g., "0 2 * * *" for daily at 2 AM)
+    timezone?: string; // Timezone (e.g., "America/New_York")
+    maxDuration?: number; // Maximum runtime in milliseconds
+    autoStop?: boolean; // Whether to automatically stop after maxDuration
+    skipIfRunning?: boolean; // Skip if process is already running
+  };
 }
 
 // New types for independent process management
@@ -48,6 +56,7 @@ export interface ProcessManagementConfig {
 }
 
 export interface ProxyRoute {
+  name?: string; // Human-readable name for the route (used for statistics grouping)
   domain: string;
   target?: string; // Optional since cors-forwarder routes get target from request
   ssl?: boolean;
@@ -272,4 +281,20 @@ export interface DevelopmentSettings {
   debug?: boolean;
   verbose?: boolean;
   hotReload?: boolean;
+}
+
+export interface RouteStats {
+  name?: string; // Route name from configuration
+  domain: string;
+  target: string;
+  requests: number;
+  avgResponseTime: number;
+  topCountries: Array<{
+    country: string;
+    city?: string;
+    count: number;
+    percentage: number;
+  }>;
+  uniqueIPs: number;
+  methods: string[];
 }

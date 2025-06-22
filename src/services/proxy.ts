@@ -706,6 +706,9 @@ export class ProxyServer implements WebSocketServiceInterface {
       }
     }
     
+    // Initialize process schedules
+    processManager.initializeSchedules(this.config.processManagement);
+    
     const processPromises: Promise<void>[] = [];
     
     // Start processes from the independent process management configuration

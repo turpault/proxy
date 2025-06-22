@@ -5,6 +5,7 @@ import { watch } from 'fs';
 import { logger } from '../utils/logger';
 import { ProcessConfig, ProcessManagementConfig } from '../types';
 import axios from 'axios';
+import { ProcessScheduler } from './process-scheduler';
 
 /**
  * Process Manager for managing long-running child processes
@@ -64,8 +65,25 @@ export class ProcessManager {
   private reinitializeTimeout: NodeJS.Timeout | null = null;
   private onConfigUpdate: ((config: ProcessManagementConfig) => void) | null = null;
   private onProcessUpdate: (() => void) | null = null;
+  private scheduler: ProcessScheduler;
 
   constructor() {
+    // Initialize the process scheduler
+    this.scheduler = new ProcessScheduler();
+    
+    // Set up scheduler callbacks
+    this.scheduler.setProcessStartCallback(async (id: string, config: ProcessConfig) => {
+      await this.startProcess(id, config, 'scheduled');
+    });
+    
+    this.scheduler.setProcessStopCallback(async (id: string) => {
+      await this.stopProcess(id);
+    });
+    
+    this.scheduler.setProcessStatusChangeCallback((id: string, isRunning: boolean) => {
+      this.updateSchedulerProcessStatus(id, isRunning);
+    });
+
     // Handle graceful shutdown
     // Note: This process manager is designed to NEVER kill child processes
     // Child processes are spawned with detached: true and will survive
@@ -490,12 +508,18 @@ export class ProcessManager {
 
     this.processes.set(id, managedProcess);
 
+    // Set up scheduler for this process if configured
+    this.scheduler.scheduleProcess(id, config);
+
     if (existingProcess) {
       // Reconnect to existing process
       managedProcess.isRunning = true;
       managedProcess.isReconnected = true;
       managedProcess.isStopped = false;
       managedProcess.startTime = new Date();
+
+      // Update scheduler status
+      this.scheduler.updateProcessStatus(id, true);
 
       // Set up process death monitoring
       const pid = existingProcess.pid;
@@ -505,6 +529,8 @@ export class ProcessManager {
         
         // Handle process death
         managedProcess.isRunning = false;
+        this.scheduler.updateProcessStatus(id, false);
+        
         if (managedProcess.process) {
           managedProcess.process.kill(); // Kill the tail process
         }
@@ -546,6 +572,9 @@ export class ProcessManager {
 
       try {
         await this.spawnProcess(managedProcess, target);
+        
+        // Update scheduler status
+        this.scheduler.updateProcessStatus(id, managedProcess.isRunning);
         
         // Notify listeners of process update
         this.notifyProcessUpdate();
@@ -1139,6 +1168,9 @@ export class ProcessManager {
     // Stop file watching
     this.stopFileWatching();
 
+    // Stop scheduler
+    this.scheduler.shutdown();
+
     // Stop all health checks
     for (const [id] of this.healthCheckIntervals) {
       this.stopHealthCheck(id);
@@ -1202,6 +1234,34 @@ export class ProcessManager {
     } catch (error) {
       logger.error(`Failed to force restart process ${id}`, error);
     }
+  }
+
+  /**
+   * Update scheduler process status
+   */
+  private updateSchedulerProcessStatus(id: string, isRunning: boolean): void {
+    this.scheduler.updateProcessStatus(id, isRunning);
+    this.notifyProcessUpdate();
+  }
+
+  /**
+   * Initialize schedules for all processes in a configuration
+   */
+  public initializeSchedules(config: ProcessManagementConfig): void {
+    logger.info('Initializing process schedules');
+    
+    for (const [id, processConfig] of Object.entries(config.processes)) {
+      if (processConfig.schedule?.enabled) {
+        this.scheduler.scheduleProcess(id, processConfig);
+      }
+    }
+  }
+
+  /**
+   * Get scheduler instance
+   */
+  public getScheduler(): ProcessScheduler {
+    return this.scheduler;
   }
 }
 

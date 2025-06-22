@@ -180,6 +180,7 @@ const configSchema = Joi.object({
   httpsPort: Joi.number().default(443),
   routes: Joi.array().items(
     Joi.object({
+      name: Joi.string().optional(),
       domain: Joi.string().required(),
       target: Joi.string().when('type', {
         is: Joi.valid('proxy'),
