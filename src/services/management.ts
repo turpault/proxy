@@ -272,6 +272,21 @@ export function registerManagementEndpoints(
       if (period !== 'all') {
         const timePeriodStats = statisticsService.getTimePeriodStats(period);
         
+        // Aggregate country data from routes for heatmap
+        const countryCounts = new Map<string, number>();
+        timePeriodStats.routes.forEach(route => {
+          route.topCountries.forEach(country => {
+            if (country.country && country.country !== 'Unknown') {
+              countryCounts.set(country.country, (countryCounts.get(country.country) || 0) + country.count);
+            }
+          });
+        });
+        
+        const topCountries = Array.from(countryCounts.entries())
+          .map(([country, count]) => ({ country, count }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 10);
+        
         res.json({ 
           success: true, 
           data: {
@@ -280,14 +295,15 @@ export function registerManagementEndpoints(
               uniqueIPs: timePeriodStats.totalRequests, // This is approximate
               uniqueCountries: timePeriodStats.uniqueCountries,
               uniqueCities: 0, // Not available in time period stats
-              topCountries: [], // Not available in time period stats
+              topCountries: topCountries,
               topCities: [], // Not available in time period stats
               topIPs: [], // Not available in time period stats
               requestsByHour: [], // Not available in time period stats
               requestsByDay: [] // Not available in time period stats
             },
             routes: timePeriodStats.routes,
-            avgResponseTime: timePeriodStats.avgResponseTime
+            avgResponseTime: timePeriodStats.avgResponseTime,
+            period: timePeriodStats.period
           },
           timestamp: new Date().toISOString()
         });

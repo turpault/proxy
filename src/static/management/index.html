@@ -1107,6 +1107,42 @@
       .certificate-summary-number {
         font-size: 1.5rem;
       }
+
+      /* Route cards mobile styles */
+      .route-card {
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+      }
+
+      .route-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+      }
+
+      .route-domain {
+        font-size: 1.1rem;
+      }
+
+      .route-stats {
+        text-align: left;
+        width: 100%;
+      }
+
+      .route-details {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+      }
+
+      .route-detail-value {
+        gap: 0.25rem;
+      }
+
+      .country-badge,
+      .method-badge {
+        font-size: 0.75rem;
+        padding: 0.2rem 0.5rem;
+      }
     }
 
     /* Process tabs styles */
@@ -1877,6 +1913,120 @@
       letter-spacing: 0.5px;
       font-weight: 500;
     }
+
+    /* Route statistics styles */
+    .route-card {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      transition: all 0.2s ease;
+    }
+
+    .route-card:hover {
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+      transform: translateY(-1px);
+    }
+
+    .route-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1.5rem;
+      gap: 1rem;
+    }
+
+    .route-info {
+      flex: 1;
+    }
+
+    .route-domain {
+      font-weight: 700;
+      color: #1a202c;
+      font-size: 1.25rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .route-target {
+      color: #4a5568;
+      font-size: 0.95rem;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    }
+
+    .route-stats {
+      text-align: right;
+    }
+
+    .route-requests {
+      font-weight: 600;
+      color: #2b6cb0;
+      font-size: 1.1rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .route-response-time {
+      color: #718096;
+      font-size: 0.9rem;
+    }
+
+    .route-details {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+
+    .route-detail {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .route-detail-label {
+      font-weight: 600;
+      color: #4a5568;
+      font-size: 0.9rem;
+    }
+
+    .route-detail-value {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .country-badge {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+
+    .method-badge {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: white;
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    }
+
+    .no-data {
+      color: #a0aec0;
+      font-style: italic;
+      font-size: 0.9rem;
+    }
+
+    /* Time period display */
+    #time-period {
+      color: #718096;
+      font-size: 0.9rem;
+      text-align: center;
+      margin-bottom: 1rem;
+    }
   </style>
 </head>
 
@@ -1974,7 +2124,8 @@
 
       <div class="routes-section">
         <h2>Route Statistics</h2>
-        <div id="routesTable">
+        <div id="time-period" class="time-period-display">Loading time period...</div>
+        <div id="routes-container">
           <div class="loading">Loading route statistics...</div>
         </div>
       </div>
@@ -3096,138 +3247,69 @@
         const totalResponseTimes = data.details.byIP.reduce((sum, ipStat) => {
           // If responseTimes is available in the data, use it
           if (ipStat.responseTimes && Array.isArray(ipStat.responseTimes)) {
-            return sum + ipStat.responseTimes.reduce((a, b) => a + b, 0);
+            return sum + ipStat.responseTimes.reduce((ipSum, time) => ipSum + time, 0);
           }
           return sum;
         }, 0);
-        const totalRequests = summary.totalRequests || 1;
-        avgResponseTime = totalResponseTimes / totalRequests;
+        const totalRequests = data.details.byIP.reduce((sum, ipStat) => sum + ipStat.count, 0);
+        avgResponseTime = totalRequests > 0 ? totalResponseTimes / totalRequests : 0;
       }
-      document.getElementById('avgResponseTime').textContent = formatResponseTime(avgResponseTime);
-      
-      // For active routes, check if we have routes data or need to calculate from details
-      let activeRoutes = 0;
-      if (data.routes && Array.isArray(data.routes)) {
-        activeRoutes = data.routes.length;
-      } else if (data.details && data.details.byIP) {
-        const uniqueRoutes = new Set();
-        data.details.byIP.forEach(ipStat => {
-          if (ipStat.routes && Array.isArray(ipStat.routes)) {
-            ipStat.routes.forEach(route => uniqueRoutes.add(route));
-          }
-        });
-        activeRoutes = uniqueRoutes.size;
-      }
-      document.getElementById('activeRoutes').textContent = activeRoutes;
-      
-      // Update routes table - use routes data if available, otherwise create from details
-      const routesContainer = document.getElementById('routesTable');
+      document.getElementById('avgResponseTime').textContent = avgResponseTime > 0 ? `${avgResponseTime.toFixed(2)}ms` : 'N/A';
+
+      // Update route statistics
+      const routesContainer = document.getElementById('routes-container');
       if (data.routes && Array.isArray(data.routes) && data.routes.length > 0) {
-        // Use the routes data from time period stats
-        const routesHtml = `
-          <table class="routes-table">
-            <thead>
-              <tr>
-                <th>Domain</th>
-                <th>Target</th>
-                <th>Requests</th>
-                <th>Unique IPs</th>
-                <th>Top Countries</th>
-                <th>Avg Response Time</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${data.routes.map(route => `
-                <tr>
-                  <td class="route-domain">${route.domain}</td>
-                  <td class="route-target">${route.target}</td>
-                  <td class="request-count">${formatNumber(route.requests)}</td>
-                  <td>${route.uniqueIPs}</td>
-                  <td>
-                    ${(route.topCountries || []).slice(0, 3).map(country => `
-                      <div class="geolocation">
-                        <span class="country-name">${country.country} (${country.count})</span>
-                      </div>
-                    `).join('')}
-                  </td>
-                  <td>${formatResponseTime(route.avgResponseTime || 0)}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        `;
-        routesContainer.innerHTML = routesHtml;
-      } else if (data.details && data.details.byIP && data.details.byIP.length > 0) {
-        // Fallback to creating routes from details data
-        const routeStats = new Map();
-        
-        data.details.byIP.forEach(ipStat => {
-          if (ipStat.routes && Array.isArray(ipStat.routes)) {
-            ipStat.routes.forEach(route => {
-              const existing = routeStats.get(route);
-              if (existing) {
-                existing.requests += ipStat.count;
-                existing.ips.add(ipStat.ip);
-                if (ipStat.location && ipStat.location !== 'Unknown') {
-                  existing.countries.add(ipStat.location);
-                }
-              } else {
-                routeStats.set(route, {
-                  domain: route,
-                  target: route,
-                  requests: ipStat.count,
-                  ips: new Set([ipStat.ip]),
-                  countries: new Set(ipStat.location && ipStat.location !== 'Unknown' ? [ipStat.location] : [])
-                });
-              }
-            });
-          }
-        });
-        
-        const routesArray = Array.from(routeStats.values()).map(route => ({
-          ...route,
-          uniqueIPs: route.ips.size,
-          topCountries: Array.from(route.countries).slice(0, 3).map(country => ({
-            country: country,
-            count: 1
-          }))
-        }));
-        
-        if (routesArray.length > 0) {
-          const routesHtml = `
-            <table class="routes-table">
-              <thead>
-                <tr>
-                  <th>Route</th>
-                  <th>Requests</th>
-                  <th>Unique IPs</th>
-                  <th>Top Countries</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${routesArray.map(route => `
-                  <tr>
-                    <td class="route-domain">${route.domain}</td>
-                    <td class="request-count">${formatNumber(route.requests)}</td>
-                    <td>${route.uniqueIPs}</td>
-                    <td>
-                      ${route.topCountries.map(country => `
-                        <div class="geolocation">
-                          <span class="country-name">${country.country}</span>
-                        </div>
-                      `).join('')}
-                    </td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
+        const routesHtml = data.routes.map(route => {
+          const topCountriesHtml = route.topCountries && route.topCountries.length > 0 
+            ? route.topCountries.slice(0, 3).map(country => 
+                `<span class="country-badge">${country.country} (${country.count})</span>`
+              ).join('')
+            : '<span class="no-data">No country data</span>';
+          
+          const methodsHtml = route.methods && route.methods.length > 0
+            ? route.methods.map(method => `<span class="method-badge">${method}</span>`).join('')
+            : '<span class="no-data">No method data</span>';
+          
+          return `
+            <div class="route-card">
+              <div class="route-header">
+                <div class="route-info">
+                  <div class="route-domain">${route.domain || 'Unknown'}</div>
+                  <div class="route-target">${route.target || 'Unknown'}</div>
+                </div>
+                <div class="route-stats">
+                  <div class="route-requests">${formatNumber(route.requests)} requests</div>
+                  <div class="route-response-time">${route.avgResponseTime > 0 ? route.avgResponseTime.toFixed(2) + 'ms' : 'N/A'}</div>
+                </div>
+              </div>
+              <div class="route-details">
+                <div class="route-detail">
+                  <div class="route-detail-label">Top Countries:</div>
+                  <div class="route-detail-value">${topCountriesHtml}</div>
+                </div>
+                <div class="route-detail">
+                  <div class="route-detail-label">Methods:</div>
+                  <div class="route-detail-value">${methodsHtml}</div>
+                </div>
+                <div class="route-detail">
+                  <div class="route-detail-label">Unique IPs:</div>
+                  <div class="route-detail-value">${route.uniqueIPs || 0}</div>
+                </div>
+              </div>
+            </div>
           `;
-          routesContainer.innerHTML = routesHtml;
-        } else {
-          routesContainer.innerHTML = '<div class="loading">No route data available</div>';
-        }
+        }).join('');
+        
+        routesContainer.innerHTML = routesHtml;
       } else {
-        routesContainer.innerHTML = '<div class="loading">No route data available</div>';
+        routesContainer.innerHTML = '<div class="no-data">No route statistics available for the selected time period</div>';
+      }
+
+      // Update time period display
+      if (data.period) {
+        const startDate = new Date(data.period.start).toLocaleString();
+        const endDate = new Date(data.period.end).toLocaleString();
+        document.getElementById('time-period').textContent = `${startDate} - ${endDate}`;
       }
     }
 
@@ -3254,10 +3336,10 @@
           throw new Error('Failed to load statistics');
         }
         
-        // Aggregate country counts from routes data or summary data
+        // Aggregate country counts from the actual data structure
         const countryCounts = {};
         
-        // First try to get data from routes (time period stats)
+        // Try to get data from routes (time period stats)
         if (data.data.routes && Array.isArray(data.data.routes)) {
           data.data.routes.forEach(route => {
             (route.topCountries || []).forEach(country => {
@@ -3267,11 +3349,33 @@
             });
           });
         }
-        // Fallback to summary data if no routes data
-        else if (data.data.summary && data.data.summary.topCountries) {
+        
+        // If no routes data, try to get from summary
+        if (Object.keys(countryCounts).length === 0 && data.data.summary && data.data.summary.topCountries) {
           data.data.summary.topCountries.forEach(country => {
             if (country.country && country.country !== 'Unknown') {
               countryCounts[country.country] = country.count;
+            }
+          });
+        }
+        
+        // If still no data, try to get from details
+        if (Object.keys(countryCounts).length === 0 && data.data.details && data.data.details.byIP) {
+          data.data.details.byIP.forEach(ipStat => {
+            if (ipStat.location && ipStat.location !== 'Unknown') {
+              const country = ipStat.location.split(', ').pop(); // Get last part (country)
+              if (country && country !== 'Unknown') {
+                countryCounts[country] = (countryCounts[country] || 0) + ipStat.count;
+              }
+            }
+          });
+        }
+        
+        // If still no data, try to get from the raw stats data
+        if (Object.keys(countryCounts).length === 0 && data.data.stats) {
+          data.data.stats.forEach(stat => {
+            if (stat.geolocation && stat.geolocation.country && stat.geolocation.country !== 'Unknown') {
+              countryCounts[stat.geolocation.country] = (countryCounts[stat.geolocation.country] || 0) + stat.count;
             }
           });
         }
@@ -3281,6 +3385,11 @@
           name: country, 
           value: count 
         }));
+        
+        if (mapData.length === 0) {
+          container.innerHTML = '<div style="color:#718096;padding:2rem;text-align:center;">No geolocation data available for the selected time period</div>';
+          return;
+        }
         
         geoHeatmapChart.setOption({
           title: {
@@ -3318,6 +3427,7 @@
         geoHeatmapChart.hideLoading();
         geoHeatmapLoaded = true;
       } catch (err) {
+        console.error('Error rendering heatmap:', err);
         container.innerHTML = '<div style="color:#e53e3e;padding:2rem;text-align:center;">Failed to load geolocation statistics</div>';
       }
     }
