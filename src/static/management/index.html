@@ -1217,10 +1217,17 @@
       display: block;
     }
 
+    .process-tab-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+      flex-wrap: wrap;
+    }
+
     .process-tab-actions {
       display: flex;
       gap: 0.25rem;
-      margin-bottom: 0.75rem;
       flex-wrap: wrap;
     }
 
@@ -1235,7 +1242,8 @@
       display: flex;
       flex-wrap: wrap;
       gap: 0.5rem;
-      margin-bottom: 0.75rem;
+      align-items: flex-start;
+      flex: 1;
     }
 
     .process-tab-info-item {
@@ -2836,31 +2844,33 @@
         
         return `
           <div class="process-tab-content ${isActive}" id="process-content-${process.id}">
-            <div class="process-tab-actions">
-              <button onclick="startProcess('${process.id}')" class="btn btn-start" ${status === 'running' ? 'disabled' : ''}>
-                Start
-              </button>
-              <button onclick="stopProcess('${process.id}')" class="btn btn-stop" ${status !== 'running' ? 'disabled' : ''}>
-                Stop
-              </button>
-              <button onclick="restartProcess('${process.id}')" class="btn btn-restart">
-                Restart
-              </button>
-            </div>
-            <div class="process-tab-info">
-              <div class="process-tab-info-item">
-                <span class="process-tab-info-label">Status</span>
-                <span class="process-tab-info-value ${statusClass}">${statusText}</span>
+            <div class="process-tab-header">
+              <div class="process-tab-actions">
+                <button onclick="startProcess('${process.id}')" class="btn btn-start" ${status === 'running' ? 'disabled' : ''}>
+                  Start
+                </button>
+                <button onclick="stopProcess('${process.id}')" class="btn btn-stop" ${status !== 'running' ? 'disabled' : ''}>
+                  Stop
+                </button>
+                <button onclick="restartProcess('${process.id}')" class="btn btn-restart">
+                  Restart
+                </button>
               </div>
-              <div class="process-tab-info-item">
-                <span class="process-tab-info-label">PID</span>
-                <span class="process-tab-info-value">${process.pid || 'N/A'}</span>
+              <div class="process-tab-info">
+                <div class="process-tab-info-item">
+                  <span class="process-tab-info-label">Status</span>
+                  <span class="process-tab-info-value ${statusClass}">${statusText}</span>
+                </div>
+                <div class="process-tab-info-item">
+                  <span class="process-tab-info-label">PID</span>
+                  <span class="process-tab-info-value">${process.pid || 'N/A'}</span>
+                </div>
+                <div class="process-tab-info-item">
+                  <span class="process-tab-info-label">Uptime</span>
+                  <span class="process-tab-info-value">${process.uptime ? formatUptime(process.uptime) : 'N/A'}</span>
+                </div>
+                <button class="btn btn-xs" onclick="toggleDetails('${process.id}')">Details</button>
               </div>
-              <div class="process-tab-info-item">
-                <span class="process-tab-info-label">Uptime</span>
-                <span class="process-tab-info-value">${process.uptime ? formatUptime(process.uptime) : 'N/A'}</span>
-              </div>
-              <button class="btn btn-xs" onclick="toggleDetails('${process.id}')" style="margin-left: 1rem;">Details</button>
             </div>
             <div class="process-tab-section collapsible" id="details-${process.id}">
               <div class="process-tab-info">
