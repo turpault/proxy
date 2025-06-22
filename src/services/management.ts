@@ -266,54 +266,41 @@ export function registerManagementEndpoints(
 
   managementApp.get('/api/statistics', (req, res) => {
     try {
-      const period = req.query.period || '24h';
-      const stats = statisticsService.getCurrentStats();
+      const period = (req.query.period as string) || '24h';
       
-      // Filter data based on period
-      let filteredStats = stats;
+      // Use getTimePeriodStats for better route data when period is specified
       if (period !== 'all') {
-        const now = Date.now();
-        let cutoffTime = now;
+        const timePeriodStats = statisticsService.getTimePeriodStats(period);
         
-        switch (period) {
-          case '1h':
-            cutoffTime = now - (60 * 60 * 1000);
-            break;
-          case '24h':
-            cutoffTime = now - (24 * 60 * 60 * 1000);
-            break;
-          case '7d':
-            cutoffTime = now - (7 * 24 * 60 * 60 * 1000);
-            break;
-          case '30d':
-            cutoffTime = now - (30 * 24 * 60 * 60 * 1000);
-            break;
-          default:
-            cutoffTime = now - (24 * 60 * 60 * 1000); // Default to 24h
-        }
+        res.json({ 
+          success: true, 
+          data: {
+            summary: {
+              totalRequests: timePeriodStats.totalRequests,
+              uniqueIPs: timePeriodStats.totalRequests, // This is approximate
+              uniqueCountries: timePeriodStats.uniqueCountries,
+              uniqueCities: 0, // Not available in time period stats
+              topCountries: [], // Not available in time period stats
+              topCities: [], // Not available in time period stats
+              topIPs: [], // Not available in time period stats
+              requestsByHour: [], // Not available in time period stats
+              requestsByDay: [] // Not available in time period stats
+            },
+            routes: timePeriodStats.routes,
+            avgResponseTime: timePeriodStats.avgResponseTime
+          },
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        // Use getCurrentStats for all-time data
+        const stats = statisticsService.getCurrentStats();
         
-        // Filter details by timestamp - we'll filter the byIP details
-        if (stats.details && stats.details.byIP) {
-          const filteredByIP = stats.details.byIP.filter((ipStat: any) => {
-            const lastSeen = new Date(ipStat.lastSeen).getTime();
-            return lastSeen >= cutoffTime;
-          });
-          
-          filteredStats = {
-            ...stats,
-            details: {
-              ...stats.details,
-              byIP: filteredByIP
-            }
-          };
-        }
+        res.json({ 
+          success: true, 
+          data: stats,
+          timestamp: new Date().toISOString()
+        });
       }
-      
-      res.json({ 
-        success: true, 
-        data: filteredStats,
-        timestamp: new Date().toISOString()
-      });
     } catch (error) {
       logger.error('Failed to get statistics', error);
       res.status(500).json({ success: false, error: 'Failed to get statistics' });

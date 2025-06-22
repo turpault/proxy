@@ -3084,16 +3084,46 @@
     }
 
     function updateStatisticsDisplay(data) {
-      // Update overview cards
-      document.getElementById('totalRequests').textContent = formatNumber(data.totalRequests || 0);
-      document.getElementById('uniqueIPs').textContent = formatNumber(data.uniqueIPs || 0);
-      document.getElementById('activeRoutes').textContent = (data.routes || []).length;
-      document.getElementById('uniqueCountries').textContent = formatNumber(data.uniqueCountries || 0);
-      document.getElementById('avgResponseTime').textContent = formatResponseTime(data.avgResponseTime || 0);
+      // Update overview cards using summary data
+      const summary = data.summary || {};
+      document.getElementById('totalRequests').textContent = formatNumber(summary.totalRequests || 0);
+      document.getElementById('uniqueIPs').textContent = formatNumber(summary.uniqueIPs || 0);
+      document.getElementById('uniqueCountries').textContent = formatNumber(summary.uniqueCountries || 0);
       
-      // Update routes table
+      // Handle average response time - could be in data.avgResponseTime or calculated from details
+      let avgResponseTime = data.avgResponseTime || 0;
+      if (!avgResponseTime && data.details && data.details.byIP && data.details.byIP.length > 0) {
+        const totalResponseTimes = data.details.byIP.reduce((sum, ipStat) => {
+          // If responseTimes is available in the data, use it
+          if (ipStat.responseTimes && Array.isArray(ipStat.responseTimes)) {
+            return sum + ipStat.responseTimes.reduce((a, b) => a + b, 0);
+          }
+          return sum;
+        }, 0);
+        const totalRequests = summary.totalRequests || 1;
+        avgResponseTime = totalResponseTimes / totalRequests;
+      }
+      document.getElementById('avgResponseTime').textContent = formatResponseTime(avgResponseTime);
+      
+      // For active routes, check if we have routes data or need to calculate from details
+      let activeRoutes = 0;
+      if (data.routes && Array.isArray(data.routes)) {
+        activeRoutes = data.routes.length;
+      } else if (data.details && data.details.byIP) {
+        const uniqueRoutes = new Set();
+        data.details.byIP.forEach(ipStat => {
+          if (ipStat.routes && Array.isArray(ipStat.routes)) {
+            ipStat.routes.forEach(route => uniqueRoutes.add(route));
+          }
+        });
+        activeRoutes = uniqueRoutes.size;
+      }
+      document.getElementById('activeRoutes').textContent = activeRoutes;
+      
+      // Update routes table - use routes data if available, otherwise create from details
       const routesContainer = document.getElementById('routesTable');
-      if (data.routes && data.routes.length > 0) {
+      if (data.routes && Array.isArray(data.routes) && data.routes.length > 0) {
+        // Use the routes data from time period stats
         const routesHtml = `
           <table class="routes-table">
             <thead>
@@ -3101,6 +3131,7 @@
                 <th>Domain</th>
                 <th>Target</th>
                 <th>Requests</th>
+                <th>Unique IPs</th>
                 <th>Top Countries</th>
                 <th>Avg Response Time</th>
               </tr>
@@ -3110,14 +3141,11 @@
                 <tr>
                   <td class="route-domain">${route.domain}</td>
                   <td class="route-target">${route.target}</td>
-                  <td class="request-count">${formatNumber(route.requestCount || route.requests || 0)}</td>
+                  <td class="request-count">${formatNumber(route.requests)}</td>
+                  <td>${route.uniqueIPs}</td>
                   <td>
                     ${(route.topCountries || []).slice(0, 3).map(country => `
                       <div class="geolocation">
-                        <img src="https://flagcdn.com/16x12/${country.countryCode?.toLowerCase() || 'xx'}.png" 
-                             alt="${country.country}" 
-                             class="country-flag"
-                             onerror="this.style.display='none'">
                         <span class="country-name">${country.country} (${country.count})</span>
                       </div>
                     `).join('')}
@@ -3129,6 +3157,75 @@
           </table>
         `;
         routesContainer.innerHTML = routesHtml;
+      } else if (data.details && data.details.byIP && data.details.byIP.length > 0) {
+        // Fallback to creating routes from details data
+        const routeStats = new Map();
+        
+        data.details.byIP.forEach(ipStat => {
+          if (ipStat.routes && Array.isArray(ipStat.routes)) {
+            ipStat.routes.forEach(route => {
+              const existing = routeStats.get(route);
+              if (existing) {
+                existing.requests += ipStat.count;
+                existing.ips.add(ipStat.ip);
+                if (ipStat.location && ipStat.location !== 'Unknown') {
+                  existing.countries.add(ipStat.location);
+                }
+              } else {
+                routeStats.set(route, {
+                  domain: route,
+                  target: route,
+                  requests: ipStat.count,
+                  ips: new Set([ipStat.ip]),
+                  countries: new Set(ipStat.location && ipStat.location !== 'Unknown' ? [ipStat.location] : [])
+                });
+              }
+            });
+          }
+        });
+        
+        const routesArray = Array.from(routeStats.values()).map(route => ({
+          ...route,
+          uniqueIPs: route.ips.size,
+          topCountries: Array.from(route.countries).slice(0, 3).map(country => ({
+            country: country,
+            count: 1
+          }))
+        }));
+        
+        if (routesArray.length > 0) {
+          const routesHtml = `
+            <table class="routes-table">
+              <thead>
+                <tr>
+                  <th>Route</th>
+                  <th>Requests</th>
+                  <th>Unique IPs</th>
+                  <th>Top Countries</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${routesArray.map(route => `
+                  <tr>
+                    <td class="route-domain">${route.domain}</td>
+                    <td class="request-count">${formatNumber(route.requests)}</td>
+                    <td>${route.uniqueIPs}</td>
+                    <td>
+                      ${route.topCountries.map(country => `
+                        <div class="geolocation">
+                          <span class="country-name">${country.country}</span>
+                        </div>
+                      `).join('')}
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `;
+          routesContainer.innerHTML = routesHtml;
+        } else {
+          routesContainer.innerHTML = '<div class="loading">No route data available</div>';
+        }
       } else {
         routesContainer.innerHTML = '<div class="loading">No route data available</div>';
       }
@@ -3157,14 +3254,27 @@
           throw new Error('Failed to load statistics');
         }
         
-        // Aggregate country counts from all routes
+        // Aggregate country counts from routes data or summary data
         const countryCounts = {};
-        (data.data.routes || []).forEach(route => {
-          (route.topCountries || []).forEach(c => {
-            if (!c.country) return;
-            countryCounts[c.country] = (countryCounts[c.country] || 0) + c.count;
+        
+        // First try to get data from routes (time period stats)
+        if (data.data.routes && Array.isArray(data.data.routes)) {
+          data.data.routes.forEach(route => {
+            (route.topCountries || []).forEach(country => {
+              if (country.country && country.country !== 'Unknown') {
+                countryCounts[country.country] = (countryCounts[country.country] || 0) + country.count;
+              }
+            });
           });
-        });
+        }
+        // Fallback to summary data if no routes data
+        else if (data.data.summary && data.data.summary.topCountries) {
+          data.data.summary.topCountries.forEach(country => {
+            if (country.country && country.country !== 'Unknown') {
+              countryCounts[country.country] = country.count;
+            }
+          });
+        }
         
         // Convert to ECharts format
         const mapData = Object.entries(countryCounts).map(([country, count]) => ({ 
