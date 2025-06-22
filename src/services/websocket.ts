@@ -199,7 +199,7 @@ export class WebSocketService {
   // Broadcast process updates
   broadcastProcessUpdate(processes: any[]): void {
     this.broadcast({
-      type: 'processes_update',
+      type: 'processes',
       data: processes,
       timestamp: new Date().toISOString()
     });

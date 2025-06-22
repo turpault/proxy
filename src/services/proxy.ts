@@ -1672,10 +1672,10 @@ export class ProxyServer implements WebSocketServiceInterface {
   }
 
   async getStatusData(): Promise<any> {
-    const status = this.getStatus();
+    const processes = await this.getProcesses();
     return {
-      processes: status.processes,
-      uptime: status.uptime,
+      processes: processes,
+      uptime: process.uptime(),
       timestamp: new Date().toISOString()
     };
   }
