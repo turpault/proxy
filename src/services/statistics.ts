@@ -86,6 +86,7 @@ export interface StatisticsReport {
 }
 
 export interface RouteStats {
+  name?: string; // Route name from configuration
   domain: string;
   target: string;
   requests: number;
@@ -690,7 +691,7 @@ export class StatisticsService {
   /**
    * Generate statistics for a specific time period
    */
-  public getTimePeriodStats(period: string): TimePeriodStats {
+  public getTimePeriodStats(period: string, routeConfigs?: { domain: string; path?: string; target?: string; name?: string }[]): TimePeriodStats {
     const now = new Date();
     let startDate: Date;
 
@@ -825,7 +826,15 @@ export class StatisticsService {
         .sort((a, b) => b.count - a.count)
         .slice(0, 5);
 
+      // Find the route name from the config if available
+      let routeName: string | undefined = undefined;
+      if (routeConfigs) {
+        const match = routeConfigs.find(cfg => cfg.domain === route.domain && (cfg.target === route.target || cfg.path === route.target));
+        if (match) routeName = match.name;
+      }
+
       return {
+        name: routeName,
         domain: route.domain,
         target: route.target,
         requests: route.requests,
@@ -862,6 +871,12 @@ export class StatisticsService {
         end: now
       }
     };
+  }
+
+  public clearAll(): void {
+    this.stats.clear();
+    this.saveStats();
+    logger.info('All statistics cleared');
   }
 }
 

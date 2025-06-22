@@ -270,7 +270,9 @@ export function registerManagementEndpoints(
       
       // Use getTimePeriodStats for better route data when period is specified
       if (period !== 'all') {
-        const timePeriodStats = statisticsService.getTimePeriodStats(period);
+        // Pass route configs for name lookup
+        const routeConfigs = config.routes.map(r => ({ domain: r.domain, path: r.path, target: r.target, name: r.name }));
+        const timePeriodStats = statisticsService.getTimePeriodStats(period, routeConfigs);
         
         // Aggregate country data from routes for heatmap
         const countryCounts = new Map<string, number>();
@@ -683,6 +685,16 @@ export function registerManagementEndpoints(
     } catch (error) {
       logger.error('Failed to delete cache entry', error);
       res.status(500).json({ success: false, error: 'Failed to delete cache entry' });
+    }
+  });
+
+  managementApp.post('/api/statistics/clear', (req, res) => {
+    try {
+      statisticsService.clearAll();
+      res.json({ success: true, message: 'Statistics cleared' });
+    } catch (error) {
+      logger.error('Failed to clear statistics', error);
+      res.status(500).json({ success: false, error: 'Failed to clear statistics' });
     }
   });
 } 

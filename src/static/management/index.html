@@ -2153,11 +2153,36 @@
 
       <div class="routes-section">
         <h2>Route Statistics</h2>
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
+          <button id="clear-statistics-btn" class="btn btn-stop" style="margin-left: auto;">🗑️ Clear Statistics</button>
+        </div>
         <div id="time-period" class="time-period-display">Loading time period...</div>
         <div id="routes-container">
           <div class="loading">Loading route statistics...</div>
         </div>
       </div>
+
+      <script>
+        document.getElementById('clear-statistics-btn').onclick = async function() {
+          if (!confirm('Are you sure you want to clear all HTTP statistics? This cannot be undone.')) return;
+          this.disabled = true;
+          this.textContent = 'Clearing...';
+          try {
+            const res = await fetch('/api/statistics/clear', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+              alert('Statistics cleared!');
+              loadStatistics();
+            } else {
+              alert('Failed to clear statistics: ' + (data.error || 'Unknown error'));
+            }
+          } catch (err) {
+            alert('Failed to clear statistics: ' + err);
+          }
+          this.disabled = false;
+          this.textContent = '🗑️ Clear Statistics';
+        };
+      </script>
     </div>
 
     <!-- Certificates Tab -->
