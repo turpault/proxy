@@ -3,6 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import * as fs from 'fs-extra';
 import { logger } from '../utils/logger';
+import { WebSocketService } from './websocket';
 
 // Types for config and proxyServer are imported from their respective modules
 import { ServerConfig } from '../types';
@@ -25,6 +26,26 @@ export function registerManagementEndpoints(
 
   // Serve static files for the management interface
   managementApp.use('/', express.static(path.join(__dirname, '../static/management')));
+
+  // Create HTTP server for WebSocket support
+  const http = require('http');
+  const server = http.createServer(managementApp);
+  
+  // Store the server reference for later use
+  (managementApp as any).server = server;
+  
+  // Store WebSocket service reference for later initialization
+  (managementApp as any).webSocketService = new WebSocketService(proxyServer);
+  
+  // Initialize WebSocket after server starts listening
+  (managementApp as any).initializeWebSocket = () => {
+    try {
+      (managementApp as any).webSocketService.initialize(server);
+      logger.info('WebSocket service initialized for management console');
+    } catch (error) {
+      logger.error('Failed to initialize WebSocket service', error);
+    }
+  };
 
   // API endpoints for process management
   managementApp.get('/api/processes', (req, res) => {
@@ -302,7 +323,18 @@ export function registerManagementEndpoints(
   managementApp.get('/api/certificates', async (req, res) => {
     try {
       const status = proxyServer.getStatus();
-      const certificates = Array.isArray(status.certificates) ? status.certificates : [];
+      const certificatesMap = status.certificates;
+      
+      // Convert Map to array of certificate objects
+      const certificates: any[] = [];
+      certificatesMap.forEach((certInfo: any, domain: string) => {
+        certificates.push({
+          domain,
+          ...certInfo,
+          expiresAt: certInfo.expiresAt.toISOString(),
+          createdAt: certInfo.createdAt?.toISOString()
+        });
+      });
       
       // Get Let's Encrypt status from the proxy server
       const letsEncryptStatus = {

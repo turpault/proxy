@@ -20,18 +20,31 @@ async function startManagementConsole(proxyServer: ProxyServer, config: MainConf
   // Register management endpoints
   registerManagementEndpoints(managementApp, proxyServer.getConfig(), proxyServer);
   
+  // Get the HTTP server from the management app
+  const server = (managementApp as any).server;
+  
   // Start management server
   const port = config.management.port;
   const host = config.management.host || '0.0.0.0';
   
   return new Promise((resolve, reject) => {
-    const server = managementApp.listen(port, host, () => {
+    server.listen(port, host, () => {
       logger.info(`Management console started on http://${host}:${port}`);
       managementServer = managementApp;
+      
+      // Initialize WebSocket service after server is listening
+      setTimeout(() => {
+        try {
+          (managementApp as any).initializeWebSocket();
+        } catch (error) {
+          logger.error('Failed to initialize WebSocket service', error);
+        }
+      }, 100); // Small delay to ensure server is fully ready
+      
       resolve();
     });
     
-    server.on('error', (error) => {
+    server.on('error', (error: any) => {
       logger.error(`Failed to start management console on port ${port}`, error);
       reject(error);
     });
@@ -42,6 +55,7 @@ async function startServer(): Promise<ProxyServer> {
   logger.info('Starting Proxy Server and Process Manager...');
   
   // Try to load main configuration first
+  try {
     mainConfig = await ConfigLoader.loadMainConfig();
     logger.info('Using main configuration structure');
     
@@ -71,7 +85,26 @@ async function startServer(): Promise<ProxyServer> {
     logger.info('Server status', status);
     
     return server;
-
+  } catch (error) {
+    logger.info('Main configuration not found or invalid, falling back to legacy configuration');
+    logger.debug('Main config error:', error);
+    
+    // Fall back to legacy configuration
+    const config = await ConfigLoader.load();
+    
+    // Create and start proxy server
+    const server = new ProxyServer(config);
+    await server.initialize();
+    await server.start();
+    
+    logger.info('Proxy server started successfully (legacy mode)');
+    
+    // Log server status
+    const status = server.getStatus();
+    logger.info('Server status', status);
+    
+    return server;
+  }
 }
 
 async function stopServer(): Promise<void> {

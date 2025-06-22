@@ -156,7 +156,7 @@ export class ProxyServer implements WebSocketServiceInterface {
       httpPort: this.config.port,
       httpsPort: this.config.httpsPort,
       routes: this.config.routes.length,
-      certificates: this.proxyCertificates.getAllCertificates().size,
+      certificates: this.proxyCertificates.getAllCertificates(),
       processes: processManager.getProcessStatus().length,
       statistics: statisticsService.getStatsSummary(),
       cache: cacheService.getStats(),

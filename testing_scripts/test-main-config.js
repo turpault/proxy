@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { ConfigLoader } from '../src/config/loader.js';
+import { ConfigLoader } from '../src/config/loader.ts';
 
 async function testMainConfig() {
   console.log('🔍 Testing Main Configuration Loading...\n');
@@ -24,19 +24,13 @@ async function testMainConfig() {
     console.log('\nTesting process configuration loading...');
     const processConfig = await ConfigLoader.loadProcessConfig(mainConfig.config.processes);
     console.log('✓ Process configuration loaded successfully');
-    console.log('Processes count:', Object.keys(processConfig.processes).length);
+    console.log('Processes count:', Object.keys(processConfig.processes || {}).length);
 
-    console.log('\n✅ All configuration files loaded successfully!');
-    console.log('\n💡 The main configuration structure is working correctly.');
-    console.log('   Management console will be available on port', mainConfig.management.port);
-
+    console.log('\n🎉 All configuration tests passed!');
   } catch (error) {
-    console.error('❌ Test failed:', error.message);
-    if (error.stack) {
-      console.error('Stack trace:', error.stack);
-    }
+    console.error('❌ Configuration test failed:', error.message);
+    process.exit(1);
   }
 }
 
-// Run the test
 testMainConfig(); 
