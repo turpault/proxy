@@ -3,6 +3,7 @@ import { logger } from '../utils/logger';
 import { BaseProxy, ProxyRequestConfig } from './base-proxy';
 import { cacheService } from './cache';
 import { CORSConfig } from '../types';
+import { convertToImage } from '../utils/pdf-converter';
 
 export class CorsProxy extends BaseProxy {
   async handleProxyRequest(
@@ -78,13 +79,27 @@ export class CorsProxy extends BaseProxy {
         try {
           // Read the response body as binary
           const responseBuffer = await response.arrayBuffer();
-          const contentType = response.headers.get('content-type') || 'application/octet-stream';
+          let contentType = response.headers.get('content-type') || 'application/octet-stream';
+          let body = Buffer.from(responseBuffer).toString('binary');
+
+          // if the request is a pdf conversion, convert the body to a pdf
+          if (contentType.includes('application/pdf') && req.query.convert) {
+            const { body:newBody, contentType:newContentType } = await convertToImage(
+              body, 
+              contentType, 
+              req.query.convert as string, 
+              req.query.width as string, 
+              req.query.height as string
+            );
+            body = newBody;
+            contentType = newContentType;
+          }
           
           // Cache the response with user information
           await cacheService.set(target, req.method, {
             status: response.status,
             headers: Object.fromEntries(response.headers.entries()),
-            body: Buffer.from(responseBuffer).toString('binary'),
+            body,
             contentType,
           }, userId, userIP);
           
@@ -181,7 +196,7 @@ export class CorsProxy extends BaseProxy {
     }
 
     // Advanced CORS configuration
-    const config = corsConfig.enabled !== false ? corsConfig : null;
+    const config = typeof corsConfig === 'object' && corsConfig.enabled !== false ? corsConfig : null;
     if (!config) return;
 
     // Handle origin
@@ -252,7 +267,7 @@ export class CorsProxy extends BaseProxy {
     }
 
     // Advanced CORS configuration
-    const config = corsConfig.enabled !== false ? corsConfig : null;
+    const config = typeof corsConfig === 'object' && corsConfig.enabled !== false ? corsConfig : null;
     if (!config) {
       return (req: express.Request, res: express.Response, next: express.NextFunction) => {
         next();
