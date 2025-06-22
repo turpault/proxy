@@ -2722,64 +2722,42 @@
         pidElement.textContent = processData.pid || 'N/A';
       }
 
-      // Update port
-      const portElement = processContent.querySelector('.process-tab-info-item:nth-child(3) .process-tab-info-value');
-      if (portElement) {
-        portElement.textContent = processData.port || 'N/A';
+      // Update uptime
+      const uptimeElement = processContent.querySelector('.process-tab-info-item:nth-child(3) .process-tab-info-value');
+      if (uptimeElement) {
+        uptimeElement.textContent = processData.uptime ? formatUptime(processData.uptime) : 'N/A';
       }
 
       // Update restart count
-      const restartElement = processContent.querySelector('.process-tab-info-item:nth-child(4) .process-tab-info-value');
+      const restartElement = processContent.querySelector('.process-tab-section .process-tab-info-item:nth-child(1) .process-tab-info-value');
       if (restartElement) {
         restartElement.className = `process-tab-info-value ${getRestartCountClass(processData.restartAttempts || 0)}`;
         restartElement.textContent = processData.restartAttempts || 0;
       }
 
       // Update health failures
-      const healthElement = processContent.querySelector('.process-tab-info-item:nth-child(5) .process-tab-info-value');
+      const healthElement = processContent.querySelector('.process-tab-section .process-tab-info-item:nth-child(2) .process-tab-info-value');
       if (healthElement) {
         healthElement.className = `process-tab-info-value ${getRestartCountClass(processData.healthFailures || 0)}`;
         healthElement.textContent = processData.healthFailures || 0;
       }
 
+      // Update last health check time
+      const lastHealthCheckElement = processContent.querySelector('.process-tab-section .process-tab-info-item:nth-child(3) .process-tab-info-value');
+      if (lastHealthCheckElement) {
+        lastHealthCheckElement.textContent = processData.lastHealthCheckTime ? formatLocalTime(processData.lastHealthCheckTime) : 'N/A';
+      }
+
       // Update start time
-      const startTimeElement = processContent.querySelector('.process-tab-info-item:nth-child(6) .process-tab-info-value');
+      const startTimeElement = processContent.querySelector('.process-tab-section .process-tab-info-item:nth-child(4) .process-tab-info-value');
       if (startTimeElement) {
         startTimeElement.textContent = processData.startTime ? formatLocalTime(processData.startTime) : 'N/A';
       }
 
       // Update last restart time
-      const lastRestartElement = processContent.querySelector('.process-tab-info-item:nth-child(7) .process-tab-info-value');
+      const lastRestartElement = processContent.querySelector('.process-tab-section .process-tab-info-item:nth-child(5) .process-tab-info-value');
       if (lastRestartElement) {
         lastRestartElement.textContent = processData.lastRestartTime ? formatLocalTime(processData.lastRestartTime) : 'N/A';
-      }
-
-      // Update uptime
-      const uptimeElement = processContent.querySelector('.process-tab-info-item:nth-child(4) .process-tab-info-value');
-      if (uptimeElement) {
-        uptimeElement.textContent = processData.uptime ? formatUptime(processData.uptime) : 'N/A';
-      }
-
-      // Update restart history section
-      const restartHistorySection = processContent.querySelector('.process-tab-section:first-of-type .process-tab-info');
-      if (restartHistorySection) {
-        // Update current session restarts
-        const currentSessionElement = restartHistorySection.querySelector('.process-tab-info-item:first-child .process-tab-info-value');
-        if (currentSessionElement) {
-          currentSessionElement.textContent = `${processData.restartAttempts || 0} restarts`;
-        }
-
-        // Update last restart time in history section
-        const lastRestartHistoryElement = restartHistorySection.querySelector('.process-tab-info-item:nth-child(2) .process-tab-info-value');
-        if (lastRestartHistoryElement && processData.lastRestartTime) {
-          lastRestartHistoryElement.textContent = formatLocalTime(processData.lastRestartTime);
-        }
-
-        // Update reconnected status
-        const reconnectedElement = restartHistorySection.querySelector('.process-tab-info-item:last-child .process-tab-info-value');
-        if (reconnectedElement && processData.isReconnected) {
-          reconnectedElement.textContent = `Existing PID: ${processData.pid}`;
-        }
       }
 
       // Update tab header status indicator
@@ -2867,10 +2845,6 @@
                 <span class="process-tab-info-value">${process.pid || 'N/A'}</span>
               </div>
               <div class="process-tab-info-item">
-                <span class="process-tab-info-label">Port</span>
-                <span class="process-tab-info-value">${process.port || 'N/A'}</span>
-              </div>
-              <div class="process-tab-info-item">
                 <span class="process-tab-info-label">Uptime</span>
                 <span class="process-tab-info-value">${process.uptime ? formatUptime(process.uptime) : 'N/A'}</span>
               </div>
@@ -2885,6 +2859,10 @@
                 <div class="process-tab-info-item">
                   <span class="process-tab-info-label">Health Failures</span>
                   <span class="process-tab-info-value ${getRestartCountClass(process.healthFailures || 0)}">${process.healthFailures || 0}</span>
+                </div>
+                <div class="process-tab-info-item">
+                  <span class="process-tab-info-label">Last Health Check</span>
+                  <span class="process-tab-info-value time-display">${process.lastHealthCheckTime ? formatLocalTime(process.lastHealthCheckTime) : 'N/A'}</span>
                 </div>
                 <div class="process-tab-info-item">
                   <span class="process-tab-info-label">Start Time</span>

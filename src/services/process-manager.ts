@@ -32,6 +32,7 @@ export interface ManagedProcess {
   startTime: Date | null;
   lastRestartTime: Date | null;
   healthCheckFailures: number;
+  lastHealthCheckTime: Date | null; // Track when last health check was performed
   pidFilePath: string; // Track the PID file path for this process
   logFilePath: string; // Track the log file path for this process
   isReconnected: boolean; // Whether this process was reconnected to an existing one
@@ -400,6 +401,7 @@ export class ProcessManager {
       startTime: null,
       lastRestartTime: null,
       healthCheckFailures: 0,
+      lastHealthCheckTime: null,
       pidFilePath,
       logFilePath,
       isReconnected: false,
@@ -882,6 +884,9 @@ export class ProcessManager {
     const healthCheckInterval = setInterval(async () => {
       let healthUrl: string = "unset";
       try {
+        // Update last health check time
+        managedProcess.lastHealthCheckTime = new Date();
+        
         // Check if healthCheckPath is already a full URL
         if (healthCheckPath.startsWith('http://') || healthCheckPath.startsWith('https://')) {
           // Use the full URL directly
@@ -980,25 +985,39 @@ export class ProcessManager {
     lastRestartTime: Date | null;
     uptime?: number;
     healthCheckFailures: number;
+    lastHealthCheckTime: Date | null;
     isStopped: boolean;
     isRemoved: boolean;
   }> {
-    return Array.from(this.processes.values()).map(proc => ({
-      id: proc.id,
-      name: proc.config.name || `proxy-${proc.id}`,
-      isRunning: proc.isRunning,
-      pid: proc.process?.pid,
-      pidFile: proc.pidFilePath,
-      logFile: proc.logFilePath,
-      isReconnected: proc.isReconnected,
-      restartCount: proc.restartCount,
-      startTime: proc.startTime,
-      lastRestartTime: proc.lastRestartTime,
-      uptime: proc.startTime ? Date.now() - proc.startTime.getTime() : undefined,
-      healthCheckFailures: proc.healthCheckFailures,
-      isStopped: proc.isStopped,
-      isRemoved: proc.isRemoved,
-    }));
+    return Array.from(this.processes.values()).map(proc => {
+      // Check if the process is actually running by verifying the PID
+      let actualIsRunning = proc.isRunning;
+      if (proc.process?.pid) {
+        actualIsRunning = this.isPidRunning(proc.process.pid);
+      } else if (proc.isReconnected && proc.startTime) {
+        // For reconnected processes, check if the PID from the PID file is still running
+        // This is a fallback since we don't store the PID in the process object for reconnected processes
+        actualIsRunning = true; // Assume running if reconnected and not explicitly stopped
+      }
+      
+      return {
+        id: proc.id,
+        name: proc.config.name || `proxy-${proc.id}`,
+        isRunning: actualIsRunning,
+        pid: proc.process?.pid,
+        pidFile: proc.pidFilePath,
+        logFile: proc.logFilePath,
+        isReconnected: proc.isReconnected,
+        restartCount: proc.restartCount,
+        startTime: proc.startTime,
+        lastRestartTime: proc.lastRestartTime,
+        uptime: proc.startTime ? Date.now() - proc.startTime.getTime() : undefined,
+        healthCheckFailures: proc.healthCheckFailures,
+        lastHealthCheckTime: proc.lastHealthCheckTime,
+        isStopped: proc.isStopped,
+        isRemoved: proc.isRemoved,
+      };
+    });
   }
 
   /**

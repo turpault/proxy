@@ -1658,11 +1658,11 @@ export class ProxyServer implements WebSocketServiceInterface {
       id: process.id,
       name: process.name || process.id,
       status: process.isRunning ? 'running' : 'stopped',
-      port: this.getProcessPort(process.id),
       pid: process.pid,
       restartAttempts: process.restartCount,
       lastRestartTime: process.lastRestartTime?.toISOString(),
       healthFailures: process.healthCheckFailures,
+      lastHealthCheckTime: process.lastHealthCheckTime?.toISOString(),
       startTime: process.startTime?.toISOString(),
       uptime: process.uptime,
       logFile: process.logFile,
@@ -1702,16 +1702,6 @@ export class ProxyServer implements WebSocketServiceInterface {
       logger.error('Failed to read process logs', { processId, error });
       return [];
     }
-  }
-
-  private getProcessPort(processId: string): number | null {
-    // Extract port from process configuration if available
-    // This is a simplified implementation - you might want to enhance this
-    const process = processManager.getProcessStatus().find(p => p.id === processId);
-    if (process?.name?.includes('8888')) return 8888;
-    if (process?.name?.includes('8890')) return 8890;
-    if (process?.name?.includes('8892')) return 8892;
-    return null;
   }
 
   private async broadcastProcessUpdates(): Promise<void> {
