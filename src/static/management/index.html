@@ -2685,12 +2685,21 @@
       }
     }
 
+    // Helper function to normalize process status
+    function getProcessStatus(process) {
+      // Backend sends isRunning: true/false, frontend expects 'running'/'stopped'
+      if (process.isRunning === true) return 'running';
+      if (process.isRunning === false) return 'stopped';
+      // Fallback to status field if isRunning is not available
+      return process.status || 'stopped';
+    }
+
     // Update status display
     function updateStatusDisplay() {
       // Ensure processes is an array and handle potential undefined/null values
       const processes = Array.isArray(statusData.processes) ? statusData.processes : [];
       const processesCount = processes.length;
-      const runningCount = processes.filter(p => p && p.status === 'running').length;
+      const runningCount = processes.filter(p => p && getProcessStatus(p) === 'running').length;
       const stoppedCount = processesCount - runningCount;
       const uptime = statusData.uptime || 0;
       const timestamp = statusData.timestamp ? formatLocalTime(statusData.timestamp) : 'N/A';
@@ -2707,11 +2716,13 @@
       const processContent = document.getElementById(`process-content-${processId}`);
       if (!processContent) return;
 
+      const status = getProcessStatus(processData);
+
       // Update status
       const statusElement = processContent.querySelector('.process-tab-info-item:first-child .process-tab-info-value');
       if (statusElement) {
-        const statusClass = processData.status === 'running' ? 'success' : 'error';
-        const statusText = processData.status === 'running' ? 'Running' : 'Stopped';
+        const statusClass = status === 'running' ? 'success' : 'error';
+        const statusText = status === 'running' ? 'Running' : 'Stopped';
         statusElement.className = `process-tab-info-value ${statusClass}`;
         statusElement.textContent = statusText;
       }
@@ -2765,7 +2776,7 @@
       if (tabButton) {
         const statusIndicator = tabButton.querySelector('.process-tab-status');
         if (statusIndicator) {
-          statusIndicator.className = `process-tab-status ${processData.status === 'running' ? 'running' : 'stopped'}`;
+          statusIndicator.className = `process-tab-status ${status === 'running' ? 'running' : 'stopped'}`;
         }
       }
 
@@ -2774,10 +2785,10 @@
       const stopButton = processContent.querySelector('.btn-stop');
       
       if (startButton) {
-        startButton.disabled = processData.status === 'running';
+        startButton.disabled = status === 'running';
       }
       if (stopButton) {
-        stopButton.disabled = processData.status !== 'running';
+        stopButton.disabled = status !== 'running';
       }
     }
 
@@ -2805,7 +2816,7 @@
 
       // Generate tab headers
       const tabHeaders = processes.map((process) => {
-        const statusClass = process.status === 'running' ? 'running' : 'stopped';
+        const statusClass = getProcessStatus(process) === 'running' ? 'running' : 'stopped';
         const isActive = process.id === currentActiveTab ? 'active' : '';
         
         return `
@@ -2819,16 +2830,17 @@
       // Generate tab content
       const tabContents = processes.map((process) => {
         const isActive = process.id === currentActiveTab ? 'active' : '';
-        const statusClass = process.status === 'running' ? 'success' : 'error';
-        const statusText = process.status === 'running' ? 'Running' : 'Stopped';
+        const status = getProcessStatus(process);
+        const statusClass = status === 'running' ? 'success' : 'error';
+        const statusText = status === 'running' ? 'Running' : 'Stopped';
         
         return `
           <div class="process-tab-content ${isActive}" id="process-content-${process.id}">
             <div class="process-tab-actions">
-              <button onclick="startProcess('${process.id}')" class="btn btn-start" ${process.status === 'running' ? 'disabled' : ''}>
+              <button onclick="startProcess('${process.id}')" class="btn btn-start" ${status === 'running' ? 'disabled' : ''}>
                 Start
               </button>
-              <button onclick="stopProcess('${process.id}')" class="btn btn-stop" ${process.status !== 'running' ? 'disabled' : ''}>
+              <button onclick="stopProcess('${process.id}')" class="btn btn-stop" ${status !== 'running' ? 'disabled' : ''}>
                 Stop
               </button>
               <button onclick="restartProcess('${process.id}')" class="btn btn-restart">
