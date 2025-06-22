@@ -42,7 +42,6 @@ async function startServer(): Promise<ProxyServer> {
   logger.info('Starting Proxy Server and Process Manager...');
   
   // Try to load main configuration first
-  try {
     mainConfig = await ConfigLoader.loadMainConfig();
     logger.info('Using main configuration structure');
     
@@ -60,7 +59,7 @@ async function startServer(): Promise<ProxyServer> {
     // Create and start proxy server
     const server = new ProxyServer(proxyConfig);
     await server.initialize();
-    await server.start();
+    await server.start(true); // Disable built-in management server
     
     // Start management console
     await startManagementConsole(server, mainConfig);
@@ -72,25 +71,7 @@ async function startServer(): Promise<ProxyServer> {
     logger.info('Server status', status);
     
     return server;
-  } catch (error) {
-    logger.info('Main configuration not found, falling back to legacy configuration');
-    
-    // Fall back to legacy configuration
-    const config = await ConfigLoader.load();
-    
-    // Create and start proxy server
-    const server = new ProxyServer(config);
-    await server.initialize();
-    await server.start();
-    
-    logger.info('Proxy server started successfully (legacy mode)');
-    
-    // Log server status
-    const status = server.getStatus();
-    logger.info('Server status', status);
-    
-    return server;
-  }
+
 }
 
 async function stopServer(): Promise<void> {

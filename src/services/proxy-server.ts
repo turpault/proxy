@@ -88,7 +88,7 @@ export class ProxyServer implements WebSocketServiceInterface {
     logger.info('Cache cleanup scheduled (every hour)');
   }
 
-  async start(): Promise<void> {
+  async start(disableManagementServer: boolean = false): Promise<void> {
     logger.info('Starting proxy server...');
     
     // Start HTTP server
@@ -103,12 +103,14 @@ export class ProxyServer implements WebSocketServiceInterface {
       logger.info(`HTTPS server started on port ${this.config.httpsPort}`);
     });
     
-    // Start management server
-    this.managementServer = http.createServer(this.managementApp);
-    const managementPort = this.config.port + 1000; // Management on port + 1000
-    this.managementServer.listen(managementPort, () => {
-      logger.info(`Management server started on port ${managementPort}`);
-    });
+    // Start management server only if not disabled
+    if (!disableManagementServer) {
+      this.managementServer = http.createServer(this.managementApp);
+      const managementPort = this.config.port + 1000; // Management on port + 1000
+      this.managementServer.listen(managementPort, () => {
+        logger.info(`Management server started on port ${managementPort}`);
+      });
+    }
     
     logger.info('Proxy server started successfully');
   }
@@ -162,6 +164,13 @@ export class ProxyServer implements WebSocketServiceInterface {
       memory: process.memoryUsage(),
       timestamp: new Date().toISOString()
     };
+  }
+
+  /**
+   * Get the server configuration
+   */
+  getConfig(): ServerConfig {
+    return this.config;
   }
 
   // WebSocket interface methods
