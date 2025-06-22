@@ -37,9 +37,9 @@
       border-radius: 8px 8px 0 0;
       overflow: hidden;
       margin-bottom: 2rem;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.08);
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.08);
     }
-    
+
     .tab {
       flex: 1;
       padding: 1.2rem 0;
@@ -53,21 +53,21 @@
       outline: none;
       transition: background 0.2s, color 0.2s;
     }
-    
+
     .tab.active {
-      background: rgba(255,255,255,0.15);
+      background: rgba(255, 255, 255, 0.15);
       color: #fff;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
     }
-    
+
     .tab:not(.active):hover {
-      background: rgba(255,255,255,0.08);
+      background: rgba(255, 255, 255, 0.08);
     }
-    
+
     .tab-content {
       display: none;
     }
-    
+
     .tab-content.active {
       display: block;
     }
@@ -112,14 +112,16 @@
       border: 1px solid rgba(239, 68, 68, 0.2);
     }
 
-    .status-cards, .stats-overview {
+    .status-cards,
+    .stats-overview {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 1rem;
       margin-bottom: 2rem;
     }
 
-    .card, .stat-card {
+    .card,
+    .stat-card {
       background: white;
       border-radius: 8px;
       padding: 1.5rem;
@@ -127,7 +129,8 @@
       border: 1px solid #e2e8f0;
     }
 
-    .card h3, .stat-card h4 {
+    .card h3,
+    .stat-card h4 {
       color: #4a5568;
       margin-bottom: 0.5rem;
       font-size: 0.9rem;
@@ -135,7 +138,8 @@
       letter-spacing: 0.5px;
     }
 
-    .card .value, .stat-card .value {
+    .card .value,
+    .stat-card .value {
       font-size: 2rem;
       font-weight: bold;
       color: #2d3748;
@@ -162,7 +166,9 @@
       cursor: not-allowed;
     }
 
-    .processes-section, .routes-section, .certificates-section {
+    .processes-section,
+    .routes-section,
+    .certificates-section {
       background: white;
       border-radius: 8px;
       padding: 2rem;
@@ -171,7 +177,9 @@
       margin-bottom: 2rem;
     }
 
-    .processes-section h2, .routes-section h2, .certificates-section h2 {
+    .processes-section h2,
+    .routes-section h2,
+    .certificates-section h2 {
       color: #2d3748;
       margin-bottom: 0.5rem;
       font-size: 1.5rem;
@@ -608,9 +616,17 @@
     }
 
     @keyframes pulse {
-      0% { opacity: 1; }
-      50% { opacity: 0.5; }
-      100% { opacity: 1; }
+      0% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.5;
+      }
+
+      100% {
+        opacity: 1;
+      }
     }
 
     .log-line {
@@ -2066,6 +2082,7 @@
     .route-group {
       margin-bottom: 2.5rem;
     }
+
     .route-group-title {
       font-size: 1.3rem;
       font-weight: 700;
@@ -2075,20 +2092,340 @@
       padding-left: 0.75rem;
       letter-spacing: 0.5px;
     }
+
     .route-group-cards {
       display: flex;
       flex-wrap: wrap;
       gap: 1.5rem;
     }
+
     @media (max-width: 768px) {
       .route-group-cards {
         flex-direction: column;
         gap: 0.75rem;
       }
+
       .route-group-title {
         font-size: 1.1rem;
         margin-bottom: 0.5rem;
         padding-left: 0.5rem;
+      }
+    }
+
+    /* Configuration Editor Styles */
+    .config-tabs {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      border: 1px solid #e2e8f0;
+      overflow: hidden;
+    }
+
+    .config-tabs-header {
+      display: flex;
+      background: #f8f9fa;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .config-tab {
+      flex: 1;
+      padding: 1rem;
+      text-align: center;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 500;
+      color: #4a5568;
+      transition: all 0.2s;
+      border-bottom: 3px solid transparent;
+    }
+
+    .config-tab:hover {
+      background: #e2e8f0;
+      color: #2d3748;
+    }
+
+    .config-tab.active {
+      background: white;
+      color: #4299e1;
+      border-bottom-color: #4299e1;
+    }
+
+    .config-tab-content {
+      display: none;
+      padding: 2rem;
+    }
+
+    .config-tab-content.active {
+      display: block;
+    }
+
+    .config-section {
+      margin-bottom: 2rem;
+    }
+
+    .config-section h2 {
+      color: #2d3748;
+      margin-bottom: 0.5rem;
+      font-size: 1.5rem;
+    }
+
+    .config-controls {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .config-controls .btn {
+      min-width: 120px;
+      font-size: 0.9rem;
+      padding: 0.5rem 1rem;
+      height: 2.5rem;
+    }
+
+    .config-controls .refresh-btn {
+      min-width: 140px;
+      font-size: 0.9rem;
+      padding: 0.5rem 1rem;
+      height: 2.5rem;
+    }
+
+    .config-info {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      padding: 1rem;
+      background: #f8f9fa;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .config-info-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .config-info-item label {
+      font-weight: 600;
+      color: #4a5568;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .config-info-item span {
+      color: #2d3748;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 0.9rem;
+      word-break: break-all;
+    }
+
+    .config-editor-container {
+      margin-bottom: 1.5rem;
+    }
+
+    .config-editor {
+      width: 100%;
+      min-height: 500px;
+      padding: 1rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 0.9rem;
+      line-height: 1.4;
+      background: #f8f9fa;
+      color: #2d3748;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .config-editor:focus {
+      border-color: #4299e1;
+      background: white;
+    }
+
+    .config-editor::placeholder {
+      color: #a0aec0;
+    }
+
+    .config-validation {
+      margin-bottom: 1rem;
+    }
+
+    .validation-message {
+      padding: 0.75rem;
+      border-radius: 4px;
+      font-weight: 500;
+      font-size: 0.9rem;
+    }
+
+    .validation-message.success {
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
+      color: #155724;
+    }
+
+    .validation-message.error {
+      background: #f8d7da;
+      border: 1px solid #f5c6cb;
+      color: #721c24;
+    }
+
+    .validation-message.warning {
+      background: #fff3cd;
+      border: 1px solid #ffeaa7;
+      color: #856404;
+    }
+
+    /* Backup Modal Styles */
+    .backup-modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+    }
+
+    .backup-modal-content {
+      background-color: white;
+      margin: 5% auto;
+      padding: 2rem;
+      border-radius: 8px;
+      width: 80%;
+      max-width: 800px;
+      max-height: 80vh;
+      overflow-y: auto;
+      position: relative;
+    }
+
+    .backup-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .backup-modal-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #2d3748;
+    }
+
+    .backup-modal-close {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: #718096;
+      padding: 0.5rem;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+
+    .backup-modal-close:hover {
+      background: #f7fafc;
+      color: #4a5568;
+    }
+
+    .backup-list {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .backup-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      margin-bottom: 0.75rem;
+      background: white;
+      transition: all 0.2s;
+    }
+
+    .backup-item:hover {
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      border-color: #cbd5e0;
+    }
+
+    .backup-info {
+      flex: 1;
+    }
+
+    .backup-name {
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 0.25rem;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 0.9rem;
+    }
+
+    .backup-meta {
+      font-size: 0.8rem;
+      color: #718096;
+    }
+
+    .backup-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .backup-actions .btn {
+      min-width: 80px;
+      font-size: 0.85rem;
+      padding: 0.4rem 0.8rem;
+      height: 2rem;
+    }
+
+    /* Mobile responsiveness for config editor */
+    @media (max-width: 768px) {
+      .config-controls {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .config-controls .btn {
+        min-width: auto;
+        width: 100%;
+      }
+
+      .config-info {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+      }
+
+      .config-editor {
+        min-height: 300px;
+        font-size: 0.85rem;
+      }
+
+      .backup-modal-content {
+        width: 95%;
+        margin: 10% auto;
+        padding: 1rem;
+      }
+
+      .backup-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+      }
+
+      .backup-actions {
+        width: 100%;
+        justify-content: flex-end;
       }
     }
   </style>
@@ -2101,8 +2438,9 @@
       <button class="tab" id="tab-statistics" onclick="showTab('statistics')">📊 Statistics</button>
       <button class="tab" id="tab-certificates" onclick="showTab('certificates')">🔒 Certificates</button>
       <button class="tab" id="tab-cache" onclick="showTab('cache')">💾 Cache</button>
+      <button class="tab" id="tab-config" onclick="showTab('config')">⚙️ Configuration</button>
     </div>
-    
+
     <!-- Processes Tab -->
     <div id="content-processes" class="tab-content active">
       <div class="header">
@@ -2189,7 +2527,8 @@
       <div class="routes-section">
         <h2>Route Statistics</h2>
         <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
-          <button id="clear-statistics-btn" class="btn btn-stop" style="margin-left: auto;">🗑️ Clear Statistics</button>
+          <button id="clear-statistics-btn" class="btn btn-stop" style="margin-left: auto;">🗑️ Clear
+            Statistics</button>
         </div>
         <div id="time-period" class="time-period-display">Loading time period...</div>
         <div id="routes-container">
@@ -2198,7 +2537,7 @@
       </div>
 
       <script>
-        document.getElementById('clear-statistics-btn').onclick = async function() {
+        document.getElementById('clear-statistics-btn').onclick = async function () {
           if (!confirm('Are you sure you want to clear all HTTP statistics? This cannot be undone.')) return;
           this.disabled = true;
           this.textContent = 'Clearing...';
@@ -2298,7 +2637,8 @@
 
       <div class="cache-tabs">
         <div class="cache-tabs-header">
-          <button class="cache-tab active" id="cache-tab-overview" onclick="switchCacheTab('overview')">📊 Overview</button>
+          <button class="cache-tab active" id="cache-tab-overview" onclick="switchCacheTab('overview')">📊
+            Overview</button>
           <button class="cache-tab" id="cache-tab-users" onclick="switchCacheTab('users')">👥 Users</button>
           <button class="cache-tab" id="cache-tab-entries" onclick="switchCacheTab('entries')">📋 Entries</button>
         </div>
@@ -2329,7 +2669,7 @@
           <div class="cache-section">
             <h2>Cache Entries</h2>
             <p class="section-description">Detailed view of all cache entries with filtering</p>
-            
+
             <div class="cache-filters">
               <div class="filter-group">
                 <label for="cache-user-filter">User:</label>
@@ -2371,15 +2711,115 @@
     </div>
   </div>
 
+  <!-- Configuration Editor Tab -->
+  <div id="content-config" class="tab-content">
+    <div class="header">
+      <h1>⚙️ Configuration Editor</h1>
+      <p>Edit proxy routes and process configurations with automatic backup</p>
+    </div>
+
+    <div class="config-tabs">
+      <div class="config-tabs-header">
+        <button class="config-tab active" id="config-tab-proxy" onclick="switchConfigTab('proxy')">🌐 Proxy
+          Routes</button>
+        <button class="config-tab" id="config-tab-processes" onclick="switchConfigTab('processes')">🚀
+          Processes</button>
+      </div>
+
+      <!-- Proxy Configuration Tab -->
+      <div id="config-content-proxy" class="config-tab-content active">
+        <div class="config-section">
+          <h2>Proxy Configuration</h2>
+          <p class="section-description">Edit the main proxy configuration file (config/main.yaml)</p>
+
+          <div class="config-controls">
+            <button onclick="loadConfig('proxy')" class="refresh-btn">🔄 Load Config</button>
+            <button onclick="backupConfig('proxy')" class="btn btn-restart">💾 Create Backup</button>
+            <button onclick="saveConfig('proxy')" class="btn btn-start">💾 Save Changes</button>
+            <button onclick="showBackups('proxy')" class="btn btn-logs">📋 View Backups</button>
+          </div>
+
+          <div class="config-info">
+            <div class="config-info-item">
+              <label>File Path:</label>
+              <span id="proxy-config-path">-</span>
+            </div>
+            <div class="config-info-item">
+              <label>Last Modified:</label>
+              <span id="proxy-config-modified">-</span>
+            </div>
+          </div>
+
+          <div class="config-editor-container">
+            <textarea id="proxy-config-editor" class="config-editor" placeholder="Loading configuration..."></textarea>
+          </div>
+
+          <div class="config-validation">
+            <div id="proxy-config-validation" class="validation-message"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Processes Configuration Tab -->
+      <div id="config-content-processes" class="config-tab-content">
+        <div class="config-section">
+          <h2>Process Configuration</h2>
+          <p class="section-description">Edit the process management configuration file (config/processes.yaml)</p>
+
+          <div class="config-controls">
+            <button onclick="loadConfig('processes')" class="refresh-btn">🔄 Load Config</button>
+            <button onclick="backupConfig('processes')" class="btn btn-restart">💾 Create Backup</button>
+            <button onclick="saveConfig('processes')" class="btn btn-start">💾 Save Changes</button>
+            <button onclick="showBackups('processes')" class="btn btn-logs">📋 View Backups</button>
+          </div>
+
+          <div class="config-info">
+            <div class="config-info-item">
+              <label>File Path:</label>
+              <span id="processes-config-path">-</span>
+            </div>
+            <div class="config-info-item">
+              <label>Last Modified:</label>
+              <span id="processes-config-modified">-</span>
+            </div>
+          </div>
+
+          <div class="config-editor-container">
+            <textarea id="processes-config-editor" class="config-editor"
+              placeholder="Loading configuration..."></textarea>
+          </div>
+
+          <div class="config-validation">
+            <div id="processes-config-validation" class="validation-message"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Backup Modal -->
+  <div id="backup-modal" class="backup-modal">
+    <div class="backup-modal-content">
+      <div class="backup-modal-header">
+        <h3 class="backup-modal-title">Configuration Backups</h3>
+        <button class="backup-modal-close" onclick="closeBackupModal()">&times;</button>
+      </div>
+      <div id="backup-list" class="backup-list">
+        <div class="loading">Loading backups...</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="config-editor.js"></script>
   <script>
     // Utility function to format timestamps in local time
     function formatLocalTime(timestamp) {
       if (!timestamp) return 'N/A';
-      
+
       try {
         const date = new Date(timestamp);
         if (isNaN(date.getTime())) return 'Invalid Date';
-        
+
         // Format the date in local region format
         const localDate = date.toLocaleString(undefined, {
           year: 'numeric',
@@ -2390,7 +2830,7 @@
           second: '2-digit',
           hour12: false
         });
-        
+
         // Calculate elapsed time
         const now = new Date();
         const diffMs = now.getTime() - date.getTime();
@@ -2398,7 +2838,7 @@
         const diffMinutes = Math.floor(diffSeconds / 60);
         const diffHours = Math.floor(diffMinutes / 60);
         const diffDays = Math.floor(diffHours / 24);
-        
+
         let elapsedText = '';
         if (diffDays > 0) {
           elapsedText = ` (${diffDays} day${diffDays > 1 ? 's' : ''} ago)`;
@@ -2409,7 +2849,7 @@
         } else {
           elapsedText = ' (just now)';
         }
-        
+
         return `${localDate}${elapsedText}`;
       } catch (error) {
         return 'Invalid Date';
@@ -2419,18 +2859,18 @@
     // Utility function to format relative time (e.g., "2 hours ago")
     function formatRelativeTime(timestamp) {
       if (!timestamp) return 'N/A';
-      
+
       try {
         const date = new Date(timestamp);
         if (isNaN(date.getTime())) return 'Invalid Date';
-        
+
         const now = new Date();
         const diffMs = now.getTime() - date.getTime();
         const diffSeconds = Math.floor(diffMs / 1000);
         const diffMinutes = Math.floor(diffSeconds / 60);
         const diffHours = Math.floor(diffMinutes / 60);
         const diffDays = Math.floor(diffHours / 24);
-        
+
         if (diffDays > 0) {
           return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
         } else if (diffHours > 0) {
@@ -2483,11 +2923,11 @@
       // Hide all tabs
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-      
+
       // Show selected tab
       document.getElementById(`tab-${tab}`).classList.add('active');
       document.getElementById(`content-${tab}`).classList.add('active');
-      
+
       // Load data for specific tabs
       if (tab === 'statistics') {
         if (!geoHeatmapLoaded) {
@@ -2599,16 +3039,16 @@
     function connectWebSocket() {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/ws`;
-      
+
       ws = new WebSocket(wsUrl);
-      
-      ws.onopen = function() {
+
+      ws.onopen = function () {
         console.log('WebSocket connected');
         reconnectAttempts = 0;
         updateConnectionStatus(true);
       };
-      
-      ws.onmessage = function(event) {
+
+      ws.onmessage = function (event) {
         try {
           const message = JSON.parse(event.data);
           handleWebSocketMessage(message);
@@ -2616,11 +3056,11 @@
           console.error('Failed to parse WebSocket message:', error);
         }
       };
-      
-      ws.onclose = function() {
+
+      ws.onclose = function () {
         console.log('WebSocket disconnected');
         updateConnectionStatus(false);
-        
+
         // Attempt to reconnect
         if (reconnectAttempts < maxReconnectAttempts) {
           reconnectAttempts++;
@@ -2631,8 +3071,8 @@
           showNotification('WebSocket connection lost. Please refresh the page.', 'error');
         }
       };
-      
-      ws.onerror = function(error) {
+
+      ws.onerror = function (error) {
         console.error('WebSocket error:', error);
       };
     }
@@ -2650,7 +3090,7 @@
         case 'processes':
           const oldProcessesData = processesData;
           processesData = Array.isArray(message.data) ? message.data : [];
-          
+
           // If this is the first load, update the entire display
           if (!oldProcessesData || oldProcessesData.length === 0) {
             updateProcessesDisplay();
@@ -2818,7 +3258,7 @@
       // Update action buttons
       const startButton = processContent.querySelector('.btn-start');
       const stopButton = processContent.querySelector('.btn-stop');
-      
+
       if (startButton) {
         startButton.disabled = status === 'running';
       }
@@ -2831,10 +3271,10 @@
     function updateProcessesDisplay() {
       const tabsHeader = document.getElementById('process-tabs-header');
       const tabsContent = document.getElementById('process-tabs-content');
-      
+
       // Ensure processesData is an array
       const processes = Array.isArray(processesData) ? processesData : [];
-      
+
       if (processes.length === 0) {
         tabsHeader.innerHTML = '';
         tabsContent.innerHTML = `
@@ -2853,7 +3293,7 @@
       const tabHeaders = processes.map((process) => {
         const statusClass = getProcessStatus(process) === 'running' ? 'running' : 'stopped';
         const isActive = process.id === currentActiveTab ? 'active' : '';
-        
+
         return `
           <button class="process-tab ${isActive}" data-process-id="${process.id}" onclick="switchProcessTab('${process.id}')">
             <div class="process-tab-status ${statusClass}"></div>
@@ -2868,7 +3308,7 @@
         const status = getProcessStatus(process);
         const statusClass = status === 'running' ? 'success' : 'error';
         const statusText = status === 'running' ? 'Running' : 'Stopped';
-        
+
         return `
           <div class="process-tab-content ${isActive}" id="process-content-${process.id}">
             <div class="process-tab-header">
@@ -3075,23 +3515,23 @@
             stream: 'stdout'
           };
         }
-        
+
         if (log.includes('[STDERR]')) {
           return {
             content: log,
             stream: 'stderr'
           };
         }
-        
+
         // Fallback to pattern matching for logs without explicit prefixes
-        const isStderr = log.includes('ERROR') || 
-                        log.includes('WARN') ||
-                        log.includes('FATAL') ||
-                        log.toLowerCase().includes('error') ||
-                        log.toLowerCase().includes('warning') ||
-                        log.toLowerCase().includes('fail') ||
-                        log.toLowerCase().includes('exception');
-        
+        const isStderr = log.includes('ERROR') ||
+          log.includes('WARN') ||
+          log.includes('FATAL') ||
+          log.toLowerCase().includes('error') ||
+          log.toLowerCase().includes('warning') ||
+          log.toLowerCase().includes('fail') ||
+          log.toLowerCase().includes('exception');
+
         return {
           content: log,
           stream: isStderr ? 'stderr' : 'stdout'
@@ -3137,8 +3577,8 @@
       const filterButtons = logsContainer.querySelectorAll('.logs-filter-btn');
       filterButtons.forEach(btn => {
         btn.classList.remove('active');
-        if (btn.textContent.toLowerCase() === currentLogFilter || 
-            (currentLogFilter === 'all' && btn.textContent === 'All')) {
+        if (btn.textContent.toLowerCase() === currentLogFilter ||
+          (currentLogFilter === 'all' && btn.textContent === 'All')) {
           btn.classList.add('active');
         }
         // Handle "Since Restart" button state
@@ -3158,7 +3598,7 @@
       const chunkSize = 1000;
       const processLogsInChunks = (startIndex) => {
         const endIndex = Math.min(startIndex + chunkSize, filteredLogs.length);
-        
+
         for (let i = startIndex; i < endIndex; i++) {
           const logLine = document.createElement('div');
           logLine.className = `log-line ${filteredLogs[i].stream}`;
@@ -3175,12 +3615,12 @@
           logsContainer.innerHTML = '';
           logsContainer.appendChild(header);
           logsContainer.appendChild(logLinesContainer);
-          
+
           // Only scroll to bottom if user was at bottom before update
           if (isAtBottom) {
             logLinesContainer.scrollTop = logLinesContainer.scrollHeight;
           }
-          
+
           // Setup scroll listener for this log container
           setupLogScrollListener(processId);
         }
@@ -3200,7 +3640,7 @@
           if (showLogsSinceRestart) {
             filterText += ' (since restart)';
           }
-          
+
           // Add indicator for "all logs" mode
           let lineCountText = '';
           if (currentLogLines === 'all') {
@@ -3208,14 +3648,14 @@
           } else {
             lineCountText = ` (${filteredCount.toLocaleString()}/${totalLogs.toLocaleString()} lines)`;
           }
-          
+
           title.textContent = `Process Logs${filterText}${lineCountText}`;
         }
-        
+
         // Update follow button and live indicator
         const followBtn = header.querySelector('.follow-btn');
         const liveIndicator = header.querySelector('.live-indicator');
-        
+
         if (followBtn) {
           if (isAtBottom) {
             followBtn.className = 'follow-btn active';
@@ -3227,7 +3667,7 @@
             followBtn.innerHTML = '<span>⏸️</span><span>Paused</span>';
           }
         }
-        
+
         if (liveIndicator) {
           if (isAtBottom) {
             liveIndicator.className = 'live-indicator following';
@@ -3237,7 +3677,7 @@
             liveIndicator.innerHTML = '<div class="live-dot"></div><span>Paused</span>';
           }
         }
-        
+
         // Update dropdown selection
         const lineCountSelect = header.querySelector('select');
         if (lineCountSelect) {
@@ -3247,7 +3687,7 @@
 
       // Start processing logs
       processLogsInChunks(0);
-      
+
       // Show performance warning for very large log files
       if (currentLogLines === 'all' && filteredLogs.length > 50000) {
         setTimeout(() => {
@@ -3280,7 +3720,7 @@
     function startLiveLogUpdates(processId) {
       // Stop any existing interval for this process
       stopLiveLogUpdates(processId);
-      
+
       // Request logs every 5 seconds via WebSocket
       logUpdateIntervals[processId] = setInterval(() => {
         requestLogs(processId, currentLogLines);
@@ -3298,11 +3738,11 @@
     // Statistics functions
     function setTimeFilter(period) {
       currentTimeFilter = period;
-      
+
       // Update active button
       document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
       event.target.classList.add('active');
-      
+
       loadStatistics();
       if (geoHeatmapLoaded) {
         renderGeoHeatmap();
@@ -3313,7 +3753,7 @@
       try {
         const response = await fetch(`/api/statistics?period=${currentTimeFilter}`);
         const data = await response.json();
-        
+
         if (data.success) {
           updateStatisticsDisplay(data.data);
         } else {
@@ -3330,7 +3770,7 @@
       document.getElementById('totalRequests').textContent = formatNumber(summary.totalRequests || 0);
       document.getElementById('uniqueIPs').textContent = formatNumber(summary.uniqueIPs || 0);
       document.getElementById('uniqueCountries').textContent = formatNumber(summary.uniqueCountries || 0);
-      
+
       // Handle average response time - could be in data.avgResponseTime or calculated from details
       let avgResponseTime = data.avgResponseTime || 0;
       if (!avgResponseTime && data.details && data.details.byIP && data.details.byIP.length > 0) {
@@ -3356,19 +3796,19 @@
           if (!groups[groupName]) groups[groupName] = [];
           groups[groupName].push(route);
         });
-        
+
         const groupHtml = Object.entries(groups).map(([name, routes]) => {
           const cardsHtml = routes.map(route => {
-            const topCountriesHtml = route.topCountries && route.topCountries.length > 0 
-              ? route.topCountries.slice(0, 3).map(country => 
-                  `<span class="country-badge">${country.country} (${country.count})</span>`
-                ).join('')
+            const topCountriesHtml = route.topCountries && route.topCountries.length > 0
+              ? route.topCountries.slice(0, 3).map(country =>
+                `<span class="country-badge">${country.country} (${country.count})</span>`
+              ).join('')
               : '<span class="no-data">No country data</span>';
-            
+
             const methodsHtml = route.methods && route.methods.length > 0
               ? route.methods.map(method => `<span class="method-badge">${method}</span>`).join('')
               : '<span class="no-data">No method data</span>';
-            
+
             return `
               <div class="route-card">
                 <div class="route-header">
@@ -3405,7 +3845,7 @@
             </div>
           `;
         }).join('');
-        
+
         routesContainer.innerHTML = groupHtml;
       } else {
         routesContainer.innerHTML = '<div class="no-data">No route statistics available for the selected time period</div>';
@@ -3422,29 +3862,29 @@
     async function renderGeoHeatmap() {
       const container = document.getElementById('geo-heatmap');
       container.innerHTML = '';
-      
+
       if (!window.echarts) {
         container.innerHTML = '<div style="color:#e53e3e;padding:2rem;text-align:center;">ECharts library not loaded</div>';
         return;
       }
-      
+
       if (!geoHeatmapChart) {
         geoHeatmapChart = echarts.init(container);
       }
-      
+
       geoHeatmapChart.showLoading('default', { text: 'Loading geolocation statistics...' });
 
       try {
         const res = await fetch(`/api/statistics?period=${currentTimeFilter}`);
         const data = await res.json();
-        
+
         if (!data.success) {
           throw new Error('Failed to load statistics');
         }
-        
+
         // Aggregate country counts from the actual data structure
         const countryCounts = {};
-        
+
         // Try to get data from routes (time period stats)
         if (data.data.routes && Array.isArray(data.data.routes)) {
           data.data.routes.forEach(route => {
@@ -3455,7 +3895,7 @@
             });
           });
         }
-        
+
         // If no routes data, try to get from summary
         if (Object.keys(countryCounts).length === 0 && data.data.summary && data.data.summary.topCountries) {
           data.data.summary.topCountries.forEach(country => {
@@ -3464,7 +3904,7 @@
             }
           });
         }
-        
+
         // If still no data, try to get from details
         if (Object.keys(countryCounts).length === 0 && data.data.details && data.data.details.byIP) {
           data.data.details.byIP.forEach(ipStat => {
@@ -3476,7 +3916,7 @@
             }
           });
         }
-        
+
         // If still no data, try to get from the raw stats data
         if (Object.keys(countryCounts).length === 0 && data.data.stats) {
           data.data.stats.forEach(stat => {
@@ -3485,18 +3925,18 @@
             }
           });
         }
-        
+
         // Convert to ECharts format
-        const mapData = Object.entries(countryCounts).map(([country, count]) => ({ 
-          name: country, 
-          value: count 
+        const mapData = Object.entries(countryCounts).map(([country, count]) => ({
+          name: country,
+          value: count
         }));
-        
+
         if (mapData.length === 0) {
           container.innerHTML = '<div style="color:#718096;padding:2rem;text-align:center;">No geolocation data available for the selected time period</div>';
           return;
         }
-        
+
         geoHeatmapChart.setOption({
           title: {
             text: `Geolocation Heatmap (${currentTimeFilter})`,
@@ -3511,11 +3951,11 @@
           visualMap: {
             min: 0,
             max: Math.max(10, ...mapData.map(d => d.value)),
-            text: ['High','Low'],
+            text: ['High', 'Low'],
             realtime: false,
             calculable: true,
             inRange: {
-              color: ['#e0f3f8','#abd9e9','#74add1','#4575b4','#313695','#a50026']
+              color: ['#e0f3f8', '#abd9e9', '#74add1', '#4575b4', '#313695', '#a50026']
             },
             left: 'left',
             bottom: 30
@@ -3529,7 +3969,7 @@
             data: mapData
           }]
         });
-        
+
         geoHeatmapChart.hideLoading();
         geoHeatmapLoaded = true;
       } catch (err) {
@@ -3563,13 +4003,13 @@
       document.getElementById('valid-certificates').textContent = letsEncryptStatus.validCertificates;
       document.getElementById('expiring-soon').textContent = letsEncryptStatus.expiringSoon;
       document.getElementById('expired-certificates').textContent = letsEncryptStatus.expired;
-      
+
       const letsEncryptMode = letsEncryptStatus.staging ? 'Staging' : 'Production';
       document.getElementById('letsencrypt-status').textContent = letsEncryptMode;
 
       // Update certificates table
       const container = document.getElementById('certificates-container');
-      
+
       if (!certificates || certificates.length === 0) {
         container.innerHTML = '<div class="no-data">No certificates found</div>';
         return;
@@ -3640,10 +4080,10 @@
         const now = new Date();
         const expiryDate = new Date(cert.expiresAt);
         const daysUntilExpiry = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
-        
+
         let status = 'valid';
         let statusText = 'Valid';
-        
+
         if (expiryDate < now) {
           status = 'expired';
           statusText = 'Expired';
@@ -3651,7 +4091,7 @@
           status = 'expiring-soon';
           statusText = `Expires in ${daysUntilExpiry} days`;
         }
-        
+
         return `
           <div class="certificate-card">
             <div class="certificate-header">
@@ -3678,7 +4118,7 @@
           </div>
         `;
       }).join('');
-      
+
       container.innerHTML = letsEncryptInfo + certificatesHtml;
     }
 
@@ -3752,14 +4192,14 @@
     // Check if user is at bottom of logs
     function checkIfAtBottom(logsContainer) {
       if (!logsContainer) return true;
-      
+
       const logLinesContainer = logsContainer.querySelector('.logs-content');
       if (!logLinesContainer) return true;
-      
+
       const scrollTop = logLinesContainer.scrollTop;
       const scrollHeight = logLinesContainer.scrollHeight;
       const clientHeight = logLinesContainer.clientHeight;
-      
+
       // Consider "at bottom" if within 5 pixels of the bottom
       return (scrollHeight - scrollTop - clientHeight) <= 5;
     }
@@ -3768,18 +4208,18 @@
     function setupLogScrollListener(processId) {
       const logsContainer = document.getElementById(`logs-${processId}`);
       if (!logsContainer) return;
-      
+
       const logLinesContainer = logsContainer.querySelector('.logs-content');
       if (!logLinesContainer) return;
-      
+
       // Remove existing listener if any
       logLinesContainer.removeEventListener('scroll', logLinesContainer._scrollHandler);
-      
+
       // Add new scroll listener
       logLinesContainer._scrollHandler = () => {
         isAtBottom = checkIfAtBottom(logsContainer);
       };
-      
+
       logLinesContainer.addEventListener('scroll', logLinesContainer._scrollHandler);
     }
 
@@ -3787,10 +4227,10 @@
     function scrollToBottom(processId) {
       const logsContainer = document.getElementById(`logs-${processId}`);
       if (!logsContainer) return;
-      
+
       const logLinesContainer = logsContainer.querySelector('.logs-content');
       if (!logLinesContainer) return;
-      
+
       logLinesContainer.scrollTop = logLinesContainer.scrollHeight;
       isAtBottom = true;
     }
@@ -3811,13 +4251,13 @@
       // Remove active class from all cache tabs
       document.querySelectorAll('.cache-tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.cache-tab-content').forEach(c => c.classList.remove('active'));
-      
+
       // Show selected tab
       document.getElementById(`cache-tab-${tab}`).classList.add('active');
       document.getElementById(`cache-content-${tab}`).classList.add('active');
-      
+
       activeCacheTab = tab;
-      
+
       // Load data for specific cache tabs
       if (tab === 'overview') {
         loadCacheStats();
@@ -3832,18 +4272,18 @@
       try {
         const response = await fetch('/api/cache/stats');
         if (!response.ok) throw new Error('Failed to load cache stats');
-        
+
         const result = await response.json();
         const stats = result.data || {};
         cacheData = stats;
-        
+
         // Update overview stats
         document.getElementById('cache-total-entries').textContent = stats.totalEntries || 0;
         document.getElementById('cache-mru-entries').textContent = stats.mruEntries || 0;
         document.getElementById('cache-total-size').textContent = formatBytes(stats.totalSize || 0);
         document.getElementById('cache-active-users').textContent = stats.activeUsers || 0;
         document.getElementById('cache-hit-rate').textContent = `${((stats.hitRate || 0) * 100).toFixed(1)}%`;
-        
+
         // Update detailed stats in overview tab
         if (activeCacheTab === 'overview') {
           updateCacheStatsDisplay(stats);
@@ -3858,11 +4298,11 @@
       try {
         const response = await fetch('/api/cache/users');
         if (!response.ok) throw new Error('Failed to load cache users');
-        
+
         const result = await response.json();
         const users = Array.isArray(result.data) ? result.data : [];
         cacheUsers = users;
-        
+
         updateCacheUsersDisplay(users);
       } catch (error) {
         console.error('Failed to load cache users:', error);
@@ -3875,20 +4315,20 @@
         const limit = document.getElementById('cache-entries-limit')?.value || 50;
         const userFilter = document.getElementById('cache-user-filter')?.value || '';
         const mruFilter = document.getElementById('cache-mru-filter')?.value || '';
-        
+
         let url = `/api/cache/entries?page=${page}&limit=${limit}`;
         if (userFilter) url += `&user=${encodeURIComponent(userFilter)}`;
         if (mruFilter) url += `&mru=${mruFilter}`;
-        
+
         const response = await fetch(url);
         if (!response.ok) throw new Error('Failed to load cache entries');
-        
+
         const result = await response.json();
         const data = result.data || {};
         const entries = Array.isArray(data.entries) ? data.entries : [];
         cacheEntries = entries;
         currentCachePage = page;
-        
+
         updateCacheEntriesDisplay({ entries, pagination: data.pagination });
         updateCachePagination(data.pagination?.totalPages || 1, page);
       } catch (error) {
@@ -3900,7 +4340,7 @@
     function updateCacheStatsDisplay(stats) {
       const container = document.getElementById('cache-stats-container');
       if (!container) return;
-      
+
       const html = `
         <div class="cache-stats-grid">
           <div class="cache-stat-item">
@@ -3935,26 +4375,26 @@
           </div>
         </div>
       `;
-      
+
       container.innerHTML = html;
     }
 
     function updateCacheUsersDisplay(users) {
       const container = document.getElementById('cache-users-container');
       if (!container) return;
-      
+
       // Ensure users is an array
       const usersArray = Array.isArray(users) ? users : [];
-      
+
       if (usersArray.length === 0) {
         container.innerHTML = '<div class="loading">No users with cached entries found</div>';
         return;
       }
-      
+
       const html = usersArray.map(user => {
         // Ensure user object has required properties
         if (!user || typeof user !== 'object') return '';
-        
+
         return `
           <div class="cache-user-card">
             <div class="cache-user-header">
@@ -3984,21 +4424,21 @@
           </div>
         `;
       }).join('');
-      
+
       container.innerHTML = html;
     }
 
     function updateCacheEntriesDisplay(data) {
       const container = document.getElementById('cache-entries-container');
       if (!container) return;
-      
+
       const entries = data.entries || [];
-      
+
       if (entries.length === 0) {
         container.innerHTML = '<div class="loading">No cache entries found</div>';
         return;
       }
-      
+
       const html = entries.map(entry => `
         <div class="cache-entry">
           <div class="cache-entry-header">
@@ -4021,7 +4461,7 @@
           </div>
         </div>
       `).join('');
-      
+
       container.innerHTML = html;
     }
 
@@ -4029,7 +4469,7 @@
       const prevBtn = document.getElementById('cache-prev-page');
       const nextBtn = document.getElementById('cache-next-page');
       const pageInfo = document.getElementById('cache-page-info');
-      
+
       if (prevBtn) prevBtn.disabled = currentPage <= 1;
       if (nextBtn) nextBtn.disabled = currentPage >= totalPages;
       if (pageInfo) pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
@@ -4045,10 +4485,10 @@
     function filterCacheEntries() {
       const userFilter = document.getElementById('cache-user-filter')?.value || '';
       const mruFilter = document.getElementById('cache-mru-filter')?.value || '';
-      
+
       cacheFilters.user = userFilter;
       cacheFilters.mru = mruFilter;
-      
+
       // Reset to first page when filtering
       loadCacheEntries(1);
     }
@@ -4057,11 +4497,11 @@
       if (!confirm('Are you sure you want to clear all cache entries? This action cannot be undone.')) {
         return;
       }
-      
+
       try {
         const response = await fetch('/api/cache/clear', { method: 'POST' });
         if (!response.ok) throw new Error('Failed to clear cache');
-        
+
         showNotification('All cache entries cleared successfully', 'success');
         loadCacheStats();
         if (activeCacheTab === 'users') loadCacheUsers();
@@ -4076,7 +4516,7 @@
       try {
         const response = await fetch('/api/cache/cleanup', { method: 'POST' });
         if (!response.ok) throw new Error('Failed to cleanup expired cache');
-        
+
         const result = await response.json();
         showNotification(`Cleaned up ${result.cleanedEntries || 0} expired cache entries`, 'success');
         loadCacheStats();
@@ -4092,11 +4532,11 @@
       if (!confirm(`Are you sure you want to clear all cache entries for user "${userId}"?`)) {
         return;
       }
-      
+
       try {
         const response = await fetch(`/api/cache/clear-user/${encodeURIComponent(userId)}`, { method: 'POST' });
         if (!response.ok) throw new Error('Failed to clear user cache');
-        
+
         showNotification(`Cache cleared for user "${userId}"`, 'success');
         loadCacheStats();
         if (activeCacheTab === 'users') loadCacheUsers();
@@ -4111,11 +4551,11 @@
       if (!confirm('Are you sure you want to delete this cache entry?')) {
         return;
       }
-      
+
       try {
         const response = await fetch(`/api/cache/delete/${encodeURIComponent(key)}`, { method: 'DELETE' });
         if (!response.ok) throw new Error('Failed to delete cache entry');
-        
+
         showNotification('Cache entry deleted successfully', 'success');
         loadCacheEntries(currentCachePage);
       } catch (error) {
@@ -4128,9 +4568,9 @@
       try {
         const response = await fetch(`/api/cache/entry/${encodeURIComponent(key)}`);
         if (!response.ok) throw new Error('Failed to load cache entry');
-        
+
         const entry = await response.json();
-        
+
         // Create a modal to display the cache entry
         const modal = document.createElement('div');
         modal.style.cssText = `
@@ -4145,7 +4585,7 @@
           justify-content: center;
           z-index: 1000;
         `;
-        
+
         const content = document.createElement('div');
         content.style.cssText = `
           background: white;
@@ -4156,7 +4596,7 @@
           overflow: auto;
           position: relative;
         `;
-        
+
         const closeBtn = document.createElement('button');
         closeBtn.textContent = '×';
         closeBtn.style.cssText = `
@@ -4170,11 +4610,11 @@
           color: #666;
         `;
         closeBtn.onclick = () => document.body.removeChild(modal);
-        
-        const preview = entry.body.length > 1000 ? 
-          entry.body.substring(0, 1000) + '... [truncated]' : 
+
+        const preview = entry.body.length > 1000 ?
+          entry.body.substring(0, 1000) + '... [truncated]' :
           entry.body;
-        
+
         content.innerHTML = `
           <h2>Cache Entry: ${entry.url}</h2>
           <div style="margin-bottom: 1rem;">
@@ -4189,18 +4629,18 @@
           <h3>Response Body Preview:</h3>
           <div class="cache-entry-preview">${preview}</div>
         `;
-        
+
         content.appendChild(closeBtn);
         modal.appendChild(content);
         document.body.appendChild(modal);
-        
+
         // Close modal when clicking outside
         modal.onclick = (e) => {
           if (e.target === modal) {
             document.body.removeChild(modal);
           }
         };
-        
+
       } catch (error) {
         console.error('Failed to view cache entry:', error);
         showNotification('Failed to load cache entry', 'error');
@@ -4214,6 +4654,198 @@
       const i = Math.floor(Math.log(bytes) / Math.log(k));
       return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
+
+    // Configuration Editor Functions
+    let currentConfigType = 'proxy';
+    let currentConfigContent = '';
+
+    function switchConfigTab(type) {
+      document.querySelectorAll('.config-tab').forEach(tab => tab.classList.remove('active'));
+      document.querySelectorAll('.config-tab-content').forEach(content => content.classList.remove('active'));
+
+      document.getElementById(`config-tab-${type}`).classList.add('active');
+      document.getElementById(`config-content-${type}`).classList.add('active');
+
+      currentConfigType = type;
+      loadConfig(type);
+    }
+
+    async function loadConfig(type) {
+      try {
+        const response = await fetch(`/api/config/${type}`);
+        const data = await response.json();
+
+        if (data.success) {
+          const editor = document.getElementById(`${type}-config-editor`);
+          const pathSpan = document.getElementById(`${type}-config-path`);
+          const modifiedSpan = document.getElementById(`${type}-config-modified`);
+          const validation = document.getElementById(`${type}-config-validation`);
+
+          if (editor) editor.value = data.data.content;
+          if (pathSpan) pathSpan.textContent = data.data.path;
+          if (modifiedSpan) modifiedSpan.textContent = formatLocalTime(data.data.lastModified);
+          if (validation) {
+            validation.textContent = 'Configuration loaded successfully';
+            validation.className = 'validation-message success';
+          }
+        } else {
+          throw new Error(data.error || 'Failed to load configuration');
+        }
+      } catch (error) {
+        console.error(`Failed to load ${type} configuration:`, error);
+        const validation = document.getElementById(`${type}-config-validation`);
+        if (validation) {
+          validation.textContent = `Failed to load configuration: ${error.message}`;
+          validation.className = 'validation-message error';
+        }
+      }
+    }
+
+    async function backupConfig(type) {
+      try {
+        const response = await fetch(`/api/config/${type}/backup`, { method: 'POST' });
+        const data = await response.json();
+
+        if (data.success) {
+          showNotification('Configuration backup created successfully', 'success');
+        } else {
+          throw new Error(data.error || 'Failed to create backup');
+        }
+      } catch (error) {
+        console.error(`Failed to backup ${type} configuration:`, error);
+        showNotification(`Failed to create backup: ${error.message}`, 'error');
+      }
+    }
+
+    async function saveConfig(type) {
+      const editor = document.getElementById(`${type}-config-editor`);
+      if (!editor) return;
+
+      const content = editor.value;
+      const createBackup = confirm('Create a backup before saving? (Recommended)');
+
+      try {
+        const response = await fetch(`/api/config/${type}/save`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content, createBackup })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          currentConfigContent = content;
+          showNotification('Configuration saved successfully', 'success');
+
+          const validation = document.getElementById(`${type}-config-validation`);
+          if (validation) {
+            validation.textContent = 'Configuration saved successfully';
+            validation.className = 'validation-message success';
+          }
+        } else {
+          throw new Error(data.error || 'Failed to save configuration');
+        }
+      } catch (error) {
+        console.error(`Failed to save ${type} configuration:`, error);
+        showNotification(`Failed to save configuration: ${error.message}`, 'error');
+
+        const validation = document.getElementById(`${type}-config-validation`);
+        if (validation) {
+          validation.textContent = `Failed to save configuration: ${error.message}`;
+          validation.className = 'validation-message error';
+        }
+      }
+    }
+
+    async function showBackups(type) {
+      try {
+        const response = await fetch(`/api/config/${type}/backups`);
+        const data = await response.json();
+
+        if (data.success) {
+          const modal = document.getElementById('backup-modal');
+          const backupList = document.getElementById('backup-list');
+
+          if (backupList) {
+            if (data.data.length === 0) {
+              backupList.innerHTML = '<div class="loading">No backups found</div>';
+            } else {
+              backupList.innerHTML = data.data.map(backup => `
+                <div class="backup-item">
+                  <div class="backup-info">
+                    <div class="backup-name">${backup.name}</div>
+                    <div class="backup-meta">
+                      Size: ${formatBytes(backup.size)} | 
+                      Modified: ${formatLocalTime(backup.lastModified)}
+                    </div>
+                  </div>
+                  <div class="backup-actions">
+                    <button onclick="restoreBackup('${type}', '${backup.path}')" class="btn btn-start">Restore</button>
+                  </div>
+                </div>
+              `).join('');
+            }
+          }
+
+          if (modal) modal.style.display = 'block';
+        } else {
+          throw new Error(data.error || 'Failed to load backups');
+        }
+      } catch (error) {
+        console.error(`Failed to load ${type} backups:`, error);
+        showNotification(`Failed to load backups: ${error.message}`, 'error');
+      }
+    }
+
+    function closeBackupModal() {
+      const modal = document.getElementById('backup-modal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    async function restoreBackup(type, backupPath) {
+      if (!confirm('Are you sure you want to restore this backup? This will overwrite the current configuration.')) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/config/${type}/restore`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ backupPath })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showNotification('Configuration restored successfully', 'success');
+          closeBackupModal();
+          loadConfig(type);
+        } else {
+          throw new Error(data.error || 'Failed to restore backup');
+        }
+      } catch (error) {
+        console.error(`Failed to restore ${type} backup:`, error);
+        showNotification(`Failed to restore backup: ${error.message}`, 'error');
+      }
+    }
+
+    // Override showTab function to handle config tab
+    const originalShowTab = showTab;
+    showTab = function (tab, pushState = true) {
+      originalShowTab(tab, pushState);
+
+      if (tab === 'config') {
+        loadConfig(currentConfigType);
+      }
+    };
+
+    // Close modal when clicking outside
+    window.onclick = function (event) {
+      const modal = document.getElementById('backup-modal');
+      if (event.target === modal) {
+        closeBackupModal();
+      }
+    };
   </script>
 </body>
 
