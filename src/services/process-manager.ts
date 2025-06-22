@@ -338,36 +338,115 @@ export class ProcessManager {
   }
 
   /**
-   * Start tailing log file to monitor process output
+   * Start monitoring log file directly instead of using tail
    */
   private startLogTailing(id: string, logFilePath: string): void {
-    // Use tail -f to follow the log file
-    const tailProcess = spawn('tail', ['-f', logFilePath], {
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
-
-    tailProcess.stdout?.on('data', (data) => {
-      const output = data.toString().trim();
-      if (output) {
-        logger.info(`[${id}] ${output}`);
-      }
-    });
-
-    tailProcess.stderr?.on('data', (data) => {
-      const output = data.toString().trim();
-      if (output) {
-        logger.warn(`[${id}] TAIL-ERROR: ${output}`);
-      }
-    });
-
-    tailProcess.on('error', (error) => {
-      logger.error(`Failed to tail log file for process ${id}`, error);
-    });
-
-    // Store the tail process reference for cleanup
     const managedProcess = this.processes.get(id);
-    if (managedProcess) {
-      managedProcess.process = tailProcess;
+    if (!managedProcess) return;
+
+    // Store the current file size to track changes
+    let lastFileSize = 0;
+    let fileWatcher: fs.FSWatcher | null = null;
+
+    const readNewLogs = async () => {
+      try {
+        if (!await fs.pathExists(logFilePath)) {
+          return;
+        }
+
+        const stats = await fs.stat(logFilePath);
+        const currentFileSize = stats.size;
+
+        // Only read if file has grown
+        if (currentFileSize > lastFileSize) {
+          const stream = fs.createReadStream(logFilePath, {
+            start: lastFileSize,
+            end: currentFileSize - 1
+          });
+
+          let buffer = '';
+          stream.on('data', (chunk) => {
+            buffer += chunk.toString();
+          });
+
+          stream.on('end', () => {
+            const lines = buffer.split('\n').filter(line => line.trim());
+            lines.forEach(line => {
+              if (line) {
+                logger.info(`[${id}] ${line}`);
+              }
+            });
+          });
+
+          stream.on('error', (error) => {
+            logger.error(`Error reading log file for process ${id}`, error);
+          });
+
+          lastFileSize = currentFileSize;
+        }
+      } catch (error) {
+        logger.error(`Failed to read log file for process ${id}`, error);
+      }
+    };
+
+    // Initial read of existing content
+    readNewLogs();
+
+    // Set up file watcher to monitor for changes
+    try {
+      fileWatcher = fs.watch(logFilePath, { persistent: true }, (eventType, filename) => {
+        if (eventType === 'change' && filename) {
+          // Debounce the read to avoid multiple rapid reads
+          setTimeout(readNewLogs, 100);
+        }
+      });
+
+      fileWatcher.on('error', (error) => {
+        logger.error(`Error watching log file for process ${id}`, error);
+      });
+
+      // Store the file watcher reference for cleanup
+      managedProcess.process = {
+        pid: null,
+        stdout: null,
+        stderr: null,
+        stdin: null,
+        kill: (signal?: string) => {
+          if (fileWatcher) {
+            fileWatcher.close();
+            fileWatcher = null;
+          }
+        },
+        on: () => {},
+        unref: () => {},
+        ref: () => {},
+        exitCode: null,
+        killed: false,
+        spawnargs: [],
+        spawnfile: '',
+        connected: false,
+        disconnect: () => {},
+        send: () => false,
+        channel: null,
+        sendHandle: null,
+        addListener: () => managedProcess.process!,
+        emit: () => false,
+        eventNames: () => [],
+        getMaxListeners: () => 0,
+        listenerCount: () => 0,
+        listeners: () => [],
+        off: () => managedProcess.process!,
+        once: () => managedProcess.process!,
+        prependListener: () => managedProcess.process!,
+        prependOnceListener: () => managedProcess.process!,
+        rawListeners: () => [],
+        removeAllListeners: () => managedProcess.process!,
+        removeListener: () => managedProcess.process!,
+        setMaxListeners: () => managedProcess.process!,
+      } as any;
+
+    } catch (error) {
+      logger.error(`Failed to set up log file watcher for process ${id}`, error);
     }
   }
 
