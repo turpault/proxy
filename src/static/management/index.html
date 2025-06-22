@@ -790,33 +790,54 @@
 
     /* Certificate styles */
     .certificate-card {
+      background: white;
       border: 1px solid #e2e8f0;
-      border-radius: 8px;
+      border-radius: 12px;
       padding: 1.5rem;
       margin-bottom: 1rem;
-      background: #f7fafc;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      transition: all 0.2s ease;
+    }
+
+    .certificate-card:hover {
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+      transform: translateY(-1px);
     }
 
     .certificate-header {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      margin-bottom: 1rem;
+      align-items: flex-start;
+      margin-bottom: 1.5rem;
+      gap: 1rem;
+    }
+
+    .certificate-info {
+      flex: 1;
     }
 
     .certificate-name {
-      font-weight: 600;
-      color: #2d3748;
-      font-size: 1.1rem;
+      font-weight: 700;
+      color: #1a202c;
+      font-size: 1.25rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .certificate-path {
+      font-size: 0.85rem;
+      color: #718096;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      word-break: break-all;
     }
 
     .certificate-status {
       padding: 0.5rem 1rem;
-      border-radius: 4px;
-      font-weight: 500;
+      border-radius: 20px;
+      font-weight: 600;
       font-size: 0.8rem;
       text-transform: uppercase;
       letter-spacing: 0.5px;
+      white-space: nowrap;
     }
 
     .certificate-status.valid {
@@ -840,7 +861,7 @@
     .certificate-details {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 1rem;
+      gap: 1.5rem;
     }
 
     .certificate-detail {
@@ -849,18 +870,31 @@
     }
 
     .certificate-detail-label {
-      font-weight: 500;
+      font-weight: 600;
       color: #4a5568;
       font-size: 0.8rem;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      margin-bottom: 0.25rem;
+      margin-bottom: 0.5rem;
     }
 
     .certificate-detail-value {
       color: #2d3748;
       font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-      font-size: 0.9rem;
+      font-size: 0.95rem;
+      font-weight: 500;
+    }
+
+    .certificate-detail-value.success {
+      color: #16a34a;
+    }
+
+    .certificate-detail-value.warning {
+      color: #d97706;
+    }
+
+    .certificate-detail-value.error {
+      color: #dc2626;
     }
 
     .letsencrypt-info {
@@ -1028,6 +1062,50 @@
         flex-direction: column;
         align-items: flex-start;
         gap: 0.25rem;
+      }
+
+      /* New Let's Encrypt config mobile styles */
+      .letsencrypt-config {
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .letsencrypt-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+      }
+
+      .letsencrypt-title {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+      }
+
+      .letsencrypt-title h3 {
+        font-size: 1.25rem;
+      }
+
+      .letsencrypt-grid {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+      }
+
+      .letsencrypt-item {
+        padding: 0.75rem;
+      }
+
+      .certificate-summary {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+      }
+
+      .certificate-summary-item {
+        padding: 0.75rem;
+      }
+
+      .certificate-summary-number {
+        font-size: 1.5rem;
       }
     }
 
@@ -1592,6 +1670,212 @@
       padding: 1rem;
       border-radius: 4px;
       margin-bottom: 1rem;
+    }
+
+    /* Let's Encrypt Configuration Styles */
+    .letsencrypt-config {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      color: white;
+      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .letsencrypt-config::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="white" opacity="0.1"/><circle cx="50" cy="10" r="0.5" fill="white" opacity="0.1"/><circle cx="10" cy="60" r="0.5" fill="white" opacity="0.1"/><circle cx="90" cy="40" r="0.5" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+      pointer-events: none;
+    }
+
+    .letsencrypt-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1.5rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    .letsencrypt-title {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .letsencrypt-icon {
+      font-size: 2rem;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+    }
+
+    .letsencrypt-title h3 {
+      margin: 0;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: white;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .letsencrypt-subtitle {
+      margin: 0.25rem 0 0 0;
+      font-size: 0.9rem;
+      color: rgba(255, 255, 255, 0.8);
+      font-weight: 400;
+    }
+
+    .letsencrypt-status-badge {
+      padding: 0.5rem 1rem;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .letsencrypt-status-badge.production {
+      background: rgba(34, 197, 94, 0.2);
+      color: #4ade80;
+    }
+
+    .letsencrypt-status-badge.staging {
+      background: rgba(245, 158, 11, 0.2);
+      color: #fbbf24;
+    }
+
+    .letsencrypt-content {
+      position: relative;
+      z-index: 1;
+    }
+
+    .letsencrypt-section {
+      margin-bottom: 1.5rem;
+    }
+
+    .letsencrypt-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .letsencrypt-section h4 {
+      margin: 0 0 1rem 0;
+      font-size: 1rem;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.9);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .letsencrypt-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+    }
+
+    .letsencrypt-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 1rem;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      transition: all 0.2s ease;
+    }
+
+    .letsencrypt-item:hover {
+      background: rgba(255, 255, 255, 0.15);
+      transform: translateY(-1px);
+    }
+
+    .letsencrypt-item-icon {
+      font-size: 1.25rem;
+      width: 2rem;
+      height: 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+    }
+
+    .letsencrypt-item-content {
+      flex: 1;
+    }
+
+    .letsencrypt-item-label {
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.7);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.25rem;
+    }
+
+    .letsencrypt-item-value {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: white;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    }
+
+    .certificate-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 1rem;
+    }
+
+    .certificate-summary-item {
+      text-align: center;
+      padding: 1rem;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      transition: all 0.2s ease;
+    }
+
+    .certificate-summary-item:hover {
+      background: rgba(255, 255, 255, 0.15);
+      transform: translateY(-2px);
+    }
+
+    .certificate-summary-item.valid {
+      border-color: rgba(34, 197, 94, 0.3);
+      background: rgba(34, 197, 94, 0.1);
+    }
+
+    .certificate-summary-item.warning {
+      border-color: rgba(245, 158, 11, 0.3);
+      background: rgba(245, 158, 11, 0.1);
+    }
+
+    .certificate-summary-item.error {
+      border-color: rgba(239, 68, 68, 0.3);
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    .certificate-summary-number {
+      font-size: 2rem;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 0.5rem;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .certificate-summary-label {
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.8);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 500;
     }
   </style>
 </head>
@@ -2966,36 +3250,61 @@
       }
 
       const letsEncryptInfo = `
-        <div class="letsencrypt-info">
-          <h4>🔒 Let's Encrypt Configuration</h4>
-          <div class="letsencrypt-details">
-            <div class="letsencrypt-detail">
-              <span class="label">Email:</span>
-              <span class="value">${letsEncryptStatus.email}</span>
+        <div class="letsencrypt-config">
+          <div class="letsencrypt-header">
+            <div class="letsencrypt-title">
+              <div class="letsencrypt-icon">🔒</div>
+              <div>
+                <h3>Let's Encrypt Configuration</h3>
+                <p class="letsencrypt-subtitle">SSL Certificate Management</p>
+              </div>
             </div>
-            <div class="letsencrypt-detail">
-              <span class="label">Environment:</span>
-              <span class="value">${letsEncryptStatus.staging ? 'Staging' : 'Production'}</span>
+            <div class="letsencrypt-status-badge ${letsEncryptStatus.staging ? 'staging' : 'production'}">
+              ${letsEncryptStatus.staging ? 'Staging' : 'Production'}
             </div>
-            <div class="letsencrypt-detail">
-              <span class="label">Certificate Directory:</span>
-              <span class="value">${letsEncryptStatus.certDir}</span>
+          </div>
+          
+          <div class="letsencrypt-content">
+            <div class="letsencrypt-section">
+              <h4>Account Information</h4>
+              <div class="letsencrypt-grid">
+                <div class="letsencrypt-item">
+                  <div class="letsencrypt-item-icon">📧</div>
+                  <div class="letsencrypt-item-content">
+                    <div class="letsencrypt-item-label">Email</div>
+                    <div class="letsencrypt-item-value">${letsEncryptStatus.email}</div>
+                  </div>
+                </div>
+                <div class="letsencrypt-item">
+                  <div class="letsencrypt-item-icon">📁</div>
+                  <div class="letsencrypt-item-content">
+                    <div class="letsencrypt-item-label">Certificate Directory</div>
+                    <div class="letsencrypt-item-value">${letsEncryptStatus.certDir}</div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="letsencrypt-detail">
-              <span class="label">Total Certificates:</span>
-              <span class="value">${letsEncryptStatus.totalCertificates}</span>
-            </div>
-            <div class="letsencrypt-detail">
-              <span class="label">Valid:</span>
-              <span class="value">${letsEncryptStatus.validCertificates}</span>
-            </div>
-            <div class="letsencrypt-detail">
-              <span class="label">Expiring Soon:</span>
-              <span class="value">${letsEncryptStatus.expiringSoon}</span>
-            </div>
-            <div class="letsencrypt-detail">
-              <span class="label">Expired:</span>
-              <span class="value">${letsEncryptStatus.expired}</span>
+            
+            <div class="letsencrypt-section">
+              <h4>Certificate Summary</h4>
+              <div class="certificate-summary">
+                <div class="certificate-summary-item">
+                  <div class="certificate-summary-number">${letsEncryptStatus.totalCertificates}</div>
+                  <div class="certificate-summary-label">Total</div>
+                </div>
+                <div class="certificate-summary-item valid">
+                  <div class="certificate-summary-number">${letsEncryptStatus.validCertificates}</div>
+                  <div class="certificate-summary-label">Valid</div>
+                </div>
+                <div class="certificate-summary-item warning">
+                  <div class="certificate-summary-number">${letsEncryptStatus.expiringSoon}</div>
+                  <div class="certificate-summary-label">Expiring Soon</div>
+                </div>
+                <div class="certificate-summary-item error">
+                  <div class="certificate-summary-number">${letsEncryptStatus.expired}</div>
+                  <div class="certificate-summary-label">Expired</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -3020,25 +3329,24 @@
         return `
           <div class="certificate-card">
             <div class="certificate-header">
-              <div class="certificate-name">${cert.domain}</div>
+              <div class="certificate-info">
+                <div class="certificate-name">${cert.domain}</div>
+                <div class="certificate-path">${cert.certPath}</div>
+              </div>
               <div class="certificate-status ${status}">${statusText}</div>
             </div>
             <div class="certificate-details">
-              <div class="certificate-detail">
-                <div class="certificate-detail-label">Domain</div>
-                <div class="certificate-detail-value">${cert.domain}</div>
-              </div>
               <div class="certificate-detail">
                 <div class="certificate-detail-label">Valid Until</div>
                 <div class="certificate-detail-value">${new Date(cert.expiresAt).toLocaleString()}</div>
               </div>
               <div class="certificate-detail">
                 <div class="certificate-detail-label">Days Until Expiry</div>
-                <div class="certificate-detail-value">${daysUntilExpiry}</div>
+                <div class="certificate-detail-value ${daysUntilExpiry <= 30 ? 'warning' : daysUntilExpiry <= 0 ? 'error' : 'success'}">${daysUntilExpiry}</div>
               </div>
               <div class="certificate-detail">
                 <div class="certificate-detail-label">Status</div>
-                <div class="certificate-detail-value">${cert.isValid ? 'Valid' : 'Invalid'}</div>
+                <div class="certificate-detail-value ${cert.isValid ? 'success' : 'error'}">${cert.isValid ? 'Valid' : 'Invalid'}</div>
               </div>
             </div>
           </div>
