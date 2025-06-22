@@ -3806,7 +3806,8 @@
         const response = await fetch('/api/cache/stats');
         if (!response.ok) throw new Error('Failed to load cache stats');
         
-        const stats = await response.json();
+        const result = await response.json();
+        const stats = result.data || {};
         cacheData = stats;
         
         // Update overview stats
@@ -3831,7 +3832,8 @@
         const response = await fetch('/api/cache/users');
         if (!response.ok) throw new Error('Failed to load cache users');
         
-        const users = await response.json();
+        const result = await response.json();
+        const users = Array.isArray(result.data) ? result.data : [];
         cacheUsers = users;
         
         updateCacheUsersDisplay(users);
@@ -3854,12 +3856,14 @@
         const response = await fetch(url);
         if (!response.ok) throw new Error('Failed to load cache entries');
         
-        const data = await response.json();
-        cacheEntries = data.entries || [];
+        const result = await response.json();
+        const data = result.data || {};
+        const entries = Array.isArray(data.entries) ? data.entries : [];
+        cacheEntries = entries;
         currentCachePage = page;
         
-        updateCacheEntriesDisplay(data);
-        updateCachePagination(data.totalPages || 1, page);
+        updateCacheEntriesDisplay({ entries, pagination: data.pagination });
+        updateCachePagination(data.pagination?.totalPages || 1, page);
       } catch (error) {
         console.error('Failed to load cache entries:', error);
         showNotification('Failed to load cache entries', 'error');
@@ -3912,39 +3916,47 @@
       const container = document.getElementById('cache-users-container');
       if (!container) return;
       
-      if (users.length === 0) {
+      // Ensure users is an array
+      const usersArray = Array.isArray(users) ? users : [];
+      
+      if (usersArray.length === 0) {
         container.innerHTML = '<div class="loading">No users with cached entries found</div>';
         return;
       }
       
-      const html = users.map(user => `
-        <div class="cache-user-card">
-          <div class="cache-user-header">
-            <div class="cache-user-id">${user.userId}</div>
-            <div class="cache-user-actions">
-              <button onclick="clearUserCache('${user.userId}')" class="btn btn-stop">Clear User Cache</button>
+      const html = usersArray.map(user => {
+        // Ensure user object has required properties
+        if (!user || typeof user !== 'object') return '';
+        
+        return `
+          <div class="cache-user-card">
+            <div class="cache-user-header">
+              <div class="cache-user-id">${user.userId || 'Unknown'}</div>
+              <div class="cache-user-actions">
+                <button onclick="clearUserCache('${user.userId || ''}')" class="btn btn-stop">Clear User Cache</button>
+              </div>
+            </div>
+            <div class="cache-user-stats">
+              <div class="cache-user-stat">
+                <div class="cache-user-stat-value">${user.entryCount || user.entries || 0}</div>
+                <div class="cache-user-stat-label">Entries</div>
+              </div>
+              <div class="cache-user-stat">
+                <div class="cache-user-stat-value">${formatBytes(user.totalSize || user.size || 0)}</div>
+                <div class="cache-user-stat-label">Size</div>
+              </div>
+              <div class="cache-user-stat">
+                <div class="cache-user-stat-value">${user.mruCount || user.mruEntries || 0}</div>
+                <div class="cache-user-stat-label">MRU</div>
+              </div>
+              <div class="cache-user-stat">
+                <div class="cache-user-stat-value">${formatRelativeTime(user.lastActivity || user.lastAccess || 0)}</div>
+                <div class="cache-user-stat-label">Last Access</div>
+              </div>
             </div>
           </div>
-          <div class="cache-user-stats">
-            <div class="cache-user-stat">
-              <div class="cache-user-stat-value">${user.entries}</div>
-              <div class="cache-user-stat-label">Entries</div>
-            </div>
-            <div class="cache-user-stat">
-              <div class="cache-user-stat-value">${formatBytes(user.size)}</div>
-              <div class="cache-user-stat-label">Size</div>
-            </div>
-            <div class="cache-user-stat">
-              <div class="cache-user-stat-value">${user.mruEntries}</div>
-              <div class="cache-user-stat-label">MRU</div>
-            </div>
-            <div class="cache-user-stat">
-              <div class="cache-user-stat-value">${formatRelativeTime(user.lastAccess)}</div>
-              <div class="cache-user-stat-label">Last Access</div>
-            </div>
-          </div>
-        </div>
-      `).join('');
+        `;
+      }).join('');
       
       container.innerHTML = html;
     }
