@@ -2549,7 +2549,8 @@
       if (tab === 'processes' && process) {
         // Wait for processesData to be loaded, then switch
         const trySwitch = () => {
-          if (processesData && processesData.find(p => p.id === process)) {
+          const processes = Array.isArray(processesData) ? processesData : [];
+          if (processes.length > 0 && processes.find(p => p && p.id === process)) {
             switchProcessTab(process, false);
           } else {
             setTimeout(trySwitch, 100);
@@ -2613,7 +2614,7 @@
       switch (message.type) {
         case 'processes':
           const oldProcessesData = processesData;
-          processesData = message.data;
+          processesData = Array.isArray(message.data) ? message.data : [];
           
           // If this is the first load, update the entire display
           if (!oldProcessesData || oldProcessesData.length === 0) {
@@ -2621,12 +2622,14 @@
           } else {
             // Update individual process information without regenerating HTML
             processesData.forEach(process => {
-              updateProcessInfo(process.id, process);
+              if (process && process.id) {
+                updateProcessInfo(process.id, process);
+              }
             });
           }
           break;
         case 'status':
-          statusData = message.data;
+          statusData = message.data || {};
           updateStatusDisplay();
           break;
         case 'logs':
@@ -2684,8 +2687,10 @@
 
     // Update status display
     function updateStatusDisplay() {
-      const processesCount = statusData.processes?.length || 0;
-      const runningCount = statusData.processes?.filter(p => p.status === 'running').length || 0;
+      // Ensure processes is an array and handle potential undefined/null values
+      const processes = Array.isArray(statusData.processes) ? statusData.processes : [];
+      const processesCount = processes.length;
+      const runningCount = processes.filter(p => p && p.status === 'running').length;
       const stoppedCount = processesCount - runningCount;
       const uptime = statusData.uptime || 0;
       const timestamp = statusData.timestamp ? formatLocalTime(statusData.timestamp) : 'N/A';
@@ -2803,7 +2808,10 @@
       const tabsHeader = document.getElementById('process-tabs-header');
       const tabsContent = document.getElementById('process-tabs-content');
       
-      if (!processesData || processesData.length === 0) {
+      // Ensure processesData is an array
+      const processes = Array.isArray(processesData) ? processesData : [];
+      
+      if (processes.length === 0) {
         tabsHeader.innerHTML = '';
         tabsContent.innerHTML = `
           <div class="no-processes-tab">
@@ -2815,10 +2823,10 @@
       }
 
       // Preserve current active tab
-      const currentActiveTab = activeProcessTab || (processesData.length > 0 ? processesData[0].id : null);
+      const currentActiveTab = activeProcessTab || (processes.length > 0 ? processes[0].id : null);
 
       // Generate tab headers
-      const tabHeaders = processesData.map((process) => {
+      const tabHeaders = processes.map((process) => {
         const statusClass = process.status === 'running' ? 'running' : 'stopped';
         const isActive = process.id === currentActiveTab ? 'active' : '';
         
@@ -2831,7 +2839,7 @@
       }).join('');
 
       // Generate tab content
-      const tabContents = processesData.map((process) => {
+      const tabContents = processes.map((process) => {
         const isActive = process.id === currentActiveTab ? 'active' : '';
         const statusClass = process.status === 'running' ? 'success' : 'error';
         const statusText = process.status === 'running' ? 'Running' : 'Stopped';
@@ -2944,9 +2952,9 @@
           requestLogs(currentActiveTab, currentLogLines);
           setupLiveUpdates(currentActiveTab);
         }
-      } else if (!activeProcessTab && processesData.length > 0) {
+      } else if (!activeProcessTab && processes.length > 0) {
         // Set the first process as active if no active tab
-        switchProcessTab(processesData[0].id);
+        switchProcessTab(processes[0].id);
       }
     }
 
@@ -2990,7 +2998,8 @@
       }
 
       // Store last restart time for this process
-      const process = processesData.find(p => p.id === processId);
+      const processes = Array.isArray(processesData) ? processesData : [];
+      const process = processes.find(p => p && p.id === processId);
       if (process && process.lastRestartTime) {
         processLastRestartTimes[processId] = new Date(process.lastRestartTime).getTime();
       }
