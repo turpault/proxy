@@ -31,14 +31,16 @@ export function registerManagementEndpoints(
     try {
       const processes = processManager.getProcessStatus();
       const availableProcesses = config.processManagement?.processes || {};
+      // Ensure processes is an array
+      const processesArray = Array.isArray(processes) ? processes : [];
       // Create a set of all process IDs (both configured and managed)
       const allProcessIds = new Set([
         ...Object.keys(availableProcesses),
-        ...processes.map(p => p.id)
+        ...processesArray.map(p => p.id)
       ]);
       const processList = Array.from(allProcessIds).map(processId => {
         const processConfig = availableProcesses[processId];
-        const runningProcess = processes.find(p => p.id === processId);
+        const runningProcess = processesArray.find(p => p.id === processId);
         // If process is not in current config but exists in process manager, it's been removed
         const isRemoved = !processConfig && runningProcess;
         // Convert isRunning to status string for HTML compatibility
@@ -92,7 +94,8 @@ export function registerManagementEndpoints(
       const availableProcesses = config.processManagement?.processes || {};
       const processConfig = availableProcesses[id];
       const processes = processManager.getProcessStatus();
-      const runningProcess = processes.find(p => p.id === id);
+      const processesArray = Array.isArray(processes) ? processes : [];
+      const runningProcess = processesArray.find(p => p.id === id);
       // If process is not in current config but exists in process manager, it's been removed
       const isRemoved = !processConfig && runningProcess;
       if (!processConfig && !runningProcess) {
@@ -203,7 +206,8 @@ export function registerManagementEndpoints(
       const { id } = req.params;
       const { lines = 100 } = req.query;
       const processes = processManager.getProcessStatus();
-      const process = processes.find(p => p.id === id);
+      const processesArray = Array.isArray(processes) ? processes : [];
+      const process = processesArray.find(p => p.id === id);
       if (!process || !process.logFile) {
         return res.status(404).json({ success: false, error: 'Process or log file not found' });
       }
@@ -298,7 +302,7 @@ export function registerManagementEndpoints(
   managementApp.get('/api/certificates', async (req, res) => {
     try {
       const status = proxyServer.getStatus();
-      const certificates = status.certificates || [];
+      const certificates = Array.isArray(status.certificates) ? status.certificates : [];
       
       // Get Let's Encrypt status from the proxy server
       const letsEncryptStatus = {
@@ -306,10 +310,10 @@ export function registerManagementEndpoints(
         staging: config.letsEncrypt?.staging || false,
         certDir: config.letsEncrypt?.certDir || 'Not configured',
         totalCertificates: certificates.length,
-        validCertificates: certificates.filter((cert: any) => cert.isValid).length,
-        expired: certificates.filter((cert: any) => !cert.isValid).length,
+        validCertificates: certificates.filter((cert: any) => cert && cert.isValid).length,
+        expired: certificates.filter((cert: any) => cert && !cert.isValid).length,
         expiringSoon: certificates.filter((cert: any) => {
-          if (!cert.isValid) return false;
+          if (!cert || !cert.isValid) return false;
           const expiryDate = new Date(cert.expiresAt);
           const now = new Date();
           const daysUntilExpiry = (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
