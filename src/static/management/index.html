@@ -1229,6 +1229,11 @@
       display: flex;
       gap: 0.25rem;
       flex-wrap: wrap;
+      padding: 0.5rem;
+      background: #f8f9fa;
+      border-radius: 4px;
+      border: 1px solid #e2e8f0;
+      align-items: center;
     }
 
     .process-tab-actions .btn {
@@ -1244,6 +1249,10 @@
       gap: 0.5rem;
       align-items: flex-start;
       flex: 1;
+      padding: 0.5rem;
+      background: #f8f9fa;
+      border-radius: 4px;
+      border: 1px solid #e2e8f0;
     }
 
     .process-tab-info-item {
@@ -1420,6 +1429,24 @@
       display: flex;
       align-items: center;
       gap: 1rem;
+      padding: 1rem;
+      background: #f8f9fa;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .cache-controls .btn {
+      min-width: 120px;
+      font-size: 0.9rem;
+      padding: 0.5rem 1rem;
+      height: 2.5rem;
+    }
+
+    .cache-controls .refresh-btn {
+      min-width: 140px;
+      font-size: 0.9rem;
+      padding: 0.5rem 1rem;
+      height: 2.5rem;
     }
 
     .cache-tabs {
@@ -2265,8 +2292,8 @@
 
       <div class="cache-controls">
         <button onclick="loadCacheStats()" class="refresh-btn">🔄 Refresh Stats</button>
-        <button onclick="clearAllCache()" class="btn btn-stop" style="margin-left: 10px;">🗑️ Clear All Cache</button>
-        <button onclick="cleanupExpiredCache()" class="btn btn-restart" style="margin-left: 10px;">🧹 Cleanup Expired</button>
+        <button onclick="clearAllCache()" class="btn btn-stop">🗑️ Clear All Cache</button>
+        <button onclick="cleanupExpiredCache()" class="btn btn-restart">🧹 Cleanup Expired</button>
       </div>
 
       <div class="cache-tabs">
