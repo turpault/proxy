@@ -228,3 +228,48 @@ export interface DynamicCorsProxyConfig {
     logErrors?: boolean;
   };
 }
+
+export interface MainConfig {
+  management: ManagementConfig;
+  config: ConfigReferences;
+  settings: GlobalSettings;
+  development?: DevelopmentSettings;
+}
+
+export interface ManagementConfig {
+  port: number;
+  host?: string;
+  cors?: {
+    enabled?: boolean;
+    origin?: string | string[];
+    credentials?: boolean;
+  };
+}
+
+export interface ConfigReferences {
+  proxy: string;
+  processes: string;
+}
+
+export interface GlobalSettings {
+  dataDir?: string;
+  logsDir?: string;
+  certificatesDir?: string;
+  statistics?: {
+    enabled?: boolean;
+    backupInterval?: number;
+    retentionDays?: number;
+  };
+  cache?: {
+    enabled?: boolean;
+    maxAge?: number;
+    maxSize?: string;
+    cleanupInterval?: number;
+  };
+}
+
+export interface DevelopmentSettings {
+  debug?: boolean;
+  verbose?: boolean;
+  hotReload?: boolean;
+}

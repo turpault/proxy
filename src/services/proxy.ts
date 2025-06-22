@@ -1047,6 +1047,13 @@ export class ProxyServer implements WebSocketServiceInterface {
   }
 
   /**
+   * Get the server configuration
+   */
+  getConfig(): ServerConfig {
+    return this.config;
+  }
+
+  /**
    * Check if a route has a corresponding managed process
    */
   private isRouteProcessManaged(route: ProxyRoute): boolean {

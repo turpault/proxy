@@ -2,7 +2,7 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import { parse as parseYaml } from 'yaml';
 import Joi from 'joi';
-import { ServerConfig, ProcessManagementConfig } from '../types';
+import { ServerConfig, ProcessManagementConfig, MainConfig } from '../types';
 import { logger } from '../utils/logger';
 
 // CSP Directive validation schema
@@ -133,6 +133,48 @@ const processManagementConfigSchema = Joi.object({
   }).optional(),
 });
 
+// Main Configuration schema
+const mainConfigSchema = Joi.object({
+  management: Joi.object({
+    port: Joi.number().required(),
+    host: Joi.string().default('0.0.0.0'),
+    cors: Joi.object({
+      enabled: Joi.boolean().default(true),
+      origin: Joi.alternatives().try(Joi.string(), Joi.array().items(Joi.string())).optional(),
+      credentials: Joi.boolean().default(true),
+    }).optional(),
+  }).required(),
+  config: Joi.object({
+    proxy: Joi.string().required(),
+    processes: Joi.string().required(),
+  }).required(),
+  settings: Joi.object({
+    dataDir: Joi.string().default('./data'),
+    logsDir: Joi.string().default('./logs'),
+    certificatesDir: Joi.string().default('./certificates'),
+    statistics: Joi.object({
+      enabled: Joi.boolean().default(true),
+      backupInterval: Joi.number().default(86400000),
+      retentionDays: Joi.number().default(30),
+    }).optional(),
+    cache: Joi.object({
+      enabled: Joi.boolean().default(true),
+      maxAge: Joi.number().default(86400000),
+      maxSize: Joi.string().default('100MB'),
+      cleanupInterval: Joi.number().default(3600000),
+    }).optional(),
+  }).default({
+    dataDir: './data',
+    logsDir: './logs',
+    certificatesDir: './certificates',
+  }),
+  development: Joi.object({
+    debug: Joi.boolean().default(false),
+    verbose: Joi.boolean().default(false),
+    hotReload: Joi.boolean().default(false),
+  }).optional(),
+});
+
 const configSchema = Joi.object({
   port: Joi.number().default(80),
   httpsPort: Joi.number().default(443),
@@ -200,11 +242,148 @@ const configSchema = Joi.object({
 });
 
 export class ConfigLoader {
+  static async loadMainConfig(configPath?: string): Promise<MainConfig> {
+    const configFile = configPath || process.env.MAIN_CONFIG_FILE || './config/main.yaml';
+    
+    try {
+      logger.info(`Loading main configuration from ${configFile}`);
+      
+      // Check if config file exists
+      const configExists = await fs.pathExists(configFile);
+      if (!configExists) {
+        throw new Error(`Main configuration file not found: ${configFile}`);
+      }
+
+      // Read and parse YAML config
+      const configContent = await fs.readFile(configFile, 'utf8');
+      const rawConfig = parseYaml(configContent);
+
+      // Validate main configuration
+      const { error, value } = mainConfigSchema.validate(rawConfig, {
+        abortEarly: false,
+        allowUnknown: false,
+      });
+
+      if (error) {
+        const errorMessages = error.details.map(detail => detail.message).join(', ');
+        throw new Error(`Main configuration validation failed: ${errorMessages}`);
+      }
+
+      logger.info('Main configuration loaded successfully');
+      return value as MainConfig;
+    } catch (error) {
+      logger.error(`Failed to load main configuration from ${configFile}`, error);
+      throw error;
+    }
+  }
+
+  static async loadProxyConfig(proxyConfigPath: string): Promise<ServerConfig> {
+    try {
+      logger.info(`Loading proxy configuration from ${proxyConfigPath}`);
+      
+      // Resolve the proxy config file path
+      const resolvedPath = path.isAbsolute(proxyConfigPath) 
+        ? proxyConfigPath 
+        : path.resolve(process.cwd(), proxyConfigPath);
+      
+      // Check if config file exists
+      const configExists = await fs.pathExists(resolvedPath);
+      if (!configExists) {
+        throw new Error(`Proxy configuration file not found: ${resolvedPath}`);
+      }
+
+      // Read and parse YAML config
+      const configContent = await fs.readFile(resolvedPath, 'utf8');
+      const rawConfig = parseYaml(configContent);
+
+      // Merge with environment variables
+      const config = this.mergeWithEnv(rawConfig);
+
+      // Check for unresolved environment variables in OAuth2 configs
+      this.validateOAuth2EnvironmentVariables(config);
+
+      // Validate configuration
+      const { error, value } = configSchema.validate(config, {
+        abortEarly: false,
+        allowUnknown: false,
+      });
+
+      if (error) {
+        const errorMessages = error.details.map(detail => detail.message).join(', ');
+        throw new Error(`Proxy configuration validation failed: ${errorMessages}`);
+      }
+
+      logger.info('Proxy configuration loaded successfully', {
+        routes: value.routes.length,
+        letsEncryptStaging: value.letsEncrypt.staging,
+      });
+
+      return value as ServerConfig;
+    } catch (error) {
+      logger.error(`Failed to load proxy configuration from ${proxyConfigPath}`, error);
+      throw error;
+    }
+  }
+
+  static async loadProcessConfig(processConfigPath: string): Promise<ProcessManagementConfig> {
+    try {
+      logger.info(`Loading process configuration from ${processConfigPath}`);
+      
+      // Resolve the process config file path
+      const resolvedPath = path.isAbsolute(processConfigPath) 
+        ? processConfigPath 
+        : path.resolve(process.cwd(), processConfigPath);
+      
+      // Check if config file exists
+      const configExists = await fs.pathExists(resolvedPath);
+      if (!configExists) {
+        throw new Error(`Process configuration file not found: ${resolvedPath}`);
+      }
+
+      // Read and parse YAML config
+      const configContent = await fs.readFile(resolvedPath, 'utf8');
+      const processConfig = parseYaml(configContent);
+      
+      // Validate process management configuration
+      const { error: processError } = processManagementConfigSchema.validate(processConfig);
+      if (processError) {
+        throw new Error(`Process management configuration validation failed: ${processError.message}`);
+      }
+      
+      logger.info(`Loaded process management configuration from ${resolvedPath}`);
+      return processConfig as ProcessManagementConfig;
+    } catch (error) {
+      logger.error(`Failed to load process configuration from ${processConfigPath}`, error);
+      throw error;
+    }
+  }
+
   static async load(configPath?: string): Promise<ServerConfig> {
+    // Try to load main config first, fall back to legacy single-file config
+    try {
+      const mainConfig = await this.loadMainConfig();
+      const proxyConfig = await this.loadProxyConfig(mainConfig.config.proxy);
+      
+      // Merge process management config if it exists
+      try {
+        const processConfig = await this.loadProcessConfig(mainConfig.config.processes);
+        proxyConfig.processManagement = processConfig;
+      } catch (error) {
+        logger.warn('Failed to load process management configuration, continuing without it');
+      }
+      
+      return proxyConfig;
+    } catch (error) {
+      logger.info('Main configuration not found, falling back to legacy single-file configuration');
+      return this.loadLegacyConfig(configPath);
+    }
+  }
+
+  private static async loadLegacyConfig(configPath?: string): Promise<ServerConfig> {
     const configFile = configPath || process.env.CONFIG_FILE || './config/proxy.yaml';
     
     try {
-      logger.info(`Loading configuration from ${configFile}`);
+      logger.info(`Loading legacy configuration from ${configFile}`);
       
       // Check if config file exists
       const configExists = await fs.pathExists(configFile);
