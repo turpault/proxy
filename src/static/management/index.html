@@ -2027,6 +2027,35 @@
       text-align: center;
       margin-bottom: 1rem;
     }
+
+    .route-group {
+      margin-bottom: 2.5rem;
+    }
+    .route-group-title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #4a5568;
+      margin-bottom: 1rem;
+      border-left: 4px solid #667eea;
+      padding-left: 0.75rem;
+      letter-spacing: 0.5px;
+    }
+    .route-group-cards {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+    }
+    @media (max-width: 768px) {
+      .route-group-cards {
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      .route-group-title {
+        font-size: 1.1rem;
+        margin-bottom: 0.5rem;
+        padding-left: 0.5rem;
+      }
+    }
   </style>
 </head>
 
@@ -3259,48 +3288,64 @@
       // Update route statistics
       const routesContainer = document.getElementById('routes-container');
       if (data.routes && Array.isArray(data.routes) && data.routes.length > 0) {
-        const routesHtml = data.routes.map(route => {
-          const topCountriesHtml = route.topCountries && route.topCountries.length > 0 
-            ? route.topCountries.slice(0, 3).map(country => 
-                `<span class="country-badge">${country.country} (${country.count})</span>`
-              ).join('')
-            : '<span class="no-data">No country data</span>';
-          
-          const methodsHtml = route.methods && route.methods.length > 0
-            ? route.methods.map(method => `<span class="method-badge">${method}</span>`).join('')
-            : '<span class="no-data">No method data</span>';
-          
+        // Group routes by name
+        const groups = {};
+        data.routes.forEach(route => {
+          const groupName = route.name || 'Other';
+          if (!groups[groupName]) groups[groupName] = [];
+          groups[groupName].push(route);
+        });
+        
+        const groupHtml = Object.entries(groups).map(([name, routes]) => {
+          const cardsHtml = routes.map(route => {
+            const topCountriesHtml = route.topCountries && route.topCountries.length > 0 
+              ? route.topCountries.slice(0, 3).map(country => 
+                  `<span class="country-badge">${country.country} (${country.count})</span>`
+                ).join('')
+              : '<span class="no-data">No country data</span>';
+            
+            const methodsHtml = route.methods && route.methods.length > 0
+              ? route.methods.map(method => `<span class="method-badge">${method}</span>`).join('')
+              : '<span class="no-data">No method data</span>';
+            
+            return `
+              <div class="route-card">
+                <div class="route-header">
+                  <div class="route-info">
+                    <div class="route-domain">${route.domain || 'Unknown'}</div>
+                    <div class="route-target">${route.target || 'Unknown'}</div>
+                  </div>
+                  <div class="route-stats">
+                    <div class="route-requests">${formatNumber(route.requests)} requests</div>
+                    <div class="route-response-time">${route.avgResponseTime > 0 ? route.avgResponseTime.toFixed(2) + 'ms' : 'N/A'}</div>
+                  </div>
+                </div>
+                <div class="route-details">
+                  <div class="route-detail">
+                    <div class="route-detail-label">Top Countries:</div>
+                    <div class="route-detail-value">${topCountriesHtml}</div>
+                  </div>
+                  <div class="route-detail">
+                    <div class="route-detail-label">Methods:</div>
+                    <div class="route-detail-value">${methodsHtml}</div>
+                  </div>
+                  <div class="route-detail">
+                    <div class="route-detail-label">Unique IPs:</div>
+                    <div class="route-detail-value">${route.uniqueIPs || 0}</div>
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('');
           return `
-            <div class="route-card">
-              <div class="route-header">
-                <div class="route-info">
-                  <div class="route-domain">${route.domain || 'Unknown'}</div>
-                  <div class="route-target">${route.target || 'Unknown'}</div>
-                </div>
-                <div class="route-stats">
-                  <div class="route-requests">${formatNumber(route.requests)} requests</div>
-                  <div class="route-response-time">${route.avgResponseTime > 0 ? route.avgResponseTime.toFixed(2) + 'ms' : 'N/A'}</div>
-                </div>
-              </div>
-              <div class="route-details">
-                <div class="route-detail">
-                  <div class="route-detail-label">Top Countries:</div>
-                  <div class="route-detail-value">${topCountriesHtml}</div>
-                </div>
-                <div class="route-detail">
-                  <div class="route-detail-label">Methods:</div>
-                  <div class="route-detail-value">${methodsHtml}</div>
-                </div>
-                <div class="route-detail">
-                  <div class="route-detail-label">Unique IPs:</div>
-                  <div class="route-detail-value">${route.uniqueIPs || 0}</div>
-                </div>
-              </div>
+            <div class="route-group">
+              <h3 class="route-group-title">${name}</h3>
+              <div class="route-group-cards">${cardsHtml}</div>
             </div>
           `;
         }).join('');
         
-        routesContainer.innerHTML = routesHtml;
+        routesContainer.innerHTML = groupHtml;
       } else {
         routesContainer.innerHTML = '<div class="no-data">No route statistics available for the selected time period</div>';
       }
