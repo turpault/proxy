@@ -9,17 +9,16 @@ import mime from 'mime-types';
 import * as path from 'path';
 import { CertificateInfo, CSPConfig, CSPDirectives, GeolocationFilter, ProcessConfig, ProcessManagementConfig, ProxyRoute, ServerConfig } from '../types';
 import { logger } from '../utils/logger';
+import { cacheService } from './cache';
+import { ClassicProxy } from './classic-proxy';
+import { CorsProxy } from './cors-proxy';
 import { GeolocationInfo, geolocationService } from './geolocation';
 import { LetsEncryptService } from './letsencrypt';
+import { registerManagementEndpoints } from './management';
 import { OAuth2Service } from './oauth2';
 import { processManager } from './process-manager';
 import { statisticsService } from './statistics';
 import { WebSocketService, WebSocketServiceInterface } from './websocket';
-import { registerManagementEndpoints } from './management';
-import { inspect } from 'util';
-import { cacheService } from './cache';
-import { ClassicProxy } from './classic-proxy';
-import { CorsProxy } from './cors-proxy';
 
 export class ProxyServer implements WebSocketServiceInterface {
   private app: express.Application;

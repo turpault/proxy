@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { ProxyServer } from './services/proxy';
+import { ProxyServer } from './services/proxy-server';
 import { ConfigLoader } from './config/loader';
 import { logger } from './utils/logger';
 import * as fs from 'fs-extra';
@@ -16,6 +16,7 @@ async function startServer(): Promise<ProxyServer> {
   
   // Create and start proxy server
   const server = new ProxyServer(config);
+  await server.initialize();
   await server.start();
   
   logger.info('Proxy server started successfully');
