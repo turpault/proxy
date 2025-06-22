@@ -1069,21 +1069,39 @@ export class ProcessManager {
     isRemoved: boolean;
   }> {
     return Array.from(this.processes.values()).map(proc => {
-      // Check if the process is actually running by verifying the PID
+      // Check if the process is actually running
       let actualIsRunning = proc.isRunning;
+      let actualPid = proc.process?.pid;
+
       if (proc.process?.pid) {
+        // For spawned processes, check if the PID is still running
         actualIsRunning = this.isPidRunning(proc.process.pid);
-      } else if (proc.isReconnected && proc.startTime) {
-        // For reconnected processes, check if the PID from the PID file is still running
-        // This is a fallback since we don't store the PID in the process object for reconnected processes
-        actualIsRunning = true; // Assume running if reconnected and not explicitly stopped
+        actualPid = proc.process.pid;
+      } else if (proc.isReconnected && !proc.isStopped) {
+        // For reconnected processes, read the PID from the PID file and check if it's running
+        try {
+          const pidContent = fs.readFileSync(proc.pidFilePath, 'utf8');
+          const pid = parseInt(pidContent.trim(), 10);
+          if (!isNaN(pid)) {
+            actualPid = pid;
+            actualIsRunning = this.isPidRunning(pid);
+          } else {
+            actualIsRunning = false;
+          }
+        } catch (error) {
+          // If we can't read the PID file, assume the process is not running
+          actualIsRunning = false;
+        }
+      } else if (proc.isStopped) {
+        // If explicitly stopped, mark as not running
+        actualIsRunning = false;
       }
       
       return {
         id: proc.id,
         name: proc.config.name || `proxy-${proc.id}`,
         isRunning: actualIsRunning,
-        pid: proc.process?.pid,
+        pid: actualPid,
         pidFile: proc.pidFilePath,
         logFile: proc.logFilePath,
         isReconnected: proc.isReconnected,
