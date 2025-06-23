@@ -1,6 +1,4 @@
 // Configuration Editor Functions
-// Note: currentConfigType is declared in the main HTML file, so we don't redeclare it here
-let currentConfigContent = '';
 
 function switchConfigTab(type) {
   document.querySelectorAll('.config-tab').forEach(tab => tab.classList.remove('active'));
