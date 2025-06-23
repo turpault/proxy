@@ -350,20 +350,32 @@ export class OAuth2Service {
         
         if (sessionId && this.isAuthenticated(sessionId)) {
           const session = this.getSession(sessionId);
+          const now = new Date();
+          const isExpired = session?.expiresAt && session.expiresAt < now;
+          
           return res.json({
             authenticated: true,
             session: {
+              accessToken: session?.accessToken,
               tokenType: session?.tokenType,
               scope: session?.scope,
-              expiresAt: session?.expiresAt,
-              // Don't include sensitive tokens in response
+              expiresAt: session?.expiresAt?.toISOString(),
+              isExpired: isExpired,
+              expiresIn: session?.expiresAt ? Math.max(0, session.expiresAt.getTime() - now.getTime()) : null,
+              sessionId: sessionId
             },
-            provider: config.provider
+            provider: config.provider,
+            subscriptionKey: config.subscriptionKey,
+            subscriptionKeyHeader: config.subscriptionKeyHeader,
+            timestamp: now.toISOString()
           });
         } else {
           return res.json({
             authenticated: false,
-            provider: config.provider
+            provider: config.provider,
+            subscriptionKey: config.subscriptionKey,
+            subscriptionKeyHeader: config.subscriptionKeyHeader,
+            timestamp: new Date().toISOString()
           });
         }
       }

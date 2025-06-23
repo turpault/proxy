@@ -33,7 +33,10 @@ export class ProxyServer implements WebSocketServiceInterface {
     this.mainConfig = mainConfig;
     this.app = express();
     this.managementApp = express();
-    this.proxyRoutes = new ProxyRoutes();
+    
+    // Get temp directory from main config
+    const tempDir = mainConfig?.settings?.tempDir;
+    this.proxyRoutes = new ProxyRoutes(tempDir);
     this.proxyMiddleware = new ProxyMiddleware();
     this.proxyCertificates = new ProxyCertificates(config);
     this.proxyProcesses = new ProxyProcesses(config);

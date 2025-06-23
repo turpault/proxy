@@ -19,6 +19,7 @@ export interface ConversionResult {
  * @param format - The desired output format ('jpeg' or 'png')
  * @param width - Optional width for the output image
  * @param height - Optional height for the output image
+ * @param tempDir - Optional custom temp directory (defaults to system temp directory)
  * @returns Promise<ConversionResult> - The converted image data and content type
  */
 export async function convertToImage(
@@ -26,7 +27,8 @@ export async function convertToImage(
   contentType: string,
   format?: string,
   width?: string | number,
-  height?: string | number
+  height?: string | number,
+  tempDir?: string
 ): Promise<ConversionResult> {
   // Check if input is PDF
   if (!contentType.includes('application/pdf')) {
@@ -62,14 +64,17 @@ export async function convertToImage(
     const { spawn } = await import('child_process');
     const { promisify } = await import('util');
 
-    const tempDir = os.tmpdir();
+    // Use provided temp directory or fall back to system temp directory
+    const workingTempDir = tempDir || os.tmpdir();
     const timestamp = Date.now();
-    const tempPdfPath = path.join(tempDir, `temp_${timestamp}.pdf`);
-    const tempImagePrefix = path.join(tempDir, `page_${timestamp}`);
-    const outputImagePath = path.join(tempDir, `composite_${timestamp}.${outputFormat}`);
+    // create a random temporary
+    const tempPdfPath = path.join(workingTempDir, `temp_${timestamp}.pdf`);
+    const tempImagePrefix = path.join(workingTempDir, `page_${timestamp}`);
+    const outputImagePath = path.join(workingTempDir, `composite_${timestamp}.${outputFormat}`);
 
     try {
       // Write PDF to temporary file
+      logger.info(`[PDFTOPPM] Writing PDF to temporary file: ${tempPdfPath}, ${pdfBuffer.length} bytes`);
       await fs.writeFile(tempPdfPath, pdfBuffer);
 
       // Step 1: Convert PDF to individual page images using pdftoppm
@@ -89,6 +94,7 @@ export async function convertToImage(
 
       // Execute pdftoppm
       const pdftoppmResult = await new Promise<void>((resolve, reject) => {
+        logger.info(`[PDFTOPPM] Executing pdftoppm with args: ${pdftoppmArgs.join(' ')}`);
         const pdftoppmProcess = spawn('pdftoppm', pdftoppmArgs);
         
         let stderr = '';
@@ -164,6 +170,7 @@ export async function convertToImage(
       const imageBase64 = imageBuffer.toString('base64');
 
       // Clean up temporary files
+      /*
       try {
         await fs.unlink(tempPdfPath);
         for (const pageFile of pageFiles) {
@@ -173,6 +180,7 @@ export async function convertToImage(
       } catch (cleanupError) {
         logger.warn('Failed to clean up temporary files', { error: cleanupError });
       }
+      */
 
       // Return the converted image
       return {
@@ -221,4 +229,4 @@ export function isConversionSupported(contentType: string, format?: string): boo
 
   const outputFormat = format?.toLowerCase();
   return outputFormat === 'jpeg' || outputFormat === 'png';
-} 
+}

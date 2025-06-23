@@ -302,3 +302,21 @@ export interface RouteStats {
   uniqueIPs: number;
   methods: string[];
 }
+
+// Type for /oauth/session response
+export interface OAuthSessionResponse {
+  authenticated: boolean;
+  provider: string;
+  timestamp: string;
+  subscriptionKey?: string;
+  subscriptionKeyHeader?: string;
+  session?: {
+    accessToken: string;
+    tokenType?: string;
+    scope?: string;
+    expiresAt?: string;
+    isExpired?: boolean;
+    expiresIn?: number | null;
+    sessionId?: string;
+  };
+}

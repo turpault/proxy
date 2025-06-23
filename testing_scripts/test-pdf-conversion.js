@@ -1,5 +1,9 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Test the PDF conversion functionality
 async function testPdfConversion() {
@@ -7,7 +11,7 @@ async function testPdfConversion() {
 
   try {
     // Create a simple test PDF (this is just a placeholder - in real usage you'd have actual PDF content)
-    const testPdfContent = '%PDF-1.4\n1 0 obj\n<<\n/Type /Catalog\n/Pages 2 0 R\n>>\nendobj\n2 0 obj\n<<\n/Type /Pages\n/Kids [3 0 R 4 0 R]\n/Count 2\n>>\nendobj\n3 0 obj\n<<\n/Type /Page\n/Parent 2 0 R\n/MediaBox [0 0 612 792]\n/Contents 5 0 R\n>>\nendobj\n4 0 obj\n<<\n/Type /Page\n/Parent 2 0 R\n/MediaBox [0 0 612 792]\n/Contents 6 0 R\n>>\nendobj\n5 0 obj\n<<\n/Length 44\n>>\nstream\nBT\n/F1 12 Tf\n72 720 Td\n(Page 1) Tj\nET\nendstream\nendobj\n6 0 obj\n<<\n/Length 44\n>>\nstream\nBT\n/F1 12 Tf\n72 720 Td\n(Page 2) Tj\nET\nendstream\nendobj\nxref\n0 7\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000172 00000 n \n0000000261 00000 n \n0000000320 00000 n \ntrailer\n<<\n/Size 7\n/Root 1 0 R\n>>\nstartxref\n413\n%%EOF';
+    const testPdfContent = '%PDF-1.4\n1 0 obj\n<<\n/Type /Catalog\n/Pages 2 0 R\n>>\nendobj\n2 0 obj\n<<\n/Type /Pages\n/Kids [3 0 R 4 0 R]\n/Count 2\n>>\nendobj\n3 0 obj\n<<\n/Type /Page\n/Parent 2 0 R\n/MediaBox [0 0 612 792]\n/Contents 5 0 R\n>>\nendobj\n4 0 obj\n<<\n/Type /Page\n/Parent 2 0 R\n/MediaBox [0 612 792]\n/Contents 6 0 R\n>>\nendobj\n5 0 obj\n<<\n/Length 44\n>>\nstream\nBT\n/F1 12 Tf\n72 720 Td\n(Page 1) Tj\nET\nendstream\nendobj\n6 0 obj\n<<\n/Length 44\n>>\nstream\nBT\n/F1 12 Tf\n72 720 Td\n(Page 2) Tj\nET\nendstream\nendobj\nxref\n0 7\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000172 00000 n \n0000000261 00000 n \n0000000320 00000 n \ntrailer\n<<\n/Size 7\n/Root 1 0 R\n>>\nstartxref\n413\n%%EOF';
 
     // Import the conversion function
     const { convertToImage, isConversionSupported } = await import('../src/utils/pdf-converter.ts');
@@ -60,7 +64,7 @@ async function testPdfConversion() {
       console.log('Content type:', result.contentType);
       console.log('Body length:', result.body.length);
 
-      // Save the converted image for inspection
+      // Save the converted PNG image for inspection
       const outputPath = path.join(__dirname, 'converted-test.png');
       fs.writeFileSync(outputPath, Buffer.from(result.body, 'base64'));
       console.log('Converted PNG image saved to:', outputPath);

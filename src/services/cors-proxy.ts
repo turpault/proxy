@@ -6,6 +6,13 @@ import { CORSConfig } from '../types';
 import { convertToImage } from '../utils/pdf-converter';
 
 export class CorsProxy extends BaseProxy {
+  private tempDir?: string;
+
+  constructor(tempDir?: string) {
+    super();
+    this.tempDir = tempDir;
+  }
+
   async handleProxyRequest(
     req: express.Request,
     res: express.Response,
@@ -84,16 +91,24 @@ export class CorsProxy extends BaseProxy {
 
           // if the request is a pdf conversion, convert the body to a pdf
           if (contentType.includes('application/pdf') && req.query.convert) {
+            logger.info(`[CORS PROXY] Converting PDF to image for ${routeIdentifier} ${req.query.convert} ${req.query.width} ${req.query.height}`);
+            try {
             const { body:newBody, contentType:newContentType } = await convertToImage(
               body, 
               contentType, 
               req.query.convert as string, 
               req.query.width as string, 
-              req.query.height as string
+              req.query.height as string,
+              this.tempDir
             );
             body = newBody;
             contentType = newContentType;
+          } catch (error) {
+            logger.error(`[CORS PROXY] Error converting PDF to image for ${routeIdentifier}`, error);
+            res.status(500).send("Error converting PDF to image");
+            return;
           }
+        }
           
           // Cache the response with user information
           await cacheService.set(target, req.method, {
@@ -105,7 +120,12 @@ export class CorsProxy extends BaseProxy {
           
           // Send the response as binary
           res.set('Content-Type', contentType);
-          res.send(Buffer.from(responseBuffer));
+          // If we converted the PDF, send the converted image data, otherwise send the original buffer
+          if (contentType.includes('application/pdf') && req.query.convert) {
+            res.send(Buffer.from(body, 'base64'));
+          } else {
+            res.send(Buffer.from(responseBuffer));
+          }
         } catch (cacheError) {
           logger.warn('Failed to cache response, falling back to streaming', { target, error: cacheError });
           // Fall back to streaming if caching fails

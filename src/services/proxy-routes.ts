@@ -12,9 +12,9 @@ export class ProxyRoutes {
   private corsProxy: CorsProxy;
   private oauth2Service: OAuth2Service;
 
-  constructor() {
+  constructor(tempDir?: string) {
     this.classicProxy = new ClassicProxy();
-    this.corsProxy = new CorsProxy();
+    this.corsProxy = new CorsProxy(tempDir);
     this.oauth2Service = new OAuth2Service();
   }
 
