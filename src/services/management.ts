@@ -49,6 +49,42 @@ export function registerManagementEndpoints(
     }
   };
 
+  // Health endpoint for debugging
+  managementApp.get('/health', (req, res) => {
+    try {
+      const certificates = proxyServer.proxyCertificates?.getAllCertificates() || new Map();
+      const validCertificates = Array.from(certificates.values()).filter((cert: any) => cert.isValid);
+      
+      res.json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        certificates: {
+          total: certificates.size,
+          valid: validCertificates.length,
+          domains: Array.from(certificates.keys()),
+          validDomains: validCertificates.map((cert: any) => cert.domain),
+        },
+        servers: {
+          http: !!proxyServer.httpServer,
+          https: !!proxyServer.httpsServer,
+          management: !!proxyServer.managementServer,
+        },
+        config: {
+          httpPort: config.port,
+          httpsPort: config.httpsPort,
+          routes: config.routes.length,
+        },
+      });
+    } catch (error) {
+      logger.error('Health check failed', error);
+      res.status(500).json({
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString(),
+      });
+    }
+  });
+
   // API endpoints for process management
   managementApp.get('/api/processes', (req, res) => {
     try {

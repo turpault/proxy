@@ -947,6 +947,7 @@ export class ProxyServer implements WebSocketServiceInterface {
       // Use SNI (Server Name Indication) to serve different certificates per domain
       const httpsOptions: https.ServerOptions = {
         SNICallback: (servername, callback) => {
+          logger.debug(`SNI request: ${servername}`);
           const certInfo = this.certificates.get(servername);
           if (certInfo && certInfo.isValid) {
             try {

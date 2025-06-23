@@ -106,11 +106,17 @@ export class ProxyServer implements WebSocketServiceInterface {
       logger.info(`HTTP server started on port ${this.config.port}`);
     });
     
-    // Start HTTPS server
-    this.httpsServer = await this.proxyCertificates.startHttpsServer(this.app);
-    this.httpsServer.listen(this.config.httpsPort, () => {
-      logger.info(`HTTPS server started on port ${this.config.httpsPort}`);
-    });
+    // Start HTTPS server only if we have valid certificates
+    try {
+      this.httpsServer = await this.proxyCertificates.startHttpsServer(this.app);
+      this.httpsServer.listen(this.config.httpsPort, () => {
+        logger.info(`HTTPS server started on port ${this.config.httpsPort}`);
+      });
+    } catch (error) {
+      logger.warn('No valid certificates available, HTTPS server will not start');
+      logger.info('HTTPS server requires valid certificates to be loaded before it can start');
+      this.httpsServer = null;
+    }
     
     // Start management server only if not disabled
     if (!disableManagementServer) {
