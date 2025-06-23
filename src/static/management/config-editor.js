@@ -1,5 +1,5 @@
 // Configuration Editor Functions
-let currentConfigType = 'proxy';
+// Note: currentConfigType is declared in the main HTML file, so we don't redeclare it here
 let currentConfigContent = '';
 
 function switchConfigTab(type) {
@@ -9,7 +9,10 @@ function switchConfigTab(type) {
   document.getElementById(`config-tab-${type}`).classList.add('active');
   document.getElementById(`config-content-${type}`).classList.add('active');
 
-  currentConfigType = type;
+  // Update the global currentConfigType variable
+  if (typeof currentConfigType !== 'undefined') {
+    currentConfigType = type;
+  }
   loadConfig(type);
 }
 
@@ -180,12 +183,5 @@ window.onclick = function (event) {
   }
 }
 
-// Override showTab function to handle config tab
-const originalShowTab = showTab;
-showTab = function (tab, pushState = true) {
-  originalShowTab(tab, pushState);
-
-  if (tab === 'config') {
-    loadConfig(currentConfigType);
-  }
-}; 
+// Note: showTab override is handled in the main HTML file
+// This ensures proper loading order and avoids reference errors 

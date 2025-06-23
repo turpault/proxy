@@ -2938,6 +2938,11 @@
         loadCertificates();
       } else if (tab === 'cache') {
         loadCacheStats();
+      } else if (tab === 'config') {
+        // Load configuration when config tab is selected
+        if (typeof loadConfig === 'function' && typeof currentConfigType !== 'undefined') {
+          loadConfig(currentConfigType);
+        }
       }
 
       // Update history state
