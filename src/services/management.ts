@@ -29,13 +29,6 @@ export function registerManagementEndpoints(
   // Serve static files for the management interface
   managementApp.use('/', express.static(path.join(__dirname, '../static/management')));
 
-  // Create HTTP server for WebSocket support
-  const http = require('http');
-  const server = http.createServer(managementApp);
-  
-  // Store the server reference for later use
-  (managementApp as any).server = server;
-  
   // Store WebSocket service reference for later initialization
   (managementApp as any).webSocketService = new WebSocketService(proxyServer);
   
@@ -54,9 +47,9 @@ export function registerManagementEndpoints(
   });
   
   // Initialize WebSocket after server starts listening
-  (managementApp as any).initializeWebSocket = () => {
+  (managementApp as any).initializeWebSocket = (httpServer: any) => {
     try {
-      (managementApp as any).webSocketService.initialize(server);
+      (managementApp as any).webSocketService.initialize(httpServer);
       logger.info('WebSocket service initialized for management console');
     } catch (error) {
       logger.error('Failed to initialize WebSocket service', error);

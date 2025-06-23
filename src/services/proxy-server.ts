@@ -121,7 +121,7 @@ export class ProxyServer implements WebSocketServiceInterface {
         
         // Initialize WebSocket service after server starts listening
         if ((this.managementApp as any).initializeWebSocket) {
-          (this.managementApp as any).initializeWebSocket();
+          (this.managementApp as any).initializeWebSocket(this.managementServer);
         }
       });
     }
@@ -196,7 +196,67 @@ export class ProxyServer implements WebSocketServiceInterface {
 
   // WebSocket interface methods
   async getProcesses(): Promise<any[]> {
-    return this.proxyProcesses.getProcesses();
+    const processes = processManager.getProcessStatus();
+    const availableProcesses = this.config.processManagement?.processes || {};
+    // Ensure processes is an array
+    const processesArray = Array.isArray(processes) ? processes : [];
+    // Create a set of all process IDs (both configured and managed)
+    const allProcessIds = new Set([
+      ...Object.keys(availableProcesses),
+      ...processesArray.map(p => p.id)
+    ]);
+    
+    return Array.from(allProcessIds).map(processId => {
+      const processConfig = availableProcesses[processId];
+      const runningProcess = processesArray.find(p => p.id === processId);
+      // If process is not in current config but exists in process manager, it's been removed
+      const isRemoved = !processConfig && runningProcess;
+      // Convert isRunning to status string for HTML compatibility
+      let status = 'stopped';
+      if (runningProcess?.isRunning) {
+        status = 'running';
+      } else if (runningProcess?.isStopped) {
+        status = 'stopped';
+      } else if (runningProcess?.isReconnected) {
+        status = 'starting';
+      }
+      
+      // Get scheduler information
+      const scheduler = processManager.getScheduler();
+      const scheduledProcess = scheduler.getScheduledProcess(processId);
+      
+      return {
+        id: processId,
+        name: processConfig?.name || runningProcess?.name || `proxy-${processId}`,
+        description: `Process ${processId}`,
+        status: status,
+        enabled: processConfig?.enabled ?? true,
+        command: processConfig?.command,
+        args: processConfig?.args,
+        cwd: processConfig?.cwd,
+        env: processConfig?.env,
+        isRunning: runningProcess?.isRunning || false,
+        pid: runningProcess?.pid,
+        restartCount: runningProcess?.restartCount || 0,
+        startTime: runningProcess?.startTime,
+        lastRestartTime: runningProcess?.lastRestartTime,
+        uptime: runningProcess?.uptime,
+        memoryUsage: 'N/A',
+        healthCheckFailures: runningProcess?.healthCheckFailures || 0,
+        pidFile: runningProcess?.pidFile,
+        logFile: runningProcess?.logFile,
+        isReconnected: runningProcess?.isReconnected || false,
+        isStopped: runningProcess?.isStopped || false,
+        isRemoved: isRemoved || runningProcess?.isRemoved || false,
+        schedule: processConfig?.schedule,
+        scheduledInfo: scheduledProcess ? {
+          lastRun: scheduledProcess.lastRun,
+          nextRun: scheduledProcess.nextRun,
+          runCount: scheduledProcess.runCount,
+          lastError: scheduledProcess.lastError
+        } : null
+      };
+    });
   }
 
   async getStatusData(): Promise<any> {
