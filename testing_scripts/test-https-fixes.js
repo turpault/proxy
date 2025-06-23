@@ -82,7 +82,7 @@ async function testHttpsFixes() {
     // Test 4: Check if proxy server is running
     console.log('\n4. Checking proxy server status...');
     try {
-      const { stdout } = await execAsync('curl -s http://localhost:4481/health');
+      const { stdout } = await execAsync('curl -s http://localhost:5480/health');
       const health = JSON.parse(stdout);
       console.log('✅ Management server is running');
       console.log('Health status:', JSON.stringify(health, null, 2));

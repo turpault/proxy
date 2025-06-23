@@ -39,6 +39,20 @@ export function registerManagementEndpoints(
   // Store WebSocket service reference for later initialization
   (managementApp as any).webSocketService = new WebSocketService(proxyServer);
   
+  // Set up process update callback for WebSocket broadcasts
+  processManager.setProcessUpdateCallback(async () => {
+    try {
+      const processes = await proxyServer.getProcesses();
+      (managementApp as any).webSocketService.broadcast({
+        type: 'processes',
+        data: processes,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error('Error broadcasting process updates', error);
+    }
+  });
+  
   // Initialize WebSocket after server starts listening
   (managementApp as any).initializeWebSocket = () => {
     try {

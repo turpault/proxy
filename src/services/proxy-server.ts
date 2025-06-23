@@ -5,7 +5,7 @@ import { ServerConfig, MainConfig } from '../types';
 import { logger } from '../utils/logger';
 import { cacheService } from './cache';
 import { getStatisticsService } from './statistics';
-import { WebSocketService, WebSocketServiceInterface } from './websocket';
+import { WebSocketServiceInterface } from './websocket';
 import { ProxyRoutes } from './proxy-routes';
 import { ProxyMiddleware } from './proxy-middleware';
 import { ProxyCertificates } from './proxy-certificates';
@@ -22,7 +22,6 @@ export class ProxyServer implements WebSocketServiceInterface {
   private managementServer: http.Server | null = null;
   private config: ServerConfig;
   private mainConfig?: MainConfig;
-  private webSocketService: WebSocketService;
   private proxyRoutes: ProxyRoutes;
   private proxyMiddleware: ProxyMiddleware;
   private proxyCertificates: ProxyCertificates;
@@ -34,7 +33,6 @@ export class ProxyServer implements WebSocketServiceInterface {
     this.mainConfig = mainConfig;
     this.app = express();
     this.managementApp = express();
-    this.webSocketService = new WebSocketService(this);
     this.proxyRoutes = new ProxyRoutes();
     this.proxyMiddleware = new ProxyMiddleware();
     this.proxyCertificates = new ProxyCertificates(config);
@@ -44,11 +42,6 @@ export class ProxyServer implements WebSocketServiceInterface {
     const reportDir = mainConfig?.settings?.logsDir ? path.join(mainConfig.settings.logsDir, 'statistics') : undefined;
     const dataDir = mainConfig?.settings?.statsDir;
     this.statisticsService = getStatisticsService(reportDir, dataDir);
-    
-    // Set up process update callback for WebSocket broadcasts
-    processManager.setProcessUpdateCallback(() => {
-      this.broadcastProcessUpdates();
-    });
     
     this.setupMiddleware();
     this.setupRoutes();
@@ -203,19 +196,6 @@ export class ProxyServer implements WebSocketServiceInterface {
 
   async getProcessLogs(processId: string, lines: number | string): Promise<string[]> {
     return this.proxyProcesses.getProcessLogs(processId, lines);
-  }
-
-  private async broadcastProcessUpdates(): Promise<void> {
-    try {
-      const processes = await this.getProcesses();
-      this.webSocketService.broadcast({
-        type: 'processes',
-        data: processes,
-        timestamp: new Date().toISOString()
-      });
-    } catch (error) {
-      logger.error('Error broadcasting process updates', error);
-    }
   }
 
   // Methods for management interface
