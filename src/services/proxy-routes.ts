@@ -4,14 +4,17 @@ import { logger } from '../utils/logger';
 import { ClassicProxy } from './classic-proxy';
 import { CorsProxy } from './cors-proxy';
 import { ProxyRequestConfig } from './base-proxy';
+import { OAuth2Service } from './oauth2';
 
 export class ProxyRoutes {
   private classicProxy: ClassicProxy;
   private corsProxy: CorsProxy;
+  private oauth2Service: OAuth2Service;
 
   constructor() {
     this.classicProxy = new ClassicProxy();
     this.corsProxy = new CorsProxy();
+    this.oauth2Service = new OAuth2Service();
   }
 
   setupRoutes(app: express.Application, config: ServerConfig): void {
@@ -68,6 +71,14 @@ export class ProxyRoutes {
       return;
     }
 
+    // Apply OAuth2 middleware if configured
+    if (route.oauth2 && route.oauth2.enabled) {
+      const oauthMiddleware = this.oauth2Service.createMiddleware(route.oauth2, route.publicPaths || []);
+      app.use(routePath, oauthMiddleware);
+      logger.info(`OAuth2 middleware applied to static route: ${routePath}`);
+    }
+
+    // Set up static file serving
     app.use(routePath, express.static(route.staticPath));
     logger.info(`Static route configured: ${routePath} -> ${route.staticPath}`);
   }

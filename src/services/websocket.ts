@@ -36,12 +36,6 @@ export class WebSocketService {
         return;
       }
 
-      // Check if server is listening
-      if (!server.listening) {
-        logger.error('WebSocket initialization failed: server is not listening');
-        return;
-      }
-
       this.wss = new WebSocketServer({ 
         server,
         path: '/ws'

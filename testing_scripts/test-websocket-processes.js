@@ -2,71 +2,49 @@
 
 import WebSocket from 'ws';
 
-async function testWebSocketProcesses() {
-  console.log('🧪 Testing WebSocket process updates...\n');
+console.log('Testing WebSocket connection to management console...');
 
-  const wsUrl = 'ws://localhost:5480/ws';
-  console.log(`Connecting to WebSocket: ${wsUrl}`);
+const ws = new WebSocket('ws://localhost:4481/ws');
 
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(wsUrl);
+ws.on('open', () => {
+  console.log('✅ WebSocket connected successfully');
+});
 
-    ws.on('open', () => {
-      console.log('✅ WebSocket connected successfully');
+ws.on('message', (data) => {
+  try {
+    const message = JSON.parse(data.toString());
+    console.log('📨 Received WebSocket message:');
+    console.log('  Type:', message.type);
+    console.log('  Timestamp:', message.timestamp);
 
-      // Wait a bit for any initial messages
-      setTimeout(() => {
-        console.log('📡 WebSocket connection established, waiting for process updates...');
-        console.log('💡 Try refreshing the management console or restarting a process to see updates');
+    if (message.type === 'processes') {
+      console.log('  📊 Processes data:');
+      console.log('    Count:', message.data.length);
+      message.data.forEach((process, index) => {
+        console.log(`    ${index + 1}. ${process.id} (${process.name}) - ${process.status}`);
+      });
+    } else if (message.type === 'status') {
+      console.log('  📈 Status data received');
+    } else if (message.type === 'error') {
+      console.log('  ❌ Error:', message.data.message);
+    }
+  } catch (error) {
+    console.log('❌ Failed to parse WebSocket message:', error.message);
+    console.log('Raw data:', data.toString());
+  }
+});
 
-        // Keep connection open for 10 seconds to see if we get any messages
-        setTimeout(() => {
-          console.log('⏰ Test completed, closing connection');
-          ws.close();
-          resolve();
-        }, 10000);
-      }, 1000);
-    });
+ws.on('error', (error) => {
+  console.log('❌ WebSocket error:', error.message);
+});
 
-    ws.on('message', (data) => {
-      try {
-        const message = JSON.parse(data.toString());
-        console.log('📨 Received WebSocket message:', JSON.stringify(message, null, 2));
+ws.on('close', (code, reason) => {
+  console.log('🔌 WebSocket closed:', code, reason.toString());
+});
 
-        if (message.type === 'processes') {
-          console.log(`✅ Process update received with ${message.data.length} processes`);
-          message.data.forEach(process => {
-            console.log(`  - ${process.name} (${process.id}): ${process.status}`);
-          });
-        }
-      } catch (error) {
-        console.log('❌ Failed to parse WebSocket message:', error.message);
-        console.log('Raw message:', data.toString());
-      }
-    });
-
-    ws.on('close', () => {
-      console.log('🔌 WebSocket connection closed');
-    });
-
-    ws.on('error', (error) => {
-      console.error('❌ WebSocket error:', error.message);
-      reject(error);
-    });
-
-    // Handle process exit
-    process.on('SIGINT', () => {
-      console.log('\n🛑 Received SIGINT, closing WebSocket connection');
-      ws.close();
-      resolve();
-    });
-  });
-}
-
-// Run the test
-testWebSocketProcesses().then(() => {
-  console.log('\n🏁 WebSocket test completed');
-}).catch(error => {
-  console.error('Test failed:', error);
-  process.exit(1);
-}); 
+// Close after 5 seconds
+setTimeout(() => {
+  console.log('🕐 Test completed, closing connection...');
+  ws.close();
+  process.exit(0);
+}, 5000); 
