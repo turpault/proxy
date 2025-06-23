@@ -111,9 +111,18 @@ export class ProxyServer implements WebSocketServiceInterface {
     // Start management server only if not disabled
     if (!disableManagementServer) {
       this.managementServer = http.createServer(this.managementApp);
-      const managementPort = this.config.port + 1000; // Management on port + 1000
-      this.managementServer.listen(managementPort, () => {
-        logger.info(`Management server started on port ${managementPort}`);
+      
+      // Use management port from mainConfig if available, otherwise fall back to port + 1000
+      const managementPort = this.mainConfig?.management?.port || (this.config.port + 1000);
+      const managementHost = this.mainConfig?.management?.host || '0.0.0.0';
+      
+      this.managementServer.listen(managementPort, managementHost, () => {
+        logger.info(`Management server started on ${managementHost}:${managementPort}`);
+        
+        // Initialize WebSocket service after server starts listening
+        if ((this.managementApp as any).initializeWebSocket) {
+          (this.managementApp as any).initializeWebSocket();
+        }
       });
     }
     
