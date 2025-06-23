@@ -6,7 +6,7 @@ import { logger } from '../utils/logger';
 import { WebSocketService } from './websocket';
 
 // Types for config and proxyServer are imported from their respective modules
-import { ServerConfig } from '../types';
+import { ServerConfig, MainConfig } from '../types';
 import { processManager } from './process-manager';
 import { statisticsService } from './statistics';
 import { cacheService } from './cache';
@@ -14,7 +14,9 @@ import { cacheService } from './cache';
 export function registerManagementEndpoints(
   managementApp: express.Application,
   config: ServerConfig,
-  proxyServer: any // Use ProxyServer type if available
+  proxyServer: any, // Use ProxyServer type if available
+  mainConfig?: MainConfig,
+  statisticsService?: any
 ) {
   // Setup basic middleware for management app
   managementApp.use(express.json({ limit: '10mb' }));
@@ -46,6 +48,9 @@ export function registerManagementEndpoints(
       logger.error('Failed to initialize WebSocket service', error);
     }
   };
+
+  // Use the passed statistics service or fall back to the global one
+  const statsService = statisticsService || (require('./statistics').statisticsService);
 
   // API endpoints for process management
   managementApp.get('/api/processes', (req, res) => {
@@ -284,7 +289,7 @@ export function registerManagementEndpoints(
       if (period !== 'all') {
         // Pass route configs for name lookup
         const routeConfigs = config.routes.map(r => ({ domain: r.domain, path: r.path, target: r.target, name: r.name }));
-        const timePeriodStats = statisticsService.getTimePeriodStats(period, routeConfigs);
+        const timePeriodStats = statsService.getTimePeriodStats(period, routeConfigs);
         
         // Aggregate country data from routes for heatmap
         const countryCounts = new Map<string, number>();
@@ -323,7 +328,7 @@ export function registerManagementEndpoints(
         });
       } else {
         // Use getCurrentStats for all-time data
-        const stats = statisticsService.getCurrentStats();
+        const stats = statsService.getCurrentStats();
         
         res.json({ 
           success: true, 
@@ -386,7 +391,7 @@ export function registerManagementEndpoints(
 
   managementApp.get('/api/statistics/summary', (req, res) => {
     try {
-      const summary = statisticsService.getStatsSummary();
+      const summary = statsService.getStatsSummary();
       res.json({ 
         success: true, 
         data: summary,
@@ -400,7 +405,7 @@ export function registerManagementEndpoints(
 
   managementApp.post('/api/statistics/generate-report', async (req, res) => {
     try {
-      const report = statisticsService.getCurrentStats();
+      const report = statsService.getCurrentStats();
       const timestamp = new Date().toISOString().split('T')[0];
       const filename = `statistics-manual-${timestamp}-${Date.now()}.json`;
       const reportDir = path.resolve(process.cwd(), 'logs', 'statistics');
@@ -428,7 +433,7 @@ export function registerManagementEndpoints(
 
   managementApp.post('/api/statistics/save', async (req, res) => {
     try {
-      await statisticsService.forceSave();
+      await statsService.forceSave();
       res.json({ 
         success: true, 
         message: 'Statistics saved successfully',
@@ -446,7 +451,7 @@ export function registerManagementEndpoints(
       const backupDir = path.resolve(process.cwd(), 'data', 'statistics', 'backups');
       const backupFile = path.join(backupDir, `stats-backup-${timestamp}.json`);
       await fs.ensureDir(backupDir);
-      await statisticsService.forceSave();
+      await statsService.forceSave();
       const currentFile = path.resolve(process.cwd(), 'data', 'statistics', 'current-stats.json');
       if (await fs.pathExists(currentFile)) {
         await fs.copy(currentFile, backupFile);
@@ -702,7 +707,7 @@ export function registerManagementEndpoints(
 
   managementApp.post('/api/statistics/clear', (req, res) => {
     try {
-      statisticsService.clearAll();
+      statsService.clearAll();
       res.json({ success: true, message: 'Statistics cleared' });
     } catch (error) {
       logger.error('Failed to clear statistics', error);
@@ -765,6 +770,254 @@ export function registerManagementEndpoints(
     } catch (error) {
       logger.error('Failed to validate cron expression', error);
       res.status(500).json({ success: false, error: 'Failed to validate cron expression' });
+    }
+  });
+
+  // Configuration editor endpoints
+  managementApp.get('/api/config/:type', async (req, res) => {
+    try {
+      const { type } = req.params;
+      let configPath: string;
+      let configData: any;
+
+      switch (type) {
+        case 'proxy':
+          configPath = path.resolve(process.cwd(), 'config', 'main.yaml');
+          break;
+        case 'processes':
+          configPath = path.resolve(process.cwd(), 'config', 'processes.yaml');
+          break;
+        default:
+          return res.status(400).json({ success: false, error: 'Invalid config type' });
+      }
+
+      if (!await fs.pathExists(configPath)) {
+        return res.status(404).json({ success: false, error: 'Configuration file not found' });
+      }
+
+      const configContent = await fs.readFile(configPath, 'utf8');
+      const { parse } = await import('yaml');
+      configData = parse(configContent);
+
+      res.json({ 
+        success: true, 
+        data: {
+          content: configContent,
+          parsed: configData,
+          path: configPath,
+          lastModified: (await fs.stat(configPath)).mtime
+        }
+      });
+    } catch (error) {
+      logger.error(`Failed to read ${req.params.type} configuration`, error);
+      res.status(500).json({ success: false, error: 'Failed to read configuration' });
+    }
+  });
+
+  managementApp.post('/api/config/:type/backup', async (req, res) => {
+    try {
+      const { type } = req.params;
+      let configPath: string;
+
+      switch (type) {
+        case 'proxy':
+          configPath = path.resolve(process.cwd(), 'config', 'main.yaml');
+          break;
+        case 'processes':
+          configPath = path.resolve(process.cwd(), 'config', 'processes.yaml');
+          break;
+        default:
+          return res.status(400).json({ success: false, error: 'Invalid config type' });
+      }
+
+      if (!await fs.pathExists(configPath)) {
+        return res.status(404).json({ success: false, error: 'Configuration file not found' });
+      }
+
+      // Get backup directory from main config or use default
+      const backupDir = mainConfig?.settings?.backupDir || './config/backup';
+      await fs.ensureDir(backupDir);
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const configName = path.basename(configPath, '.yaml');
+      const backupPath = path.join(backupDir, `${configName}.backup-${timestamp}.yaml`);
+      
+      await fs.copyFile(configPath, backupPath);
+      
+      res.json({ 
+        success: true, 
+        data: {
+          backupPath,
+          originalPath: configPath,
+          timestamp
+        },
+        message: 'Configuration backed up successfully'
+      });
+    } catch (error) {
+      logger.error(`Failed to backup ${req.params.type} configuration`, error);
+      res.status(500).json({ success: false, error: 'Failed to backup configuration' });
+    }
+  });
+
+  managementApp.post('/api/config/:type/save', async (req, res) => {
+    try {
+      const { type } = req.params;
+      const { content, createBackup = true } = req.body;
+      
+      if (!content) {
+        return res.status(400).json({ success: false, error: 'Configuration content is required' });
+      }
+
+      let configPath: string;
+
+      switch (type) {
+        case 'proxy':
+          configPath = path.resolve(process.cwd(), 'config', 'main.yaml');
+          break;
+        case 'processes':
+          configPath = path.resolve(process.cwd(), 'config', 'processes.yaml');
+          break;
+        default:
+          return res.status(400).json({ success: false, error: 'Invalid config type' });
+      }
+
+      // Validate YAML syntax
+      try {
+        const { parse } = await import('yaml');
+        parse(content);
+      } catch (error) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Invalid YAML syntax',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+
+      // Create backup if requested
+      let backupPath: string | null = null;
+      if (createBackup && await fs.pathExists(configPath)) {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const backupDir = mainConfig?.settings?.backupDir || './config/backup';
+        await fs.ensureDir(backupDir);
+        const configName = path.basename(configPath, '.yaml');
+        backupPath = path.join(backupDir, `${configName}.backup-${timestamp}.yaml`);
+        await fs.copyFile(configPath, backupPath);
+      }
+
+      // Write new configuration
+      await fs.writeFile(configPath, content, 'utf8');
+      
+      res.json({ 
+        success: true, 
+        data: {
+          configPath,
+          backupPath,
+          lastModified: new Date().toISOString()
+        },
+        message: 'Configuration saved successfully'
+      });
+    } catch (error) {
+      logger.error(`Failed to save ${req.params.type} configuration`, error);
+      res.status(500).json({ success: false, error: 'Failed to save configuration' });
+    }
+  });
+
+  managementApp.get('/api/config/:type/backups', async (req, res) => {
+    try {
+      const { type } = req.params;
+      let configPath: string;
+
+      switch (type) {
+        case 'proxy':
+          configPath = path.resolve(process.cwd(), 'config', 'main.yaml');
+          break;
+        case 'processes':
+          configPath = path.resolve(process.cwd(), 'config', 'processes.yaml');
+          break;
+        default:
+          return res.status(400).json({ success: false, error: 'Invalid config type' });
+      }
+
+      // Get backup directory from main config or use default
+      const backupDir = mainConfig?.settings?.backupDir || './config/backup';
+      const configName = path.basename(configPath, '.yaml');
+      const backupPattern = `${configName}.backup-*.yaml`;
+      
+      const files = await fs.readdir(backupDir);
+      const backupFiles = files
+        .filter(file => file.match(new RegExp(`${configName}\\.backup-.*\\.yaml`)))
+        .map(file => {
+          const filePath = path.join(backupDir, file);
+          const stats = fs.statSync(filePath);
+          return {
+            name: file,
+            path: filePath,
+            size: stats.size,
+            lastModified: stats.mtime,
+            timestamp: file.match(/backup-(.+)\.yaml/)?.[1] || null
+          };
+        })
+        .sort((a, b) => b.lastModified.getTime() - a.lastModified.getTime());
+
+      res.json({ 
+        success: true, 
+        data: backupFiles
+      });
+    } catch (error) {
+      logger.error(`Failed to list ${req.params.type} configuration backups`, error);
+      res.status(500).json({ success: false, error: 'Failed to list configuration backups' });
+    }
+  });
+
+  managementApp.post('/api/config/:type/restore', async (req, res) => {
+    try {
+      const { type } = req.params;
+      const { backupPath } = req.body;
+      
+      if (!backupPath) {
+        return res.status(400).json({ success: false, error: 'Backup path is required' });
+      }
+
+      let configPath: string;
+
+      switch (type) {
+        case 'proxy':
+          configPath = path.resolve(process.cwd(), 'config', 'main.yaml');
+          break;
+        case 'processes':
+          configPath = path.resolve(process.cwd(), 'config', 'processes.yaml');
+          break;
+        default:
+          return res.status(400).json({ success: false, error: 'Invalid config type' });
+      }
+
+      if (!await fs.pathExists(backupPath)) {
+        return res.status(404).json({ success: false, error: 'Backup file not found' });
+      }
+
+      // Create backup of current config before restoring
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const backupDir = mainConfig?.settings?.backupDir || './config/backup';
+      await fs.ensureDir(backupDir);
+      const configName = path.basename(configPath, '.yaml');
+      const currentBackupPath = path.join(backupDir, `${configName}.backup-${timestamp}.yaml`);
+      await fs.copyFile(configPath, currentBackupPath);
+
+      // Restore from backup
+      await fs.copyFile(backupPath, configPath);
+      
+      res.json({ 
+        success: true, 
+        data: {
+          configPath,
+          restoredFrom: backupPath,
+          currentBackup: currentBackupPath
+        },
+        message: 'Configuration restored successfully'
+      });
+    } catch (error) {
+      logger.error(`Failed to restore ${req.params.type} configuration`, error);
+      res.status(500).json({ success: false, error: 'Failed to restore configuration' });
     }
   });
 } 

@@ -264,6 +264,10 @@ export interface GlobalSettings {
   dataDir?: string;
   logsDir?: string;
   certificatesDir?: string;
+  tempDir?: string;
+  statsDir?: string;
+  cacheDir?: string;
+  backupDir?: string;
   statistics?: {
     enabled?: boolean;
     backupInterval?: number;

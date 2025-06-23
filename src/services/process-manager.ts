@@ -363,7 +363,7 @@ export class ProcessManager {
     if (!managedProcess) return;
 
     // Store the current file size to track changes
-    let lastFileSize = 0;
+    let lastFileSize = fs.statSync(logFilePath).size;
     let fileWatcher: fs.FSWatcher | null = null;
 
     const readNewLogs = async () => {

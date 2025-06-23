@@ -152,6 +152,10 @@ const mainConfigSchema = Joi.object({
     dataDir: Joi.string().default('./data'),
     logsDir: Joi.string().default('./logs'),
     certificatesDir: Joi.string().default('./certificates'),
+    tempDir: Joi.string().default('./data/temp'),
+    statsDir: Joi.string().default('./data/statistics'),
+    cacheDir: Joi.string().default('./data/cache'),
+    backupDir: Joi.string().default('./config/backup'),
     statistics: Joi.object({
       enabled: Joi.boolean().default(true),
       backupInterval: Joi.number().default(86400000),
@@ -167,6 +171,10 @@ const mainConfigSchema = Joi.object({
     dataDir: './data',
     logsDir: './logs',
     certificatesDir: './certificates',
+    tempDir: './data/temp',
+    statsDir: './data/statistics',
+    cacheDir: './data/cache',
+    backupDir: './config/backup',
   }),
   development: Joi.object({
     debug: Joi.boolean().default(false),
@@ -244,7 +252,18 @@ const configSchema = Joi.object({
 
 export class ConfigLoader {
   static async loadMainConfig(configPath?: string): Promise<MainConfig> {
-    const configFile = configPath || process.env.MAIN_CONFIG_FILE || './config/main.yaml';
+    // Check for command-line argument first, then environment variable, then default
+    let configFile = configPath;
+    
+    if (!configFile) {
+      // Check for --config argument
+      const configArgIndex = process.argv.indexOf('--config');
+      if (configArgIndex !== -1 && configArgIndex + 1 < process.argv.length) {
+        configFile = process.argv[configArgIndex + 1];
+      } else {
+        configFile = process.env.MAIN_CONFIG_FILE || './config/main.yaml';
+      }
+    }
     
     try {
       logger.info(`Loading main configuration from ${configFile}`);
@@ -270,8 +289,14 @@ export class ConfigLoader {
         throw new Error(`Main configuration validation failed: ${errorMessages}`);
       }
 
+      // Ensure data directories exist
+      const config = value as MainConfig;
+      if (config.settings) {
+        await this.ensureDataDirectories(config.settings);
+      }
+
       logger.info('Main configuration loaded successfully');
-      return value as MainConfig;
+      return config;
     } catch (error) {
       logger.error(`Failed to load main configuration from ${configFile}`, error);
       throw error;
@@ -621,5 +646,24 @@ security:
     await fs.writeFile(configPath, yamlContent);
     
     logger.info(`Example configuration created at ${configPath}`);
+  }
+
+  private static async ensureDataDirectories(settings: any): Promise<void> {
+    const directories = [
+      settings.dataDir,
+      settings.logsDir,
+      settings.certificatesDir,
+      settings.tempDir,
+      settings.statsDir,
+      settings.cacheDir,
+      settings.backupDir
+    ].filter(Boolean);
+
+    for (const dir of directories) {
+      if (dir) {
+        await fs.ensureDir(dir);
+        logger.debug(`Ensured directory exists: ${dir}`);
+      }
+    }
   }
 } 

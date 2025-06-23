@@ -1,0 +1,93 @@
+# Process Management Configuration
+# This file configures managed processes independently of proxy routes
+# Note: healthCheck.path can be either a full URL or a relative path
+
+processes:
+  # BDS Server Process
+  bds-server:
+    name: "BDS"
+    enabled: true
+    command: "bun"
+    args: ["index.ts","--config","/Users/turpault/ComicusConfigs/config-bds"]
+    cwd: "../bdreader-server"
+    env:
+      NODE_ENV: "production"
+    restartOnExit: true
+    restartDelay: 2000
+    maxRestarts: 10
+    pidDir: "./pids"
+    cleanupPidOnExit: true
+    healthCheck:
+      enabled: true
+      path: "http://localhost:8888/health"
+      interval: 30000  # 30 seconds
+      timeout: 5000    # 5 seconds
+      retries: 3
+
+  # US Comics Server Process
+  uscomics-server:
+    name: "USComics"
+    enabled: true
+    command: "bun"
+    args: ["index.ts","--config","/Users/turpault/ComicusConfigs/config-comics"]
+    cwd: "../bdreader-server"
+    env:
+      NODE_ENV: "production"
+    restartOnExit: true
+    restartDelay: 2000
+    maxRestarts: 10
+    pidDir: "./pids"
+    cleanupPidOnExit: true
+    healthCheck:
+      enabled: true
+      path: "http://localhost:8890/health"
+      interval: 30000
+      timeout: 5000
+      retries: 3
+
+  # Photos Server Process
+  photos-server:
+    name: "Photos"
+    enabled: true
+    command: "bun"
+    args: ["index.ts","--config","/Users/turpault/ComicusConfigs/config-photos"]
+    cwd: "../bdreader-server"
+    env:
+      NODE_ENV: "production"
+    restartOnExit: true
+    restartDelay: 2000
+    maxRestarts: 10
+    pidDir: "./pids"
+    cleanupPidOnExit: true
+    healthCheck:
+      enabled: true
+      path: "http://localhost:8892/health"
+      interval: 30000
+      timeout: 5000
+      retries: 3
+
+# Global process management settings
+settings:
+  # Default health check settings for all processes
+  defaultHealthCheck:
+    enabled: true
+    interval: 30000  # 30 seconds
+    timeout: 5000    # 5 seconds
+    retries: 3
+
+  # Default restart settings for all processes
+  defaultRestart:
+    restartOnExit: true
+    restartDelay: 2000
+    maxRestarts: 10
+
+  # PID file management
+  pidManagement:
+    defaultPidDir: "./pids"
+    cleanupPidOnExit: true
+
+  # Logging settings
+  logging:
+    logProcessOutput: true
+    logHealthChecks: false
+    logRestarts: true 

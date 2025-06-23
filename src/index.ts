@@ -18,7 +18,7 @@ async function startManagementConsole(proxyServer: ProxyServer, config: MainConf
   const managementApp = express();
   
   // Register management endpoints
-  registerManagementEndpoints(managementApp, proxyServer.getConfig(), proxyServer);
+  registerManagementEndpoints(managementApp, proxyServer.getConfig(), proxyServer, config);
   
   // Get the HTTP server from the management app
   const server = (managementApp as any).server;
@@ -71,7 +71,7 @@ async function startServer(): Promise<ProxyServer> {
     }
     
     // Create and start proxy server
-    const server = new ProxyServer(proxyConfig);
+    const server = new ProxyServer(proxyConfig, mainConfig);
     await server.initialize();
     await server.start(true); // Disable built-in management server
     
@@ -93,7 +93,7 @@ async function startServer(): Promise<ProxyServer> {
     const config = await ConfigLoader.load();
     
     // Create and start proxy server
-    const server = new ProxyServer(config);
+    const server = new ProxyServer(config, mainConfig || undefined);
     await server.initialize();
     await server.start();
     

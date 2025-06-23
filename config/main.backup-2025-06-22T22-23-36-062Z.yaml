@@ -26,10 +26,6 @@ settings:
   dataDir: "./data"
   logsDir: "./logs"
   certificatesDir: "./certificates"
-  tempDir: "./data/temp"
-  statsDir: "./data/statistics"
-  cacheDir: "./data/cache"
-  backupDir: "./config/backup"
   
   # Statistics and caching
   statistics:

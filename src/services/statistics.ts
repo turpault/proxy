@@ -122,9 +122,9 @@ export class StatisticsService {
   private isShuttingDown = false;
   private saveInterval: NodeJS.Timeout | null = null;
 
-  constructor() {
-    this.reportDir = path.resolve(process.cwd(), 'logs', 'statistics');
-    this.dataDir = path.resolve(process.cwd(), 'data', 'statistics');
+  constructor(reportDir?: string, dataDir?: string) {
+    this.reportDir = reportDir || path.resolve(process.cwd(), 'logs', 'statistics');
+    this.dataDir = dataDir || path.resolve(process.cwd(), 'data', 'statistics');
     this.ensureReportDirectory();
     this.ensureDataDirectory();
     this.loadPersistedStats();
@@ -132,9 +132,9 @@ export class StatisticsService {
     this.startPeriodicSaving();
   }
 
-  public static getInstance(): StatisticsService {
+  public static getInstance(reportDir?: string, dataDir?: string): StatisticsService {
     if (!StatisticsService.instance) {
-      StatisticsService.instance = new StatisticsService();
+      StatisticsService.instance = new StatisticsService(reportDir, dataDir);
     }
     return StatisticsService.instance;
   }
@@ -880,4 +880,10 @@ export class StatisticsService {
   }
 }
 
+// Export a function to get the statistics service instance with configuration
+export function getStatisticsService(reportDir?: string, dataDir?: string): StatisticsService {
+  return StatisticsService.getInstance(reportDir, dataDir);
+}
+
+// For backward compatibility, export the default instance
 export const statisticsService = StatisticsService.getInstance(); 

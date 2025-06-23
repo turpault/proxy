@@ -1,11 +1,11 @@
 import express from 'express';
 import http from 'http';
 import https from 'https';
-import { ServerConfig } from '../types';
+import { ServerConfig, MainConfig } from '../types';
 import { logger } from '../utils/logger';
 import { cacheService } from './cache';
 import { OAuth2Service } from './oauth2';
-import { statisticsService } from './statistics';
+import { getStatisticsService } from './statistics';
 import { WebSocketService, WebSocketServiceInterface } from './websocket';
 import { ProxyRoutes } from './proxy-routes';
 import { ProxyMiddleware } from './proxy-middleware';
@@ -13,6 +13,7 @@ import { ProxyCertificates } from './proxy-certificates';
 import { ProxyProcesses } from './proxy-processes';
 import { registerManagementEndpoints } from './management';
 import { processManager } from './process-manager';
+import path from 'path';
 
 export class ProxyServer implements WebSocketServiceInterface {
   private app: express.Application;
@@ -21,15 +22,18 @@ export class ProxyServer implements WebSocketServiceInterface {
   private httpsServer: https.Server | null = null;
   private managementServer: http.Server | null = null;
   private config: ServerConfig;
+  private mainConfig?: MainConfig;
   private oauth2Service: OAuth2Service;
   private webSocketService: WebSocketService;
   private proxyRoutes: ProxyRoutes;
   private proxyMiddleware: ProxyMiddleware;
   private proxyCertificates: ProxyCertificates;
   private proxyProcesses: ProxyProcesses;
+  private statisticsService: any;
 
-  constructor(config: ServerConfig) {
+  constructor(config: ServerConfig, mainConfig?: MainConfig) {
     this.config = config;
+    this.mainConfig = mainConfig;
     this.app = express();
     this.managementApp = express();
     this.oauth2Service = new OAuth2Service();
@@ -38,6 +42,11 @@ export class ProxyServer implements WebSocketServiceInterface {
     this.proxyMiddleware = new ProxyMiddleware();
     this.proxyCertificates = new ProxyCertificates(config);
     this.proxyProcesses = new ProxyProcesses(config);
+    
+    // Initialize statistics service with configuration
+    const reportDir = mainConfig?.settings?.logsDir ? path.join(mainConfig.settings.logsDir, 'statistics') : undefined;
+    const dataDir = mainConfig?.settings?.statsDir;
+    this.statisticsService = getStatisticsService(reportDir, dataDir);
     
     // Set up process update callback for WebSocket broadcasts
     processManager.setProcessUpdateCallback(() => {
@@ -58,7 +67,7 @@ export class ProxyServer implements WebSocketServiceInterface {
   }
 
   private setupManagementServer(): void {
-    registerManagementEndpoints(this.managementApp, this.config, this);
+    registerManagementEndpoints(this.managementApp, this.config, this, this.mainConfig, this.statisticsService);
   }
 
   async initialize(): Promise<void> {
@@ -143,7 +152,7 @@ export class ProxyServer implements WebSocketServiceInterface {
     await this.proxyProcesses.shutdown();
     
     // Shutdown statistics service
-    await statisticsService.shutdown();
+    await this.statisticsService.shutdown();
     
     // Shutdown cache service (no shutdown method, just cleanup)
     await cacheService.cleanup();
@@ -158,7 +167,7 @@ export class ProxyServer implements WebSocketServiceInterface {
       routes: this.config.routes.length,
       certificates: this.proxyCertificates.getAllCertificates(),
       processes: processManager.getProcessStatus().length,
-      statistics: statisticsService.getStatsSummary(),
+      statistics: this.statisticsService.getStatsSummary(),
       cache: cacheService.getStats(),
       uptime: process.uptime(),
       memory: process.memoryUsage(),
