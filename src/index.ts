@@ -4,52 +4,11 @@ import { ConfigLoader } from './config/loader';
 import { logger } from './utils/logger';
 import * as fs from 'fs-extra';
 import * as path from 'path';
-import express from 'express';
-import { registerManagementEndpoints } from './services/management';
-import { MainConfig } from './types';
 
 let currentServer: ProxyServer | null = null;
-let managementServer: express.Application | null = null;
 let isWatchingConfig = false;
 let isRestarting = false;
-let mainConfig: MainConfig | null = null;
-
-async function startManagementConsole(proxyServer: ProxyServer, config: MainConfig): Promise<void> {
-  const managementApp = express();
-  
-  // Register management endpoints
-  registerManagementEndpoints(managementApp, proxyServer.getConfig(), proxyServer, proxyServer.getStatisticsService(), config);
-  
-  // Get the HTTP server from the management app
-  const server = (managementApp as any).server;
-  
-  // Start management server
-  const port = config.management.port;
-  const host = config.management.host || '0.0.0.0';
-  
-  return new Promise((resolve, reject) => {
-    server.listen(port, host, () => {
-      logger.info(`Management console started on http://${host}:${port}`);
-      managementServer = managementApp;
-      
-      // Initialize WebSocket service after server is listening
-      setTimeout(() => {
-        try {
-          (managementApp as any).initializeWebSocket();
-        } catch (error) {
-          logger.error('Failed to initialize WebSocket service', error);
-        }
-      }, 100); // Small delay to ensure server is fully ready
-      
-      resolve();
-    });
-    
-    server.on('error', (error: any) => {
-      logger.error(`Failed to start management console on port ${port}`, error);
-      reject(error);
-    });
-  });
-}
+let mainConfig: any = null;
 
 async function startServer(): Promise<ProxyServer> {
   logger.info('Starting Proxy Server and Process Manager...');
@@ -70,13 +29,10 @@ async function startServer(): Promise<ProxyServer> {
       logger.warn('Failed to load process management configuration, continuing without it');
     }
     
-    // Create and start proxy server
+    // Create and start proxy server with built-in management server
     const server = new ProxyServer(proxyConfig, mainConfig);
     await server.initialize();
-    await server.start(true); // Disable built-in management server
-    
-    // Start management console
-    await startManagementConsole(server, mainConfig);
+    await server.start(); // Use built-in management server
     
     logger.info('Proxy server and management console started successfully');
     
@@ -95,7 +51,7 @@ async function startServer(): Promise<ProxyServer> {
     // Create and start proxy server
     const server = new ProxyServer(config, mainConfig || undefined);
     await server.initialize();
-    await server.start();
+    await server.start(); // Use built-in management server
     
     logger.info('Proxy server started successfully (legacy mode)');
     
@@ -113,13 +69,6 @@ async function stopServer(): Promise<void> {
     await currentServer.stop();
     currentServer = null;
     logger.info('Proxy server stopped');
-  }
-  
-  if (managementServer) {
-    logger.info('Stopping management console...');
-    // Note: Express doesn't have a built-in stop method, so we'll just clear the reference
-    managementServer = null;
-    logger.info('Management console stopped');
   }
 }
 

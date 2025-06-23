@@ -4,7 +4,6 @@ import https from 'https';
 import { ServerConfig, MainConfig } from '../types';
 import { logger } from '../utils/logger';
 import { cacheService } from './cache';
-import { OAuth2Service } from './oauth2';
 import { getStatisticsService } from './statistics';
 import { WebSocketService, WebSocketServiceInterface } from './websocket';
 import { ProxyRoutes } from './proxy-routes';
@@ -23,7 +22,6 @@ export class ProxyServer implements WebSocketServiceInterface {
   private managementServer: http.Server | null = null;
   private config: ServerConfig;
   private mainConfig?: MainConfig;
-  private oauth2Service: OAuth2Service;
   private webSocketService: WebSocketService;
   private proxyRoutes: ProxyRoutes;
   private proxyMiddleware: ProxyMiddleware;
@@ -36,7 +34,6 @@ export class ProxyServer implements WebSocketServiceInterface {
     this.mainConfig = mainConfig;
     this.app = express();
     this.managementApp = express();
-    this.oauth2Service = new OAuth2Service();
     this.webSocketService = new WebSocketService(this);
     this.proxyRoutes = new ProxyRoutes();
     this.proxyMiddleware = new ProxyMiddleware();
