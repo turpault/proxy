@@ -15,8 +15,8 @@ export function registerManagementEndpoints(
   managementApp: express.Application,
   config: ServerConfig,
   proxyServer: any, // Use ProxyServer type if available
-  mainConfig?: MainConfig,
-  statisticsService?: any
+  statisticsService: any,
+  mainConfig?: MainConfig
 ) {
   // Setup basic middleware for management app
   managementApp.use(express.json({ limit: '10mb' }));
@@ -48,9 +48,6 @@ export function registerManagementEndpoints(
       logger.error('Failed to initialize WebSocket service', error);
     }
   };
-
-  // Use the passed statistics service or fall back to the global one
-  const statsService = statisticsService || (require('./statistics').statisticsService);
 
   // API endpoints for process management
   managementApp.get('/api/processes', (req, res) => {
@@ -289,7 +286,7 @@ export function registerManagementEndpoints(
       if (period !== 'all') {
         // Pass route configs for name lookup
         const routeConfigs = config.routes.map(r => ({ domain: r.domain, path: r.path, target: r.target, name: r.name }));
-        const timePeriodStats = statsService.getTimePeriodStats(period, routeConfigs);
+        const timePeriodStats = statisticsService.getTimePeriodStats(period, routeConfigs);
         
         // Aggregate country data from routes for heatmap
         const countryCounts = new Map<string, number>();
@@ -328,7 +325,7 @@ export function registerManagementEndpoints(
         });
       } else {
         // Use getCurrentStats for all-time data
-        const stats = statsService.getCurrentStats();
+        const stats = statisticsService.getCurrentStats();
         
         res.json({ 
           success: true, 
@@ -391,7 +388,7 @@ export function registerManagementEndpoints(
 
   managementApp.get('/api/statistics/summary', (req, res) => {
     try {
-      const summary = statsService.getStatsSummary();
+      const summary = statisticsService.getStatsSummary();
       res.json({ 
         success: true, 
         data: summary,
@@ -405,7 +402,7 @@ export function registerManagementEndpoints(
 
   managementApp.post('/api/statistics/generate-report', async (req, res) => {
     try {
-      const report = statsService.getCurrentStats();
+      const report = statisticsService.getCurrentStats();
       const timestamp = new Date().toISOString().split('T')[0];
       const filename = `statistics-manual-${timestamp}-${Date.now()}.json`;
       const reportDir = path.resolve(process.cwd(), 'logs', 'statistics');
@@ -433,7 +430,7 @@ export function registerManagementEndpoints(
 
   managementApp.post('/api/statistics/save', async (req, res) => {
     try {
-      await statsService.forceSave();
+      await statisticsService.forceSave();
       res.json({ 
         success: true, 
         message: 'Statistics saved successfully',
@@ -451,7 +448,7 @@ export function registerManagementEndpoints(
       const backupDir = path.resolve(process.cwd(), 'data', 'statistics', 'backups');
       const backupFile = path.join(backupDir, `stats-backup-${timestamp}.json`);
       await fs.ensureDir(backupDir);
-      await statsService.forceSave();
+      await statisticsService.forceSave();
       const currentFile = path.resolve(process.cwd(), 'data', 'statistics', 'current-stats.json');
       if (await fs.pathExists(currentFile)) {
         await fs.copy(currentFile, backupFile);
@@ -707,7 +704,7 @@ export function registerManagementEndpoints(
 
   managementApp.post('/api/statistics/clear', (req, res) => {
     try {
-      statsService.clearAll();
+      statisticsService.clearAll();
       res.json({ success: true, message: 'Statistics cleared' });
     } catch (error) {
       logger.error('Failed to clear statistics', error);

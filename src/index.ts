@@ -18,7 +18,7 @@ async function startManagementConsole(proxyServer: ProxyServer, config: MainConf
   const managementApp = express();
   
   // Register management endpoints
-  registerManagementEndpoints(managementApp, proxyServer.getConfig(), proxyServer, config);
+  registerManagementEndpoints(managementApp, proxyServer.getConfig(), proxyServer, proxyServer.getStatisticsService(), config);
   
   // Get the HTTP server from the management app
   const server = (managementApp as any).server;

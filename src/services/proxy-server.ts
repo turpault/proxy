@@ -67,7 +67,7 @@ export class ProxyServer implements WebSocketServiceInterface {
   }
 
   private setupManagementServer(): void {
-    registerManagementEndpoints(this.managementApp, this.config, this, this.mainConfig, this.statisticsService);
+    registerManagementEndpoints(this.managementApp, this.config, this, this.statisticsService, this.mainConfig);
   }
 
   async initialize(): Promise<void> {
@@ -180,6 +180,13 @@ export class ProxyServer implements WebSocketServiceInterface {
    */
   getConfig(): ServerConfig {
     return this.config;
+  }
+
+  /**
+   * Get the statistics service
+   */
+  getStatisticsService(): any {
+    return this.statisticsService;
   }
 
   // WebSocket interface methods
