@@ -137,3 +137,4 @@ config/proxy.yaml
 config/processes.yaml
 data/cache/
 config/backup/
+data/statistics/
