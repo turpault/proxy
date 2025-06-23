@@ -67,9 +67,14 @@ export async function convertToImage(
     // Use provided temp directory or fall back to system temp directory
     const workingTempDir = tempDir || os.tmpdir();
     const timestamp = Date.now();
+    
+    // Create a dedicated folder for extracted images
+    const extractedImagesDir = path.join(workingTempDir, `extracted_${timestamp}`);
+    await fs.mkdir(extractedImagesDir, { recursive: true });
+    
     // create a random temporary
     const tempPdfPath = path.join(workingTempDir, `temp_${timestamp}.pdf`);
-    const tempImagePrefix = path.join(workingTempDir, `page_${timestamp}`);
+    const tempImagePrefix = path.join(extractedImagesDir, `page`);
     const outputImagePath = path.join(workingTempDir, `composite_${timestamp}.${outputFormat}`);
 
     try {
@@ -79,8 +84,6 @@ export async function convertToImage(
 
       // Step 1: Convert PDF to individual page images using pdftoppm
       const pdftoppmArgs = [
-        '-f', '1', // Start from page 1
-        '-l', '999', // Convert up to 999 pages (effectively all pages)
         '-singlefile', // Output single file per page
         '-scale-to', widthNum ? widthNum.toString() : '800', // Scale to width if specified
         '-jpegopt', 'quality=100', // High quality for JPEG
@@ -115,25 +118,21 @@ export async function convertToImage(
         });
       });
 
-      // Step 2: Find all generated page images
-      const pageFiles = [];
-      let pageNum = 1;
-      while (true) {
-        const pageFile = `${tempImagePrefix}-${pageNum.toString().padStart(6, '0')}.${outputFormat}`;
-        try {
-          await fs.access(pageFile);
-          pageFiles.push(pageFile);
-          pageNum++;
-        } catch {
-          break; // No more pages
-        }
-      }
+      // Step 2: Find all generated page images using readdir
+      logger.info(`[PDFTOPPM] Reading extracted images from directory: ${extractedImagesDir}`);
+      const extractedFiles = await fs.readdir(extractedImagesDir);
+      
+      // Filter for image files with the correct extension
+      const pageFiles = extractedFiles
+        .filter(file => file.endsWith(`.${outputFormat}`))
+        .map(file => path.join(extractedImagesDir, file))
+        .sort(); // Sort to ensure pages are in correct order
 
       if (pageFiles.length === 0) {
         throw new Error('No pages were converted from the PDF');
       }
 
-      logger.info(`Converted ${pageFiles.length} pages from PDF`);
+      logger.info(`Converted ${pageFiles.length} pages from PDF: ${pageFiles.map(f => path.basename(f)).join(', ')}`);
 
       // Step 3: Composite pages vertically using ImageMagick montage
       const montageArgs = [
@@ -173,9 +172,8 @@ export async function convertToImage(
       /*
       try {
         await fs.unlink(tempPdfPath);
-        for (const pageFile of pageFiles) {
-          await fs.unlink(pageFile);
-        }
+        // Remove the entire extracted images directory
+        await fs.rmdir(extractedImagesDir, { recursive: true });
         await fs.unlink(outputImagePath);
       } catch (cleanupError) {
         logger.warn('Failed to clean up temporary files', { error: cleanupError });
@@ -192,17 +190,8 @@ export async function convertToImage(
       // Clean up temporary files on error
       try {
         await fs.unlink(tempPdfPath);
-        // Try to clean up any page files that might have been created
-        let pageNum = 1;
-        while (true) {
-          const pageFile = `${tempImagePrefix}-${pageNum.toString().padStart(6, '0')}.${outputFormat}`;
-          try {
-            await fs.unlink(pageFile);
-            pageNum++;
-          } catch {
-            break;
-          }
-        }
+        // Remove the entire extracted images directory
+        await fs.rmdir(extractedImagesDir, { recursive: true });
         await fs.unlink(outputImagePath);
       } catch (cleanupError) {
         logger.warn('Failed to clean up temporary files on error', { error: cleanupError });
