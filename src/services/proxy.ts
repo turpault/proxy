@@ -636,6 +636,27 @@ export class ProxyServer implements WebSocketServiceInterface {
   }
 
   private setupManagementServer(): void {
+    // Add health endpoint for debugging
+    this.managementApp.get('/health', (req, res) => {
+      const validCertificates = Array.from(this.certificates.values()).filter(cert => cert.isValid);
+      res.json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        certificates: {
+          total: this.certificates.size,
+          valid: validCertificates.length,
+          domains: Array.from(this.certificates.keys()),
+          validDomains: validCertificates.map(cert => cert.domain),
+        },
+        servers: {
+          http: !!this.httpServer,
+          https: !!this.httpsServer,
+          management: !!this.managementServer,
+        },
+        httpsPort: this.config.httpsPort,
+      });
+    });
+
     registerManagementEndpoints(this.managementApp, this.config, this);
   }
 
@@ -665,8 +686,12 @@ export class ProxyServer implements WebSocketServiceInterface {
   private async setupCertificates(): Promise<void> {
     const domains = this.config.routes.map(route => route.domain);
     const uniqueDomains = [...new Set(domains)];
+    
+    logger.info(`Setting up certificates for ${uniqueDomains.length} domains: ${uniqueDomains.join(', ')}`);
+    
     for (const domain of uniqueDomains) {
       try {
+        logger.debug(`Checking certificate for domain: ${domain}`);
         let certInfo = await this.letsEncryptService.getCertificateInfo(domain);
         
         if (!certInfo || !certInfo.isValid) {
@@ -676,15 +701,24 @@ export class ProxyServer implements WebSocketServiceInterface {
           logger.info(`Renewing certificate for ${domain}`);
           certInfo = await this.letsEncryptService.renewCertificate(domain);
         }
-        this.certificates.set(domain, certInfo);
-        logger.info(`Certificate ready for ${domain}`, {
-          expiresAt: certInfo.expiresAt,
-        });
+        
+        if (certInfo && certInfo.isValid) {
+          this.certificates.set(domain, certInfo);
+          logger.info(`Certificate ready for ${domain}`, {
+            expiresAt: certInfo.expiresAt,
+            certPath: certInfo.certPath,
+            keyPath: certInfo.keyPath,
+          });
+        } else {
+          logger.error(`Failed to obtain valid certificate for ${domain}`);
+        }
       } catch (error) {
         logger.error(`Failed to setup certificate for ${domain}`, error);
         // Continue with other domains
       }
     }
+    
+    logger.info(`Certificate setup complete. Loaded ${this.certificates.size} certificates: ${Array.from(this.certificates.keys()).join(', ')}`);
   }
 
   private async startManagedProcesses(): Promise<void> {
@@ -886,9 +920,14 @@ export class ProxyServer implements WebSocketServiceInterface {
       }, 100);
     });
 
-    // Start HTTPS server if we have certificates
-    if (this.certificates.size > 0) {
+    // Start HTTPS server only if we have valid certificates
+    const validCertificates = Array.from(this.certificates.values()).filter(cert => cert.isValid);
+    if (validCertificates.length > 0) {
+      logger.info(`Starting HTTPS server with ${validCertificates.length} valid certificates`);
       await this.startHttpsServer();
+    } else {
+      logger.warn('No valid certificates available, HTTPS server will not start');
+      logger.info('HTTPS server requires valid certificates to be loaded before it can start');
     }
 
     // Setup certificate renewal checker
@@ -897,30 +936,41 @@ export class ProxyServer implements WebSocketServiceInterface {
 
   private async startHttpsServer(): Promise<void> {
     try {
+      // Verify we have valid certificates before starting
+      const validCertificates = Array.from(this.certificates.values()).filter(cert => cert.isValid);
+      if (validCertificates.length === 0) {
+        throw new Error('No valid certificates available for HTTPS server');
+      }
+
+      logger.info(`Starting HTTPS server with ${validCertificates.length} certificates for domains: ${Array.from(this.certificates.keys()).join(', ')}`);
+
       // Use SNI (Server Name Indication) to serve different certificates per domain
       const httpsOptions: https.ServerOptions = {
         SNICallback: (servername, callback) => {
           const certInfo = this.certificates.get(servername);
-          if (certInfo) {
+          if (certInfo && certInfo.isValid) {
             try {
               const cert = fs.readFileSync(certInfo.certPath, 'utf8');
               const key = fs.readFileSync(certInfo.keyPath, 'utf8');
+              logger.debug(`Loading certificate for SNI request: ${servername}`);
               callback(null, require('tls').createSecureContext({ cert, key }));
             } catch (error) {
               logger.error(`Failed to load certificate for ${servername}`, error);
               callback(error as Error);
             }
           } else {
-            callback(new Error(`No certificate found for ${servername}`));
+            logger.warn(`No valid certificate found for SNI request: ${servername}`);
+            callback(new Error(`No valid certificate found for ${servername}`));
           }
         },
       };
 
-      // Use the first certificate as default
-      const firstCert = Array.from(this.certificates.values())[0];
+      // Use the first valid certificate as default
+      const firstCert = validCertificates[0];
       if (firstCert) {
         httpsOptions.cert = fs.readFileSync(firstCert.certPath, 'utf8');
         httpsOptions.key = fs.readFileSync(firstCert.keyPath, 'utf8');
+        logger.debug(`Using default certificate for domain: ${firstCert.domain}`);
       }
 
       this.httpsServer = https.createServer(httpsOptions, this.app);

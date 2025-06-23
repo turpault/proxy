@@ -107,6 +107,7 @@ export class ProxyCertificates {
     
     // Set up SNI (Server Name Indication) for multiple certificates
     server.addListener('SNICallback', (servername, cb) => {
+      logger.debug(`SNICallback for ${servername}`);
       const certInfo = this.getCertificate(servername);
       
       if (certInfo) {

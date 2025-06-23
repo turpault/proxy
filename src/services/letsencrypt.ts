@@ -159,23 +159,61 @@ export class LetsEncryptService {
 
   private async parseCertificate(cert: string): Promise<{ expiresAt: Date; isValid: boolean }> {
     try {
-      // Simple certificate parsing - in production, you might want to use a proper X.509 library
+      // Use openssl to parse the certificate and get the actual expiration date
+      const { exec } = require('child_process');
+      const { promisify } = require('util');
+      const execAsync = promisify(exec);
+      
+      // Write certificate to temporary file for openssl processing
+      const tempCertPath = path.join(process.cwd(), 'temp_cert.pem');
+      await fs.writeFile(tempCertPath, cert);
+      
+      try {
+        // Use openssl to get certificate expiration date
+        const { stdout } = await execAsync(`openssl x509 -in "${tempCertPath}" -noout -enddate`);
+        const match = stdout.match(/notAfter=(.+)/);
+        
+        if (match) {
+          const expiresAt = new Date(match[1]);
+          const now = new Date();
+          const isValid = expiresAt > now;
+          
+          logger.debug(`Certificate parsed successfully`, {
+            expiresAt: expiresAt.toISOString(),
+            isValid,
+            daysUntilExpiry: Math.floor((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+          });
+          
+          return { expiresAt, isValid };
+        } else {
+          throw new Error('Could not parse expiration date from certificate');
+        }
+      } finally {
+        // Clean up temporary file
+        await fs.remove(tempCertPath).catch(() => {
+          // Ignore cleanup errors
+        });
+      }
+    } catch (error) {
+      logger.error('Failed to parse certificate with openssl, falling back to basic validation', error);
+      
+      // Fallback: basic certificate format validation
       const match = cert.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/);
-      if (!match) throw new Error('Invalid certificate format');
-
-      // For now, set expiration to 90 days from now (Let's Encrypt default)
+      if (!match) {
+        return {
+          expiresAt: new Date(),
+          isValid: false,
+        };
+      }
+      
+      // If we can't parse the date, assume it's valid for now but log a warning
+      logger.warn('Certificate format appears valid but could not parse expiration date');
       const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 90);
-
+      expiresAt.setDate(expiresAt.getDate() + 90); // Assume 90 days
+      
       return {
         expiresAt,
         isValid: true,
-      };
-    } catch (error) {
-      logger.error('Failed to parse certificate', error);
-      return {
-        expiresAt: new Date(),
-        isValid: false,
       };
     }
   }
