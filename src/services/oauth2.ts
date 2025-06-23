@@ -340,7 +340,48 @@ export class OAuth2Service {
     this.validateConfig(config);
     
     return (req, res, next) => {
-      // Skip authentication for public paths
+      // Add debug logging
+      logger.info(`[OAUTH2] ${req.method} ${req.originalUrl} - path: ${req.path} - baseUrl: ${req.baseUrl}`);
+      
+      // Handle /oauth/session endpoint specifically
+      if (req.path === '/oauth/session') {
+        // Get session ID from cookie
+        const sessionId = req.cookies?.['oauth2-session'];
+        
+        if (sessionId && this.isAuthenticated(sessionId)) {
+          const session = this.getSession(sessionId);
+          return res.json({
+            authenticated: true,
+            session: {
+              tokenType: session?.tokenType,
+              scope: session?.scope,
+              expiresAt: session?.expiresAt,
+              // Don't include sensitive tokens in response
+            },
+            provider: config.provider
+          });
+        } else {
+          return res.json({
+            authenticated: false,
+            provider: config.provider
+          });
+        }
+      }
+      
+      // Handle /oauth/logout endpoint
+      if (req.path === '/oauth/logout') {
+        const sessionId = req.cookies?.['oauth2-session'];
+        if (sessionId) {
+          this.logout(sessionId);
+          res.clearCookie('oauth2-session');
+        }
+        return res.json({
+          success: true,
+          message: 'Logged out successfully'
+        });
+      }
+      
+      // Skip authentication for other public paths
       const isPublicPath = publicPaths.some(path => 
         req.path.startsWith(path) || req.path === path
       );
