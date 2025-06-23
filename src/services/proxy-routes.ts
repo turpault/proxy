@@ -5,6 +5,7 @@ import { ClassicProxy } from './classic-proxy';
 import { CorsProxy } from './cors-proxy';
 import { ProxyRequestConfig } from './base-proxy';
 import { OAuth2Service } from './oauth2';
+import path from 'path';
 
 export class ProxyRoutes {
   private classicProxy: ClassicProxy;
@@ -80,7 +81,28 @@ export class ProxyRoutes {
 
     // Set up static file serving
     app.use(routePath, express.static(route.staticPath));
-    logger.info(`Static route configured: ${routePath} -> ${route.staticPath}`);
+    
+    // Handle SPA fallback - serve index.html for routes that don't exist
+    if (route.spaFallback) {
+      app.use(routePath, (req, res, next) => {
+        // Skip if this is an API route or static asset
+        if (req.path.startsWith('/api/') || req.path.startsWith('/static/') || req.path.includes('.')) {
+          return next();
+        }
+        
+        // Serve index.html for SPA routes
+        const indexPath = path.join(route.staticPath!, 'index.html');
+        res.sendFile(indexPath, (err) => {
+          if (err) {
+            logger.error(`Failed to serve index.html for SPA route: ${req.path}`, err);
+            return next();
+          }
+        });
+      });
+      logger.info(`SPA fallback enabled for static route: ${routePath}`);
+    }
+    
+    logger.info(`Static route configured: ${routePath} -> ${route.staticPath}${route.spaFallback ? ' (with SPA fallback)' : ''}`);
   }
 
   private setupRedirectRoute(app: express.Application, route: ProxyRoute, routePath: string): void {
