@@ -15,6 +15,8 @@ A powerful, feature-rich reverse proxy server built with TypeScript and Bun, fea
 - **🌐 Geolocation Filtering**: Block/allow requests based on geographic location
 - **📈 Health Monitoring**: Automatic health checks and process recovery
 - **🔍 Dynamic Routing**: Path-based and domain-based routing with regex support
+- **💾 Configuration Backups**: Automatic backup system with organized storage
+- **⚙️ Flexible Configuration**: Command-line and environment variable support
 
 ## 🏗️ Architecture
 
@@ -54,64 +56,130 @@ A powerful, feature-rich reverse proxy server built with TypeScript and Bun, fea
    bun install
    ```
 
-3. **Configure your domain**
+3. **Start the server**
    ```bash
-   # Edit config/proxy.yaml
-   # Replace 'example.com' with your actual domain
-   ```
-
-4. **Set up environment variables**
-   ```bash
-   # Copy and edit the example environment file
-   cp .env.example .env
-   ```
-
-5. **Start the server**
-   ```bash
-   bun start
+   # Using default configuration
+   bun run src/index.ts
+   
+   # Using custom configuration
+   bun run src/index.ts --config ./config/main.yaml
    ```
 
 ## 📋 Configuration
 
-### Basic Configuration (`config/proxy.yaml`)
+### Configuration Structure
+
+The application supports two configuration modes:
+
+1. **Main Configuration** (recommended): Uses `main.yaml` as entry point
+2. **Legacy Configuration**: Single `proxy.yaml` file
+
+#### Main Configuration Structure
+
+```
+config/
+├── main.yaml              # Main configuration entry point
+├── proxy.yaml             # Proxy routes and settings
+├── processes.yaml         # Process management configuration
+└── backup/                # Configuration backups
+    ├── main.backup-*.yaml
+    ├── proxy.backup-*.yaml
+    └── processes.backup-*.yaml
+```
+
+#### Directory Structure
+
+```
+data/
+├── temp/                  # Temporary files
+├── statistics/            # Statistics data
+└── cache/                # Cache files
+
+logs/
+└── statistics/           # Statistics reports
+
+certificates/             # SSL certificates
+```
+
+### Main Configuration (`main.yaml`)
 
 ```yaml
-# Server configuration
-server:
-  port: 80
-  httpsPort: 443
-  managementPort: 4481
+# Management Console Configuration
+management:
+  port: 4481
+  host: "0.0.0.0"
+  cors:
+    enabled: true
+    origin: ["http://localhost:3000"]
+    credentials: true
 
-# Let's Encrypt configuration
-letsEncrypt:
-  email: "admin@example.com"
-  staging: false
-  certDir: "./certificates"
+# Configuration File References
+config:
+  proxy: "./config/proxy.yaml"
+  processes: "./config/processes.yaml"
 
-# Routes configuration
-routes:
-  - domain: "example.com"
-    path: "/app"
-    target: "http://localhost:3000"
-    ssl: true
-    cors: true
+# Global Settings
+settings:
+  dataDir: "./data"
+  logsDir: "./logs"
+  certificatesDir: "./certificates"
+  tempDir: "./data/temp"
+  statsDir: "./data/statistics"
+  cacheDir: "./data/cache"
+  backupDir: "./config/backup"
+  
+  statistics:
+    enabled: true
+    backupInterval: 86400000  # 24 hours
+    retentionDays: 30
+  
+  cache:
+    enabled: true
+    maxAge: 86400000  # 24 hours
+    maxSize: "100MB"
+    cleanupInterval: 3600000  # 1 hour
+
+# Development Settings
+development:
+  debug: false
+  verbose: false
+  hotReload: false
 ```
+
+### Command Line Arguments
+
+- `--config <path>`: Specify the main configuration file path
+- `--no-watch`: Disable configuration file watching
+- `--create-config <path>`: Create an example configuration file
 
 ### Environment Variables
 
-Create a `.env` file with your configuration:
+- `MAIN_CONFIG_FILE`: Path to main configuration file
+- `CONFIG_FILE`: Path to legacy configuration file
+- `DISABLE_CONFIG_WATCH`: Set to 'true' to disable config watching
 
-```bash
-# Server configuration
-NODE_ENV=production
-LOG_LEVEL=info
+## 💾 Backup System
 
-# OAuth2 credentials (if using OAuth2)
-EXAMPLE_CLIENT_ID=your_client_id
-EXAMPLE_CLIENT_SECRET=your_client_secret
-EXAMPLE_APP_REDIRECT_URI=https://example.com/oauth/callback
-EXAMPLE_SUBSCRIPTION_KEY=your_api_key
-```
+Configuration files are automatically backed up when modified through the management console. Backups are stored in the `config/backup/` directory with timestamps:
+
+- `main.backup-YYYY-MM-DDTHH-MM-SS-sssZ.yaml`
+- `proxy.backup-YYYY-MM-DDTHH-MM-SS-sssZ.yaml`
+- `processes.backup-YYYY-MM-DDTHH-MM-SS-sssZ.yaml`
+
+Backups can be managed through the management console API:
+- `POST /api/config/:type/backup` - Create backup
+- `GET /api/config/:type/backups` - List backups
+- `POST /api/config/:type/restore` - Restore from backup
+
+## 📊 Management Interface
+
+Access the management console at `http://localhost:4481` (or the configured port) to:
+
+- View and edit configurations
+- Monitor processes
+- View statistics
+- Manage backups
+- Monitor system status
 
 ## 🔧 Advanced Features
 
@@ -160,15 +228,6 @@ security:
       connectSrc: ["'self'", "https://api.example.com"]
 ```
 
-## 📊 Management Interface
-
-Access the web-based management interface at `http://your-server:4481`:
-
-- **Process Monitoring**: View and control backend processes
-- **Statistics Dashboard**: Real-time request statistics and geolocation data
-- **SSL Certificate Management**: Monitor certificate status and expiration
-- **Log Viewer**: Real-time log streaming from managed processes
-
 ## 🔍 API Endpoints
 
 ### Process Management
@@ -200,137 +259,50 @@ GET /api/statistics?period=24h
 GET /api/certificates
 ```
 
-## 🛠️ Development
-
-### Running in Development Mode
+### Configuration Management
 
 ```bash
-# Start with file watching
-bun --watch src/index.ts
+# Create backup
+POST /api/config/:type/backup
 
-# Start with debug logging
-LOG_LEVEL=debug bun start
+# List backups
+GET /api/config/:type/backups
+
+# Restore from backup
+POST /api/config/:type/restore
 ```
 
-### Testing
+## 🧪 Testing
+
+Run the test suite to verify functionality:
 
 ```bash
+# Run all tests
+bun run test
+
+# Test backup functionality
+bun run testing_scripts/test-backup-functionality.js
+```
+
+## 🚀 Development
+
+```bash
+# Install dependencies
+bun install
+
+# Run in development mode
+bun run start
+
 # Run tests
-bun test
+bun run test
 
-# Run specific test file
-bun test src/services/__tests__/proxy.test.ts
+# Create example configuration
+bun run src/index.ts --create-config ./config/example.yaml
 ```
 
-## 📝 Examples
+## 📝 License
 
-### Static File Serving
-
-```yaml
-routes:
-  - domain: "static.example.com"
-    path: "/files"
-    staticPath: "/path/to/static/files"
-    cors: true
-    ssl: true
-```
-
-### API Proxy with CORS
-
-```yaml
-routes:
-  - domain: "api.example.com"
-    target: "http://localhost:3001"
-    cors:
-      origin: ["https://example.com", "http://localhost:3000"]
-      credentials: true
-      methods: ["GET", "POST", "PUT", "DELETE"]
-      allowedHeaders: ["Content-Type", "Authorization", "X-API-Key"]
-    ssl: true
-```
-
-### Path-based Routing
-
-```yaml
-routes:
-  - domain: "app.example.com"
-    path: "/app1"
-    target: "http://localhost:3001"
-    ssl: true
-
-  - domain: "app.example.com"
-    path: "/app2"
-    target: "http://localhost:3002"
-    ssl: true
-```
-
-### OAuth2 Protected Route
-
-```yaml
-routes:
-  - domain: "example.com"
-    path: "/protected"
-    target: "http://localhost:3000"
-    oauth2:
-      provider: "example"
-      clientId: "${EXAMPLE_CLIENT_ID}"
-      clientSecret: "${EXAMPLE_CLIENT_SECRET}"
-      authorizationEndpoint: "https://oauth.example.com/authorize"
-      tokenEndpoint: "https://oauth.example.com/token"
-      callbackUrl: "https://example.com/oauth/callback"
-    ssl: true
-```
-
-## 🔒 Security Considerations
-
-### SSL/TLS Configuration
-
-- Automatic Let's Encrypt certificate generation
-- Certificate renewal monitoring
-- HSTS headers for HTTPS enforcement
-- Secure cipher configuration
-
-### OAuth2 Security
-
-- Secure session management
-- CSRF protection
-- Secure cookie configuration
-- Environment variable protection
-
-### Process Security
-
-- Isolated process execution
-- Health check monitoring
-- Automatic restart on failure
-- Log file rotation
-
-## 📈 Monitoring and Logging
-
-### Log Levels
-
-- `error`: Critical errors and failures
-- `warn`: Warning conditions
-- `info`: General information
-- `debug`: Detailed debugging information
-
-### Statistics Collection
-
-- Request count and response times
-- Geographic location tracking
-- Error rate monitoring
-- Process health metrics
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see LICENSE file for details.
 
 ## 🆘 Support
 
@@ -339,16 +311,6 @@ For support and questions:
 - Create an issue on GitHub
 - Check the documentation
 - Review the example configurations
-
-## 🔄 Changelog
-
-### v1.0.0
-- Initial release
-- Basic reverse proxy functionality
-- Let's Encrypt integration
-- OAuth2 support
-- Process management
-- Web-based management interface
 
 ---
 
@@ -430,4 +392,47 @@ cors:
 cors:
   allowedHeaders: ["Content-Type", "Authorization", "X-API-Key", "X-Custom-Header"]
   exposedHeaders: ["X-Total-Count", "X-Page-Count"]
+```
+
+## Configuration Backups
+
+The proxy server includes an automatic backup system to ensure configuration files are not lost. Backups are stored in the `config/backup/` directory with timestamps.
+
+### Backup System
+
+Configuration files are automatically backed up when modified through the management console. Backups are stored in the `config/backup/` directory with timestamps:
+
+- `main.backup-YYYY-MM-DDTHH-MM-SS-sssZ.yaml`
+- `proxy.backup-YYYY-MM-DDTHH-MM-SS-sssZ.yaml`
+- `processes.backup-YYYY-MM-DDTHH-MM-SS-sssZ.yaml`
+
+Backups can be managed through the management console API:
+- `POST /api/config/:type/backup` - Create backup
+- `GET /api/config/:type/backups` - List backups
+- `POST /api/config/:type/restore` - Restore from backup
+
+## Management Console
+
+Access the management console at `http://localhost:4481` (or the configured port) to:
+
+- View and edit configurations
+- Monitor processes
+- View statistics
+- Manage backups
+- Monitor system status
+
+## Development
+
+```bash
+# Install dependencies
+bun install
+
+# Run in development mode
+bun run start
+
+# Run tests
+bun run test
+
+# Create example configuration
+bun run src/index.ts --create-config ./config/example.yaml
 ``` 
