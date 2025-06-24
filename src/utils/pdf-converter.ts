@@ -8,7 +8,7 @@ export interface ConversionOptions {
 }
 
 export interface ConversionResult {
-  body: string;
+  body: Buffer;
   contentType: string;
 }
 
@@ -23,7 +23,7 @@ export interface ConversionResult {
  * @returns Promise<ConversionResult> - The converted image data and content type
  */
 export async function convertToImage(
-  body: string,
+  body: Buffer,
   contentType: string,
   format?: string,
   width?: string | number,
@@ -54,15 +54,12 @@ export async function convertToImage(
       throw new Error('Height must be between 1 and 10000');
     }
 
-    // Convert binary string to Buffer
-    const pdfBuffer = Buffer.from(body, 'binary');
 
     // Import required modules
     const fs = await import('fs/promises');
     const os = await import('os');
     const path = await import('path');
     const { spawn } = await import('child_process');
-    const { promisify } = await import('util');
 
     // Use provided temp directory or fall back to system temp directory
     const workingTempDir = tempDir || os.tmpdir();
@@ -79,12 +76,13 @@ export async function convertToImage(
 
     try {
       // Write PDF to temporary file
-      logger.info(`[PDFTOPPM] Writing PDF to temporary file: ${tempPdfPath}, ${pdfBuffer.length} bytes`);
-      await fs.writeFile(tempPdfPath, pdfBuffer);
+      logger.info(`[PDFTOPPM] Writing PDF to temporary file: ${tempPdfPath}, ${body.length} bytes`);
+      await fs.writeFile(tempPdfPath, body);
 
       // Step 1: Convert PDF to individual page images using pdftoppm
       const pdftoppmArgs = [
-        '-singlefile', // Output single file per page
+        '-f', '1', // Start from page 1
+        '-l', '999', // Convert up to 999 pages (effectively all pages)
         '-scale-to', widthNum ? widthNum.toString() : '800', // Scale to width if specified
         '-jpegopt', 'quality=100', // High quality for JPEG
         tempPdfPath,
@@ -124,7 +122,6 @@ export async function convertToImage(
       
       // Filter for image files with the correct extension
       const pageFiles = extractedFiles
-        .filter(file => file.endsWith(`.${outputFormat}`))
         .map(file => path.join(extractedImagesDir, file))
         .sort(); // Sort to ensure pages are in correct order
 
@@ -166,23 +163,10 @@ export async function convertToImage(
 
       // Step 4: Read the composite image
       const imageBuffer = await fs.readFile(outputImagePath);
-      const imageBase64 = imageBuffer.toString('base64');
-
-      // Clean up temporary files
-      /*
-      try {
-        await fs.unlink(tempPdfPath);
-        // Remove the entire extracted images directory
-        await fs.rmdir(extractedImagesDir, { recursive: true });
-        await fs.unlink(outputImagePath);
-      } catch (cleanupError) {
-        logger.warn('Failed to clean up temporary files', { error: cleanupError });
-      }
-      */
 
       // Return the converted image
       return {
-        body: imageBase64,
+        body: imageBuffer,
         contentType: `image/${outputFormat}`
       };
 

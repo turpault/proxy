@@ -47,7 +47,7 @@ export class CorsProxy extends BaseProxy {
         
         // Send cached body as binary
         res.set('Content-Type', cachedResponse.contentType);
-        res.send(Buffer.from(cachedResponse.body, 'binary'));
+        res.send(cachedResponse.body);
         
         // Log cached response
         const duration = Date.now() - startTime;
@@ -87,7 +87,7 @@ export class CorsProxy extends BaseProxy {
           // Read the response body as binary
           const responseBuffer = await response.arrayBuffer();
           let contentType = response.headers.get('content-type') || 'application/octet-stream';
-          let body = Buffer.from(responseBuffer).toString('binary');
+          let body = Buffer.from(responseBuffer);
 
           // if the request is a pdf conversion, convert the body to a pdf
           if (contentType.includes('application/pdf') && req.query.convert) {
@@ -101,7 +101,7 @@ export class CorsProxy extends BaseProxy {
               req.query.height as string,
               this.tempDir
             );
-            body = newBody;
+            body = Buffer.from(newBody);
             contentType = newContentType;
           } catch (error) {
             logger.error(`[CORS PROXY] Error converting PDF to image for ${routeIdentifier}`, error);
@@ -120,12 +120,7 @@ export class CorsProxy extends BaseProxy {
           
           // Send the response as binary
           res.set('Content-Type', contentType);
-          // If we converted the PDF, send the converted image data, otherwise send the original buffer
-          if (contentType.includes('application/pdf') && req.query.convert) {
-            res.send(Buffer.from(body, 'base64'));
-          } else {
-            res.send(Buffer.from(responseBuffer));
-          }
+          res.send(body);
         } catch (cacheError) {
           logger.warn('Failed to cache response, falling back to streaming', { target, error: cacheError });
           // Fall back to streaming if caching fails

@@ -7,7 +7,7 @@ export interface CacheEntry {
   timestamp: number;
   status: number;
   headers: Record<string, string>;
-  body: string;
+  body: Buffer;
   contentType: string;
   userId?: string; // User identifier for user-specific caching
   userIP?: string; // User IP for additional identification
@@ -140,7 +140,7 @@ export class CacheService {
 
       // Read cache entry
       const cacheData = await fs.readJson(cachePath);
-      const entry: CacheEntry = cacheData;
+      const entry: CacheEntry = {...cacheData, body: Buffer.from(cacheData.body, "binary")};
 
       // Check if cache is expired
       const now = Date.now();
@@ -180,7 +180,7 @@ export class CacheService {
       this.updateMRU(key, cacheEntry);
 
       // Store on disk
-      await fs.writeJson(cachePath, cacheEntry, { spaces: 2 });
+      await fs.writeJson(cachePath, {...cacheEntry, body: cacheEntry.body.toString('binary')}, { spaces: 2 });
       logger.debug(`Cached response for ${method} ${target}${userId ? ` (user: ${userId})` : ''}`);
     } catch (error) {
       logger.error('Error writing to cache', { target, method, userId, userIP, error });
