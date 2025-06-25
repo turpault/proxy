@@ -3,7 +3,7 @@ import http from 'http';
 import https from 'https';
 import { ServerConfig, MainConfig } from '../types';
 import { logger } from '../utils/logger';
-import { cacheService } from './cache';
+import { cacheService, setCacheExpiration } from './cache';
 import { getStatisticsService } from './statistics';
 import { WebSocketServiceInterface } from './websocket';
 import { ProxyRoutes } from './proxy-routes';
@@ -34,17 +34,21 @@ export class ProxyServer implements WebSocketServiceInterface {
     this.app = express();
     this.managementApp = express();
     
-    // Get temp directory from main config
-    const tempDir = mainConfig?.settings?.tempDir;
-    this.proxyRoutes = new ProxyRoutes(tempDir);
-    this.proxyMiddleware = new ProxyMiddleware();
-    this.proxyCertificates = new ProxyCertificates(config);
-    this.proxyProcesses = new ProxyProcesses(config);
-    
     // Initialize statistics service with configuration
     const reportDir = mainConfig?.settings?.logsDir ? path.join(mainConfig.settings.logsDir, 'statistics') : undefined;
     const dataDir = mainConfig?.settings?.statsDir;
     this.statisticsService = getStatisticsService(reportDir, dataDir);
+    
+    // Get temp directory from main config
+    const tempDir = mainConfig?.settings?.tempDir;
+    this.proxyRoutes = new ProxyRoutes(tempDir, this.statisticsService);
+    this.proxyMiddleware = new ProxyMiddleware();
+    this.proxyCertificates = new ProxyCertificates(config);
+    this.proxyProcesses = new ProxyProcesses(config);
+    
+    // Set cache expiration from main config if available
+    const cacheMaxAge = mainConfig?.settings?.cache?.maxAge;
+    setCacheExpiration(typeof cacheMaxAge === 'number' ? cacheMaxAge : 24 * 60 * 60 * 1000);
     
     this.setupMiddleware();
     this.setupRoutes();

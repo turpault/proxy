@@ -163,7 +163,7 @@ const mainConfigSchema = Joi.object({
     }).optional(),
     cache: Joi.object({
       enabled: Joi.boolean().default(true),
-      maxAge: Joi.number().default(86400000),
+      maxAge: Joi.number().default(86400000).description('Cache expiration in milliseconds (default 24h)'),
       maxSize: Joi.string().default('100MB'),
       cleanupInterval: Joi.number().default(3600000),
     }).optional(),

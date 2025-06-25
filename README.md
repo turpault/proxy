@@ -435,4 +435,18 @@ bun run test
 
 # Create example configuration
 bun run src/index.ts --create-config ./config/example.yaml
-``` 
+```
+
+## Cache Expiration for CORS Proxy
+
+The disk cache for CORS proxy responses expires after a configurable time. By default, cached responses expire after 24 hours.
+
+To change the expiration, set the `maxAge` option (in milliseconds) under the `settings.cache` block in your `main.yaml`:
+
+```yaml
+settings:
+  cache:
+    maxAge: 43200000  # 12 hours (in milliseconds)
+```
+
+If not set, the default is 24 hours (86400000 ms). 

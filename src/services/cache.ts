@@ -481,4 +481,11 @@ export class CacheService {
 }
 
 // Export singleton instance
-export const cacheService = new CacheService(); 
+export const cacheService = new CacheService();
+
+// Allow runtime configuration of cache expiration
+export function setCacheExpiration(maxAgeMs: number) {
+  if (typeof maxAgeMs === 'number' && maxAgeMs > 0) {
+    (cacheService as any).maxAge = maxAgeMs;
+  }
+} 

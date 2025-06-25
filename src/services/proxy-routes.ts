@@ -5,17 +5,20 @@ import { ClassicProxy } from './classic-proxy';
 import { CorsProxy } from './cors-proxy';
 import { ProxyRequestConfig } from './base-proxy';
 import { OAuth2Service } from './oauth2';
+import { geolocationService } from './geolocation';
 import path from 'path';
 
 export class ProxyRoutes {
   private classicProxy: ClassicProxy;
   private corsProxy: CorsProxy;
   private oauth2Service: OAuth2Service;
+  private statisticsService: any;
 
-  constructor(tempDir?: string) {
+  constructor(tempDir?: string, statisticsService?: any) {
     this.classicProxy = new ClassicProxy();
     this.corsProxy = new CorsProxy(tempDir);
     this.oauth2Service = new OAuth2Service();
+    this.statisticsService = statisticsService;
   }
 
   setupRoutes(app: express.Application, config: ServerConfig): void {
@@ -152,6 +155,7 @@ export class ProxyRoutes {
 
   private setupClassicProxyRoute(app: express.Application, route: ProxyRoute, routePath: string): void {
     const proxy = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+      const startTime = Date.now();
       const config: ProxyRequestConfig = {
         route,
         target: route.target!,
@@ -164,9 +168,17 @@ export class ProxyRoutes {
       
       try {
         await this.classicProxy.handleProxyRequest(req, res, config);
+        
+        // Record statistics after successful request
+        const responseTime = Date.now() - startTime;
+        this.recordRequestStats(req, route, route.target!, responseTime, res.statusCode);
       } catch (error) {
         logger.error(`[CLASSIC PROXY] Error in proxy request for ${routePath}`, error);
         this.handleProxyError(error as Error, req, res, `classic ${routePath}`, route.target!, route, true);
+        
+        // Record statistics even for failed requests
+        const responseTime = Date.now() - startTime;
+        this.recordRequestStats(req, route, route.target!, responseTime, res.statusCode || 500);
       }
     };
     
@@ -207,13 +219,17 @@ export class ProxyRoutes {
 
   private setupCorsForwarderRoute(app: express.Application, route: ProxyRoute, routePath: string): void {
     const proxy = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+      const startTime = Date.now();
+      
+      // Validate and decode target URL
       const encodedUrl = req.query.url;
       if (!encodedUrl || typeof encodedUrl !== 'string') {
         return res.status(400).json({
           error: 'Bad Request',
-          message: 'Missing base64-encoded url query parameter'
+          message: 'Missing base64-encoded url parameter'
         });
       }
+
       let target: string;
       try {
         target = Buffer.from(encodedUrl, 'base64').toString('utf-8');
@@ -223,7 +239,8 @@ export class ProxyRoutes {
           message: 'Invalid base64 encoding in url parameter'
         });
       }
-      // Validate target URL
+
+      // Validate URL format
       try {
         new URL(target);
       } catch {
@@ -232,7 +249,9 @@ export class ProxyRoutes {
           message: 'Decoded url is not a valid URL'
         });
       }
+      
       logger.info(`[CORS FORWARDER] ${req.method} ${req.originalUrl} -> ${target}`);
+      
       try {
         const config: ProxyRequestConfig = {
           route,
@@ -244,9 +263,17 @@ export class ProxyRoutes {
           logErrors: true
         };
         await this.corsProxy.handleProxyRequest(req, res, config);
+        
+        // Record statistics after successful request
+        const responseTime = Date.now() - startTime;
+        this.recordRequestStats(req, route, target, responseTime, res.statusCode);
       } catch (error) {
         logger.error(`[CORS FORWARDER] Error in proxy request for ${routePath}`, error);
         this.handleProxyError(error as Error, req, res, `cors-forwarder ${routePath}`, target, route, true);
+        
+        // Record statistics even for failed requests
+        const responseTime = Date.now() - startTime;
+        this.recordRequestStats(req, route, target, responseTime, res.statusCode || 500);
       }
     };
     
@@ -347,5 +374,53 @@ export class ProxyRoutes {
         message: customErrorResponse?.message || 'An error occurred while processing your request'
       });
     }
+  }
+
+  /**
+   * Record request statistics if statistics service is available
+   */
+  private recordRequestStats(
+    req: express.Request,
+    route: ProxyRoute,
+    target: string,
+    responseTime: number,
+    statusCode: number
+  ): void {
+    if (!this.statisticsService) return;
+
+    try {
+      const clientIP = this.getClientIP(req);
+      const geolocation = geolocationService.getGeolocation(clientIP);
+      const userAgent = req.get('user-agent') || 'Unknown';
+      const method = req.method;
+      const routePath = route.path || route.domain || 'unknown';
+      const domain = route.domain;
+      
+      this.statisticsService.recordRequest(
+        clientIP,
+        geolocation,
+        routePath,
+        method,
+        userAgent,
+        responseTime,
+        domain,
+        target
+      );
+    } catch (error) {
+      logger.debug('Failed to record request statistics', error);
+    }
+  }
+
+  /**
+   * Get client IP address with proxy header support
+   */
+  private getClientIP(req: express.Request): string {
+    return (
+      req.headers['x-forwarded-for'] as string ||
+      req.headers['x-real-ip'] as string ||
+      req.connection.remoteAddress ||
+      req.socket.remoteAddress ||
+      'unknown'
+    ).split(',')[0].trim();
   }
 } 

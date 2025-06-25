@@ -68,6 +68,8 @@ export interface StatisticsReport {
       userAgents: string[];
       routes: string[];
       methods: string[];
+      latitude: number | null;
+      longitude: number | null;
     }>;
     byCountry: Array<{
       country: string;
@@ -452,6 +454,8 @@ export class StatisticsService {
           userAgents: Array.from(stat.userAgents),
           routes: Array.from(stat.routes),
           methods: Array.from(stat.methods),
+          latitude: stat.geolocation?.latitude ?? null,
+          longitude: stat.geolocation?.longitude ?? null,
         })),
         byCountry: Array.from(countryStats.entries()).map(([country, data]) => ({
           country,

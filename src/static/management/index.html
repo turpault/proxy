@@ -9,6 +9,7 @@
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/extension/dataTool.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/extension/bmap.min.js"></script>
+  <!-- <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/map/js/world.js"></script> -->
   <!-- Removed world.js due to MIME type issues - will use built-in world map data -->
   <style>
     * {
@@ -3803,7 +3804,7 @@
         });
 
         const groupHtml = Object.entries(groups).map(([name, routes]) => {
-          const cardsHtml = routes.map(route => {
+          const cardsHtml = routes.map((route, routeIdx) => {
             const topCountriesHtml = route.topCountries && route.topCountries.length > 0
               ? route.topCountries.slice(0, 3).map(country =>
                 `<span class="country-badge">${country.country} (${country.count})</span>`
@@ -3814,8 +3815,20 @@
               ? route.methods.map(method => `<span class="method-badge">${method}</span>`).join('')
               : '<span class="no-data">No method data</span>';
 
+            // Expanded cities section (hidden by default)
+            const allCitiesHtml = route.topCountries && route.topCountries.length > 0
+              ? `<div class="route-cities-list" style="display:none; margin-top:1rem;">
+                    <div style="font-weight:600; color:#4a5568; margin-bottom:0.5rem;">All Cities:</div>
+                    <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+                      ${route.topCountries.map(country =>
+                `<span class='country-badge'>${country.country}${country.city ? ` - ${country.city}` : ''} (${country.count})</span>`
+              ).join('')}
+                    </div>
+                 </div>`
+              : '';
+
             return `
-              <div class="route-card">
+              <div class="route-card" tabindex="0" style="cursor:pointer;" data-route-group="${name}" data-route-idx="${routeIdx}">
                 <div class="route-header">
                   <div class="route-info">
                     <div class="route-domain">${route.domain || 'Unknown'}</div>
@@ -3840,6 +3853,7 @@
                     <div class="route-detail-value">${route.uniqueIPs || 0}</div>
                   </div>
                 </div>
+                ${allCitiesHtml}
               </div>
             `;
           }).join('');
@@ -3852,6 +3866,18 @@
         }).join('');
 
         routesContainer.innerHTML = groupHtml;
+
+        // Add expand/collapse click handler for each route card
+        routesContainer.querySelectorAll('.route-card').forEach(card => {
+          card.addEventListener('click', function (e) {
+            const citiesList = this.querySelector('.route-cities-list');
+            if (citiesList) {
+              const isVisible = citiesList.style.display === 'block';
+              citiesList.style.display = isVisible ? 'none' : 'block';
+              this.classList.toggle('expanded', !isVisible);
+            }
+          });
+        });
       } else {
         routesContainer.innerHTML = '<div class="no-data">No route statistics available for the selected time period</div>';
       }
@@ -3873,6 +3899,18 @@
         return;
       }
 
+      // Dynamically load and register world geoJSON if not already registered
+      if (!echarts.getMap('world')) {
+        try {
+          const res = await fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson');
+          const geoJson = await res.json();
+          echarts.registerMap('world', geoJson);
+        } catch (err) {
+          container.innerHTML = '<div style="color:#e53e3e;padding:2rem;text-align:center;">Failed to load world map data</div>';
+          return;
+        }
+      }
+
       if (!geoHeatmapChart) {
         geoHeatmapChart = echarts.init(container);
       }
@@ -3885,6 +3923,76 @@
 
         if (!data.success) {
           throw new Error('Failed to load statistics');
+        }
+
+        // Try to use coordinates from details.byIP
+        let scatterData = [];
+        if (data.data.details && Array.isArray(data.data.details.byIP)) {
+          scatterData = data.data.details.byIP
+            .filter(ipStat => typeof ipStat.latitude === 'number' && typeof ipStat.longitude === 'number' && ipStat.latitude !== null && ipStat.longitude !== null)
+            .map(ipStat => [ipStat.longitude, ipStat.latitude, ipStat.count]);
+        }
+
+        if (scatterData.length > 0) {
+          geoHeatmapChart.hideLoading();
+          geoHeatmapChart.setOption({
+            title: {
+              text: 'Request Heatmap (by IP coordinates)',
+              left: 'center',
+              top: 10,
+              textStyle: { fontSize: 18, fontWeight: 600 }
+            },
+            geo: {
+              map: 'world',
+              roam: true,
+              label: { show: false },
+              itemStyle: {
+                areaColor: '#e0e7ef',
+                borderColor: '#bfc8d8',
+                borderWidth: 0.8
+              },
+              emphasis: {
+                itemStyle: {
+                  areaColor: '#b4d7f5'
+                }
+              }
+            },
+            visualMap: {
+              min: 1,
+              max: Math.max(10, ...scatterData.map(d => d[2])),
+              text: ['High', 'Low'],
+              realtime: false,
+              calculable: true,
+              inRange: {
+                color: ['#e0f3f8', '#abd9e9', '#74add1', '#4575b4', '#313695']
+              },
+              left: 'left',
+              top: 'bottom'
+            },
+            series: [{
+              name: 'Requests',
+              type: 'scatter',
+              coordinateSystem: 'geo',
+              data: scatterData,
+              symbolSize: function (val) {
+                return Math.max(8, Math.sqrt(val[2]) * 4);
+              },
+              encode: { tooltip: [2] },
+              itemStyle: {
+                color: '#4575b4',
+                shadowBlur: 10,
+                shadowColor: 'rgba(50, 50, 150, 0.3)'
+              },
+              emphasis: {
+                itemStyle: {
+                  color: '#d73027',
+                  borderColor: '#fff',
+                  borderWidth: 1.5
+                }
+              }
+            }]
+          });
+          return;
         }
 
         // Aggregate country counts from the actual data structure
@@ -3942,6 +4050,148 @@
           return;
         }
 
+        // Country code to name mapping for common countries
+        const countryCodeToName = {
+          'CA': 'Canada',
+          'US': 'United States',
+          'GB': 'United Kingdom',
+          'DE': 'Germany',
+          'FR': 'France',
+          'IT': 'Italy',
+          'ES': 'Spain',
+          'NL': 'Netherlands',
+          'BE': 'Belgium',
+          'CH': 'Switzerland',
+          'AT': 'Austria',
+          'SE': 'Sweden',
+          'NO': 'Norway',
+          'DK': 'Denmark',
+          'FI': 'Finland',
+          'PL': 'Poland',
+          'CZ': 'Czech Republic',
+          'HU': 'Hungary',
+          'RO': 'Romania',
+          'BG': 'Bulgaria',
+          'HR': 'Croatia',
+          'SI': 'Slovenia',
+          'SK': 'Slovakia',
+          'LT': 'Lithuania',
+          'LV': 'Latvia',
+          'EE': 'Estonia',
+          'IE': 'Ireland',
+          'PT': 'Portugal',
+          'GR': 'Greece',
+          'CY': 'Cyprus',
+          'MT': 'Malta',
+          'LU': 'Luxembourg',
+          'IS': 'Iceland',
+          'LI': 'Liechtenstein',
+          'MC': 'Monaco',
+          'SM': 'San Marino',
+          'VA': 'Vatican City',
+          'AD': 'Andorra',
+          'AU': 'Australia',
+          'NZ': 'New Zealand',
+          'JP': 'Japan',
+          'KR': 'South Korea',
+          'CN': 'China',
+          'IN': 'India',
+          'BR': 'Brazil',
+          'AR': 'Argentina',
+          'MX': 'Mexico',
+          'CL': 'Chile',
+          'PE': 'Peru',
+          'CO': 'Colombia',
+          'VE': 'Venezuela',
+          'EC': 'Ecuador',
+          'BO': 'Bolivia',
+          'PY': 'Paraguay',
+          'UY': 'Uruguay',
+          'GY': 'Guyana',
+          'SR': 'Suriname',
+          'GF': 'French Guiana',
+          'FK': 'Falkland Islands',
+          'ZA': 'South Africa',
+          'EG': 'Egypt',
+          'NG': 'Nigeria',
+          'KE': 'Kenya',
+          'GH': 'Ghana',
+          'ET': 'Ethiopia',
+          'TZ': 'Tanzania',
+          'UG': 'Uganda',
+          'DZ': 'Algeria',
+          'MA': 'Morocco',
+          'TN': 'Tunisia',
+          'LY': 'Libya',
+          'SD': 'Sudan',
+          'TD': 'Chad',
+          'NE': 'Niger',
+          'ML': 'Mali',
+          'BF': 'Burkina Faso',
+          'CI': 'Ivory Coast',
+          'SN': 'Senegal',
+          'GN': 'Guinea',
+          'SL': 'Sierra Leone',
+          'LR': 'Liberia',
+          'TG': 'Togo',
+          'BJ': 'Benin',
+          'CM': 'Cameroon',
+          'CF': 'Central African Republic',
+          'CG': 'Republic of the Congo',
+          'CD': 'Democratic Republic of the Congo',
+          'GA': 'Gabon',
+          'GQ': 'Equatorial Guinea',
+          'ST': 'Sao Tome and Principe',
+          'AO': 'Angola',
+          'ZM': 'Zambia',
+          'ZW': 'Zimbabwe',
+          'BW': 'Botswana',
+          'NA': 'Namibia',
+          'SZ': 'Eswatini',
+          'LS': 'Lesotho',
+          'MG': 'Madagascar',
+          'MU': 'Mauritius',
+          'SC': 'Seychelles',
+          'KM': 'Comoros',
+          'DJ': 'Djibouti',
+          'SO': 'Somalia',
+          'ER': 'Eritrea',
+          'RW': 'Rwanda',
+          'BI': 'Burundi',
+          'MW': 'Malawi',
+          'MZ': 'Mozambique',
+          'ZW': 'Zimbabwe',
+          'BW': 'Botswana',
+          'NA': 'Namibia',
+          'SZ': 'Eswatini',
+          'LS': 'Lesotho',
+          'MG': 'Madagascar',
+          'MU': 'Mauritius',
+          'SC': 'Seychelles',
+          'KM': 'Comoros',
+          'DJ': 'Djibouti',
+          'SO': 'Somalia',
+          'ER': 'Eritrea',
+          'RW': 'Rwanda',
+          'BI': 'Burundi',
+          'MW': 'Malawi',
+          'MZ': 'Mozambique'
+        };
+
+        // Convert country codes to names and filter out non-standard entries
+        const processedMapData = mapData
+          .filter(item => item.name !== 'Local' && item.name !== 'Unknown')
+          .map(item => ({
+            name: countryCodeToName[item.name] || item.name,
+            value: item.value
+          }))
+          .filter(item => item.value > 0);
+
+        if (processedMapData.length === 0) {
+          container.innerHTML = '<div style="color:#718096;padding:2rem;text-align:center;">No valid geolocation data available for the selected time period</div>';
+          return;
+        }
+
         geoHeatmapChart.setOption({
           title: {
             text: `Geolocation Heatmap (${currentTimeFilter})`,
@@ -3955,7 +4205,7 @@
           },
           visualMap: {
             min: 0,
-            max: Math.max(10, ...mapData.map(d => d.value)),
+            max: Math.max(10, ...processedMapData.map(d => d.value)),
             text: ['High', 'Low'],
             realtime: false,
             calculable: true,
@@ -3971,7 +4221,7 @@
             map: 'world',
             roam: true,
             emphasis: { label: { show: true } },
-            data: mapData
+            data: processedMapData
           }]
         });
 
