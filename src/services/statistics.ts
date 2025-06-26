@@ -101,6 +101,7 @@ export interface RouteStats {
   }>;
   uniqueIPs: number;
   methods: string[];
+  uniquePaths?: string[];
 }
 
 export interface TimePeriodStats {
@@ -735,9 +736,57 @@ export class StatisticsService {
       countries: Map<string, { count: number; cities: Set<string> }>;
       ips: Set<string>;
       methods: Set<string>;
+      paths: Set<string>;
     }>();
 
+    // Track unmatched requests
+    const unmatchedPaths = new Set<string>();
+    let unmatchedCount = 0;
+    let unmatchedResponseTimes: number[] = [];
+    let unmatchedIPs = new Set<string>();
+    let unmatchedMethods = new Set<string>();
+    let unmatchedCountries = new Map<string, { count: number; cities: Set<string> }>();
+
     allRouteDetails.forEach(detail => {
+      // Try to match with routeConfigs
+      let matched = false;
+      if (routeConfigs) {
+        matched = routeConfigs.some(cfg =>
+          (cfg.domain === detail.domain && (cfg.target === detail.target || cfg.path === detail.target))
+        );
+      }
+      if (!matched) {
+        unmatchedCount++;
+        unmatchedPaths.add(detail.target);
+        unmatchedResponseTimes.push(detail.responseTime);
+        unmatchedMethods.add(detail.method);
+        // Find the IP and country
+        const stat = periodStats.find(s =>
+          s.routeDetails.some(rd =>
+            rd.domain === detail.domain &&
+            rd.target === detail.target &&
+            rd.timestamp.getTime() === detail.timestamp.getTime()
+          )
+        );
+        if (stat) {
+          unmatchedIPs.add(stat.ip);
+          if (stat.geolocation) {
+            const country = stat.geolocation.country || 'Unknown';
+            const city = stat.geolocation.city;
+            const countryData = unmatchedCountries.get(country);
+            if (countryData) {
+              countryData.count++;
+              if (city) countryData.cities.add(city);
+            } else {
+              unmatchedCountries.set(country, {
+                count: 1,
+                cities: city ? new Set([city]) : new Set()
+              });
+            }
+          }
+        }
+        return;
+      }
       const key = `${detail.domain}:${detail.target}`;
       const existing = routeGroups.get(key);
       
@@ -809,7 +858,8 @@ export class StatisticsService {
           responseTimes: [detail.responseTime],
           countries,
           ips,
-          methods
+          methods,
+          paths: new Set(),
         });
       }
     });
@@ -845,9 +895,33 @@ export class StatisticsService {
         avgResponseTime,
         topCountries,
         uniqueIPs: route.ips.size,
-        methods: Array.from(route.methods)
+        methods: Array.from(route.methods),
       };
     });
+
+    // Add unmatched requests as a special route card if any
+    if (unmatchedCount > 0) {
+      const unmatchedTopCountries = Array.from(unmatchedCountries.entries())
+        .map(([country, data]) => ({
+          country,
+          count: data.count,
+          percentage: (data.count / unmatchedCount) * 100,
+          city: data.cities.size > 0 ? Array.from(data.cities)[0] : undefined
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+      routes.push({
+        name: 'Unmatched',
+        domain: 'Unmatched',
+        target: '',
+        requests: unmatchedCount,
+        avgResponseTime: unmatchedResponseTimes.length > 0 ? unmatchedResponseTimes.reduce((a, b) => a + b, 0) / unmatchedResponseTimes.length : 0,
+        topCountries: unmatchedTopCountries,
+        uniqueIPs: unmatchedIPs.size,
+        methods: Array.from(unmatchedMethods),
+        uniquePaths: Array.from(unmatchedPaths),
+      });
+    }
 
     // Sort routes by request count
     routes.sort((a, b) => b.requests - a.requests);

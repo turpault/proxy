@@ -3803,6 +3803,12 @@
           groups[groupName].push(route);
         });
 
+        // Add unmatched card at the end if present
+        let unmatchedRoute = data.routes.find(r => r.name === 'Unmatched');
+        if (unmatchedRoute) {
+          groups['Unmatched'] = [unmatchedRoute];
+        }
+
         const groupHtml = Object.entries(groups).map(([name, routes]) => {
           const cardsHtml = routes.map((route, routeIdx) => {
             const topCountriesHtml = route.topCountries && route.topCountries.length > 0
@@ -3827,8 +3833,19 @@
                  </div>`
               : '';
 
+            // Unmatched card: show unique paths on click
+            let unmatchedPathsHtml = '';
+            if (route.name === 'Unmatched' && route.uniquePaths && route.uniquePaths.length > 0) {
+              unmatchedPathsHtml = `<div class="unmatched-paths-list" style="display:none; margin-top:1rem;">
+                <div style="font-weight:600; color:#4a5568; margin-bottom:0.5rem;">Unique Paths Hit:</div>
+                <div style="display:flex; flex-direction:column; gap:0.25rem; max-height:200px; overflow:auto;">
+                  ${route.uniquePaths.map(p => `<span class='country-badge' style='background:#ddd;color:#333;'>${p}</span>`).join('')}
+                </div>
+              </div>`;
+            }
+
             return `
-              <div class="route-card" tabindex="0" style="cursor:pointer;" data-route-group="${name}" data-route-idx="${routeIdx}">
+              <div class="route-card${route.name === 'Unmatched' ? ' unmatched-card' : ''}" tabindex="0" style="cursor:pointer;" data-route-group="${name}" data-route-idx="${routeIdx}">
                 <div class="route-header">
                   <div class="route-info">
                     <div class="route-domain">${route.domain || 'Unknown'}</div>
@@ -3854,6 +3871,7 @@
                   </div>
                 </div>
                 ${allCitiesHtml}
+                ${unmatchedPathsHtml}
               </div>
             `;
           }).join('');
@@ -3874,6 +3892,13 @@
             if (citiesList) {
               const isVisible = citiesList.style.display === 'block';
               citiesList.style.display = isVisible ? 'none' : 'block';
+              this.classList.toggle('expanded', !isVisible);
+            }
+            // For unmatched card, toggle unique paths
+            const unmatchedPathsList = this.querySelector('.unmatched-paths-list');
+            if (unmatchedPathsList) {
+              const isVisible = unmatchedPathsList.style.display === 'block';
+              unmatchedPathsList.style.display = isVisible ? 'none' : 'block';
               this.classList.toggle('expanded', !isVisible);
             }
           });

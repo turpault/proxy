@@ -52,6 +52,7 @@ export class ProxyServer implements WebSocketServiceInterface {
     
     this.setupMiddleware();
     this.setupRoutes();
+    this.setupErrorHandling();
     this.setupManagementServer();
   }
 
@@ -61,6 +62,55 @@ export class ProxyServer implements WebSocketServiceInterface {
 
   private setupRoutes(): void {
     this.proxyRoutes.setupRoutes(this.app, this.config);
+  }
+
+  private setupErrorHandling(): void {
+    // Add 404 handler to record statistics for unmatched requests
+    this.app.use('*', (req, res) => {
+      const startTime = Date.now();
+      
+      // Record the unmatched request
+      const clientIP = this.getClientIP(req);
+      const geolocation = this.getGeolocation(clientIP);
+      const userAgent = req.get('user-agent') || 'Unknown';
+      const method = req.method;
+      const path = req.originalUrl || req.url;
+      
+      this.statisticsService.recordRequest(
+        clientIP,
+        geolocation,
+        path, // Use the actual path as the route
+        method,
+        userAgent,
+        undefined, // No response time yet
+        'Unmatched', // Domain for unmatched requests
+        path // Target is the path itself
+      );
+      
+      // Send 404 response
+      res.status(404).json({
+        error: 'Not Found',
+        message: `No route configured for ${method} ${path}`,
+        timestamp: new Date().toISOString()
+      });
+    });
+  }
+
+  private getClientIP(req: express.Request): string {
+    return req.ip || 
+           req.connection.remoteAddress || 
+           req.socket.remoteAddress || 
+           (req.connection as any).socket?.remoteAddress || 
+           'unknown';
+  }
+
+  private getGeolocation(ip: string): any {
+    try {
+      const { geolocationService } = require('./geolocation');
+      return geolocationService.getGeolocation(ip);
+    } catch (error) {
+      return null;
+    }
   }
 
   private setupManagementServer(): void {
