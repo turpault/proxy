@@ -229,7 +229,7 @@ export class ProxyServer implements WebSocketServiceInterface {
       httpsPort: this.config.httpsPort,
       routes: this.config.routes.length,
       certificates: this.proxyCertificates.getAllCertificates(),
-      processes: processManager.getProcessStatus().length,
+      processes: this.getProcessesSync(),
       statistics: this.statisticsService.getStatsSummary(),
       cache: cacheService.getStats(),
       uptime: process.uptime(),
@@ -239,21 +239,9 @@ export class ProxyServer implements WebSocketServiceInterface {
   }
 
   /**
-   * Get the server configuration
+   * Get processes data synchronously for status updates
    */
-  getConfig(): ServerConfig {
-    return this.config;
-  }
-
-  /**
-   * Get the statistics service
-   */
-  getStatisticsService(): any {
-    return this.statisticsService;
-  }
-
-  // WebSocket interface methods
-  async getProcesses(): Promise<any[]> {
+  private getProcessesSync(): any[] {
     const processes = processManager.getProcessStatus();
     const availableProcesses = this.config.processManagement?.processes || {};
     // Ensure processes is an array
@@ -315,6 +303,25 @@ export class ProxyServer implements WebSocketServiceInterface {
         } : null
       };
     });
+  }
+
+  /**
+   * Get the server configuration
+   */
+  getConfig(): ServerConfig {
+    return this.config;
+  }
+
+  /**
+   * Get the statistics service
+   */
+  getStatisticsService(): any {
+    return this.statisticsService;
+  }
+
+  // WebSocket interface methods
+  async getProcesses(): Promise<any[]> {
+    return this.getProcessesSync();
   }
 
   async getStatusData(): Promise<any> {
