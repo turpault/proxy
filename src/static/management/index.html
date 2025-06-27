@@ -82,6 +82,44 @@
       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
 
+    .header-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 2rem;
+    }
+
+    .header-left {
+      flex: 1;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      min-width: 200px;
+    }
+
+    .last-updated-info {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.25rem;
+    }
+
+    .last-updated-label {
+      font-size: 0.8rem;
+      opacity: 0.8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .last-updated-time {
+      font-size: 0.9rem;
+      font-weight: 500;
+      opacity: 0.9;
+    }
+
     .header h1 {
       font-size: 2.5rem;
       margin-bottom: 0.5rem;
@@ -2445,8 +2483,18 @@
     <!-- Processes Tab -->
     <div id="content-processes" class="tab-content active">
       <div class="header">
-        <h1>⚙️ Process Management</h1>
-        <p>Monitor and control managed processes</p>
+        <div class="header-content">
+          <div class="header-left">
+            <h1>⚙️ Process Management</h1>
+            <p>Monitor and control managed processes</p>
+          </div>
+          <div class="header-right">
+            <div class="last-updated-info">
+              <span class="last-updated-label">Last Updated:</span>
+              <span class="last-updated-time" id="header-last-updated">-</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="stats-overview">
@@ -2465,10 +2513,6 @@
         <div class="stat-card">
           <h4>Uptime</h4>
           <div class="value" id="uptime">-</div>
-        </div>
-        <div class="stat-card">
-          <h4>Last Updated</h4>
-          <div class="value" id="last-updated">-</div>
         </div>
       </div>
 
@@ -3039,6 +3083,9 @@
         };
         trySwitch();
       }
+
+      // Start periodic uptime updates
+      startUptimeUpdates();
     });
 
     // WebSocket connection management
@@ -3189,7 +3236,34 @@
       document.getElementById('running-count').textContent = runningCount;
       document.getElementById('stopped-count').textContent = stoppedCount;
       document.getElementById('uptime').textContent = formatUptime(uptime * 1000);
-      document.getElementById('last-updated').textContent = timestamp;
+
+      // Update the header last updated time
+      const headerLastUpdated = document.getElementById('header-last-updated');
+      if (headerLastUpdated) {
+        headerLastUpdated.textContent = timestamp;
+      }
+
+      // Store the uptime start time for periodic updates
+      if (statusData.timestamp) {
+        window.serverStartTime = new Date(statusData.timestamp).getTime() - (uptime * 1000);
+      }
+    }
+
+    // Periodic uptime update function
+    function updateUptimePeriodically() {
+      if (window.serverStartTime) {
+        const currentUptime = Date.now() - window.serverStartTime;
+        const uptimeElement = document.getElementById('uptime');
+        if (uptimeElement) {
+          uptimeElement.textContent = formatUptime(currentUptime);
+        }
+      }
+    }
+
+    // Start periodic uptime updates
+    function startUptimeUpdates() {
+      // Update uptime every second
+      setInterval(updateUptimePeriodically, 1000);
     }
 
     // Update process information fields without regenerating entire HTML
