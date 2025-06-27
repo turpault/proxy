@@ -3086,6 +3086,9 @@
 
       // Start periodic uptime updates
       startUptimeUpdates();
+
+      // Start periodic process uptime updates
+      startProcessUptimeUpdates();
     });
 
     // WebSocket connection management
@@ -4478,15 +4481,16 @@
 
     // Utility functions
     function formatUptime(milliseconds) {
-      const seconds = Math.floor(milliseconds / 1000);
+      const totalSeconds = milliseconds / 1000;
+      const seconds = Math.floor(totalSeconds);
       const minutes = Math.floor(seconds / 60);
       const hours = Math.floor(minutes / 60);
       const days = Math.floor(hours / 24);
 
       if (days > 0) return `${days}d ${hours % 24}h`;
       if (hours > 0) return `${hours}h ${minutes % 60}m`;
-      if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
-      return `${seconds}s`;
+      if (minutes > 0) return `${minutes}m ${(totalSeconds % 60).toFixed(2)}s`;
+      return `${totalSeconds.toFixed(2)}s`;
     }
 
     function getRestartCountClass(count) {
@@ -5200,6 +5204,26 @@
         closeBackupModal();
       }
     };
+
+    // Update individual process uptimes periodically
+    function updateProcessUptimes() {
+      const processes = Array.isArray(processesData) ? processesData : [];
+      processes.forEach(process => {
+        if (process && process.startTime && process.isRunning) {
+          const processUptime = Date.now() - new Date(process.startTime).getTime();
+          const uptimeElement = document.querySelector(`#process-content-${process.id} .process-tab-info-item:nth-child(3) .process-tab-info-value`);
+          if (uptimeElement) {
+            uptimeElement.textContent = formatUptime(processUptime);
+          }
+        }
+      });
+    }
+
+    // Start periodic process uptime updates
+    function startProcessUptimeUpdates() {
+      // Update process uptimes every second
+      setInterval(updateProcessUptimes, 1000);
+    }
   </script>
 </body>
 
