@@ -333,8 +333,8 @@ export function registerManagementEndpoints(
         
         // Aggregate country data from routes for heatmap
         const countryCounts = new Map<string, number>();
-        timePeriodStats.routes.forEach(route => {
-          route.topCountries.forEach(country => {
+        timePeriodStats.routes.forEach((route: any) => {
+          route.topCountries.forEach((country: any) => {
             if (country.country && country.country !== 'Unknown') {
               countryCounts.set(country.country, (countryCounts.get(country.country) || 0) + country.count);
             }
@@ -345,6 +345,21 @@ export function registerManagementEndpoints(
           .map(([country, count]) => ({ country, count }))
           .sort((a, b) => b.count - a.count)
           .slice(0, 10);
+        
+        // Calculate request type statistics from routes
+        const requestTypeCounts = new Map<string, number>();
+        timePeriodStats.routes.forEach((route: any) => {
+          const requestType = route.requestType || 'proxy';
+          requestTypeCounts.set(requestType, (requestTypeCounts.get(requestType) || 0) + route.requests);
+        });
+        
+        const requestTypes = Array.from(requestTypeCounts.entries())
+          .map(([type, count]) => ({
+            type,
+            count,
+            percentage: (count / timePeriodStats.totalRequests) * 100
+          }))
+          .sort((a, b) => b.count - a.count);
         
         res.json({ 
           success: true, 
@@ -358,7 +373,8 @@ export function registerManagementEndpoints(
               topCities: [], // Not available in time period stats
               topIPs: [], // Not available in time period stats
               requestsByHour: [], // Not available in time period stats
-              requestsByDay: [] // Not available in time period stats
+              requestsByDay: [], // Not available in time period stats
+              requestTypes: requestTypes
             },
             routes: timePeriodStats.routes,
             avgResponseTime: timePeriodStats.avgResponseTime,

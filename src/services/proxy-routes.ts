@@ -82,7 +82,19 @@ export class ProxyRoutes {
       logger.info(`OAuth2 middleware applied to static route: ${routePath}`);
     }
 
-    // Set up static file serving
+    // Set up static file serving with statistics recording
+    app.use(routePath, (req, res, next) => {
+      const startTime = Date.now();
+      
+      // Record statistics when response finishes
+      res.on('finish', () => {
+        const responseTime = Date.now() - startTime;
+        this.recordRequestStats(req, route, route.staticPath!, responseTime, res.statusCode, 'static');
+      });
+      
+      next();
+    });
+    
     app.use(routePath, express.static(route.staticPath));
     
     // Handle SPA fallback - serve index.html for routes that don't exist
@@ -118,11 +130,15 @@ export class ProxyRoutes {
       logger.info(`[REDIRECT] ${req.method} ${req.originalUrl} -> ${route.redirectTo}`);
       const start = Date.now();
       const redirectUrl = route.redirectTo!;
-      res.redirect(301, redirectUrl);
+      
+      // Record statistics when response finishes
       res.on('finish', () => {
         const duration = Date.now() - start;
         logger.info(`[REDIRECT] ${req.method} ${req.originalUrl} -> ${redirectUrl} [${res.statusCode}] (${duration}ms)`);
+        this.recordRequestStats(req, route, redirectUrl, duration, res.statusCode, 'redirect');
       });
+      
+      res.redirect(301, redirectUrl);
     });
 
     logger.info(`Redirect route configured: ${routePath} -> ${route.redirectTo}`);
@@ -140,11 +156,15 @@ export class ProxyRoutes {
         logger.info(`[REDIRECT] ${req.method} ${req.originalUrl} -> ${route.redirectTo}`);
         const start = Date.now();
         const redirectUrl = route.redirectTo!;
-        res.redirect(301, redirectUrl);
+        
+        // Record statistics when response finishes
         res.on('finish', () => {
           const duration = Date.now() - start;
           logger.info(`[REDIRECT] ${req.method} ${req.originalUrl} -> ${redirectUrl} [${res.statusCode}] (${duration}ms)`);
+          this.recordRequestStats(req, route, redirectUrl, duration, res.statusCode, 'redirect');
         });
+        
+        res.redirect(301, redirectUrl);
       } else {
         next();
       }
@@ -171,14 +191,14 @@ export class ProxyRoutes {
         
         // Record statistics after successful request
         const responseTime = Date.now() - startTime;
-        this.recordRequestStats(req, route, route.target!, responseTime, res.statusCode);
+        this.recordRequestStats(req, route, route.target!, responseTime, res.statusCode, 'proxy');
       } catch (error) {
         logger.error(`[CLASSIC PROXY] Error in proxy request for ${routePath}`, error);
         this.handleProxyError(error as Error, req, res, `classic ${routePath}`, route.target!, route, true);
         
         // Record statistics even for failed requests
         const responseTime = Date.now() - startTime;
-        this.recordRequestStats(req, route, route.target!, responseTime, res.statusCode || 500);
+        this.recordRequestStats(req, route, route.target!, responseTime, res.statusCode || 500, 'proxy');
       }
     };
     
@@ -266,14 +286,14 @@ export class ProxyRoutes {
         
         // Record statistics after successful request
         const responseTime = Date.now() - startTime;
-        this.recordRequestStats(req, route, target, responseTime, res.statusCode);
+        this.recordRequestStats(req, route, target, responseTime, res.statusCode, 'proxy');
       } catch (error) {
         logger.error(`[CORS FORWARDER] Error in proxy request for ${routePath}`, error);
         this.handleProxyError(error as Error, req, res, `cors-forwarder ${routePath}`, target, route, true);
         
         // Record statistics even for failed requests
         const responseTime = Date.now() - startTime;
-        this.recordRequestStats(req, route, target, responseTime, res.statusCode || 500);
+        this.recordRequestStats(req, route, target, responseTime, res.statusCode || 500, 'proxy');
       }
     };
     
@@ -384,7 +404,8 @@ export class ProxyRoutes {
     route: ProxyRoute,
     target: string,
     responseTime: number,
-    statusCode: number
+    statusCode: number,
+    requestType: string = 'proxy'
   ): void {
     if (!this.statisticsService) return;
 
@@ -404,7 +425,8 @@ export class ProxyRoutes {
         userAgent,
         responseTime,
         domain,
-        target
+        target,
+        requestType
       );
     } catch (error) {
       logger.debug('Failed to record request statistics', error);

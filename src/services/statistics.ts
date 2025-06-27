@@ -13,12 +13,14 @@ export interface RequestStats {
   routes: Set<string>;
   methods: Set<string>;
   responseTimes: number[];
+  requestTypes: Set<string>; // Track request types
   routeDetails: Array<{
     domain: string;
     target: string;
     method: string;
     responseTime: number;
     timestamp: Date;
+    requestType: string; // Add request type to route details
   }>;
 }
 
@@ -33,12 +35,14 @@ export interface SerializableRequestStats {
   routes: string[];
   methods: string[];
   responseTimes: number[];
+  requestTypes: string[]; // Track request types
   routeDetails: Array<{
     domain: string;
     target: string;
     method: string;
     responseTime: number;
     timestamp: string; // ISO string
+    requestType: string; // Add request type to route details
   }>;
 }
 
@@ -57,6 +61,7 @@ export interface StatisticsReport {
     topIPs: Array<{ ip: string; location: string; count: number; percentage: number }>;
     requestsByHour: Array<{ hour: number; count: number }>;
     requestsByDay: Array<{ day: string; count: number }>;
+    requestTypes: Array<{ type: string; count: number; percentage: number }>; // Add request type breakdown
   };
   details: {
     byIP: Array<{
@@ -68,6 +73,7 @@ export interface StatisticsReport {
       userAgents: string[];
       routes: string[];
       methods: string[];
+      requestTypes: string[]; // Add request types to IP details
       latitude: number | null;
       longitude: number | null;
     }>;
@@ -102,6 +108,7 @@ export interface RouteStats {
   uniqueIPs: number;
   methods: string[];
   uniquePaths?: string[];
+  requestType: string; // Add request type to route stats
 }
 
 export interface TimePeriodStats {
@@ -156,9 +163,11 @@ export class StatisticsService {
       routes: Array.from(stats.routes),
       methods: Array.from(stats.methods),
       responseTimes: stats.responseTimes,
+      requestTypes: Array.from(stats.requestTypes),
       routeDetails: stats.routeDetails.map(detail => ({
         ...detail,
-        timestamp: detail.timestamp.toISOString()
+        timestamp: detail.timestamp.toISOString(),
+        requestType: detail.requestType
       }))
     };
   }
@@ -177,9 +186,11 @@ export class StatisticsService {
       routes: new Set(serialized.routes),
       methods: new Set(serialized.methods),
       responseTimes: serialized.responseTimes,
+      requestTypes: new Set(serialized.requestTypes),
       routeDetails: serialized.routeDetails.map(detail => ({
         ...detail,
-        timestamp: new Date(detail.timestamp)
+        timestamp: new Date(detail.timestamp),
+        requestType: detail.requestType
       }))
     };
   }
@@ -292,7 +303,8 @@ export class StatisticsService {
     userAgent: string,
     responseTime?: number,
     domain?: string,
-    target?: string
+    target?: string,
+    requestType: string = 'proxy' // Default to proxy for backward compatibility
   ): void {
     if (this.isShuttingDown) return;
 
@@ -306,6 +318,7 @@ export class StatisticsService {
       existing.userAgents.add(userAgent);
       existing.routes.add(route);
       existing.methods.add(method);
+      existing.requestTypes.add(requestType);
       
       if (responseTime !== undefined) {
         existing.responseTimes.push(responseTime);
@@ -322,6 +335,7 @@ export class StatisticsService {
           method,
           responseTime: responseTime || 0,
           timestamp: now,
+          requestType,
         });
         // Keep only last 1000 route details
         if (existing.routeDetails.length > 1000) {
@@ -340,12 +354,14 @@ export class StatisticsService {
         routes: new Set([route]),
         methods: new Set([method]),
         responseTimes: responseTime !== undefined ? [responseTime] : [],
+        requestTypes: new Set([requestType]),
         routeDetails: domain && target ? [{
           domain,
           target,
           method,
           responseTime: responseTime || 0,
           timestamp: now,
+          requestType,
         }] : [],
       });
     }
@@ -429,6 +445,22 @@ export class StatisticsService {
     const requestsByHour = this.generateHourlyBreakdown(statsArray);
     const requestsByDay = this.generateDailyBreakdown(statsArray);
 
+    // Calculate request type statistics
+    const requestTypeStats = new Map<string, number>();
+    statsArray.forEach(stat => {
+      stat.requestTypes.forEach(type => {
+        requestTypeStats.set(type, (requestTypeStats.get(type) || 0) + stat.count);
+      });
+    });
+    
+    const requestTypes = Array.from(requestTypeStats.entries())
+      .map(([type, count]) => ({
+        type,
+        count,
+        percentage: (count / totalRequests) * 100,
+      }))
+      .sort((a, b) => b.count - a.count);
+
     return {
       period: {
         start: startOfDay,
@@ -444,6 +476,7 @@ export class StatisticsService {
         topIPs,
         requestsByHour,
         requestsByDay,
+        requestTypes,
       },
       details: {
         byIP: statsArray.map(stat => ({
@@ -455,6 +488,7 @@ export class StatisticsService {
           userAgents: Array.from(stat.userAgents),
           routes: Array.from(stat.routes),
           methods: Array.from(stat.methods),
+          requestTypes: Array.from(stat.requestTypes),
           latitude: stat.geolocation?.latitude ?? null,
           longitude: stat.geolocation?.longitude ?? null,
         })),
@@ -737,6 +771,7 @@ export class StatisticsService {
       ips: Set<string>;
       methods: Set<string>;
       paths: Set<string>;
+      requestTypes: Set<string>; // Track request types for each route
     }>();
 
     // Track unmatched requests
@@ -794,6 +829,7 @@ export class StatisticsService {
         existing.requests++;
         existing.responseTimes.push(detail.responseTime);
         existing.methods.add(detail.method);
+        existing.requestTypes.add(detail.requestType);
         
         // Find the IP that made this request
         const stat = periodStats.find(s => 
@@ -827,6 +863,7 @@ export class StatisticsService {
         const countries = new Map<string, { count: number; cities: Set<string> }>();
         const ips = new Set<string>();
         const methods = new Set<string>([detail.method]);
+        const requestTypes = new Set<string>([detail.requestType]);
         
         // Find the IP that made this request
         const stat = periodStats.find(s => 
@@ -860,6 +897,7 @@ export class StatisticsService {
           ips,
           methods,
           paths: new Set(),
+          requestTypes,
         });
       }
     });
@@ -896,6 +934,7 @@ export class StatisticsService {
         topCountries,
         uniqueIPs: route.ips.size,
         methods: Array.from(route.methods),
+        requestType: Array.from(route.requestTypes)[0] || 'proxy',
       };
     });
 
@@ -920,6 +959,7 @@ export class StatisticsService {
         uniqueIPs: unmatchedIPs.size,
         methods: Array.from(unmatchedMethods),
         uniquePaths: Array.from(unmatchedPaths),
+        requestType: 'unmatched',
       });
     }
 

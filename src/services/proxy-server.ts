@@ -84,7 +84,8 @@ export class ProxyServer implements WebSocketServiceInterface {
         userAgent,
         undefined, // No response time yet
         'Unmatched', // Domain for unmatched requests
-        path // Target is the path itself
+        path, // Target is the path itself
+        'unmatched' // Request type for unmatched requests
       );
       
       // Send 404 response
