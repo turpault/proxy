@@ -958,7 +958,7 @@ export class StatisticsService {
         topCountries: unmatchedTopCountries,
         uniqueIPs: unmatchedIPs.size,
         methods: Array.from(unmatchedMethods),
-        uniquePaths: Array.from(unmatchedPaths),
+        uniquePaths: Array.from(unmatchedPaths).slice(-200), // Limit to last 200 unique paths
         requestType: 'unmatched',
       });
     }
