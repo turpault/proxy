@@ -51,10 +51,10 @@ async function testProcessUptime() {
     const htmlResponse = await makeRequest('/');
     const html = htmlResponse.data;
 
-    if (html.includes('toFixed(2)')) {
-      console.log('✅ formatUptime function includes two decimal places');
+    if (html.includes('padStart(2, \'0\')')) {
+      console.log('✅ formatUptime function includes leading zero padding');
     } else {
-      console.log('❌ formatUptime function does not include two decimal places');
+      console.log('❌ formatUptime function does not include leading zero padding');
     }
 
     if (html.includes('updateProcessUptimes')) {
@@ -101,8 +101,8 @@ function formatUptime(milliseconds) {
 
   if (days > 0) return `${days}d ${hours % 24}h`;
   if (hours > 0) return `${hours}h ${minutes % 60}m`;
-  if (minutes > 0) return `${minutes}m ${(totalSeconds % 60).toFixed(2)}s`;
-  return `${totalSeconds.toFixed(2)}s`;
+  if (minutes > 0) return `${minutes}m ${(seconds % 60).toString().padStart(2, '0')}s`;
+  return `${seconds.toString().padStart(2, '0')}s`;
 }
 
 function makeRequest(path) {
