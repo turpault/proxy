@@ -1,10 +1,10 @@
 # OAuth2 Custom Endpoints and Callback Redirects
 
-This document describes the OAuth2 custom endpoint configuration features that allow you to customize the session, logout, and callback redirect paths.
+This document describes the OAuth2 custom endpoint configuration features that allow you to customize the session, logout, login, and callback redirect paths.
 
 ## Overview
 
-The OAuth2 service now supports custom endpoint paths for session management and logout, as well as custom callback redirect paths after successful authentication. This provides more flexibility in integrating OAuth2 authentication with your applications.
+The OAuth2 service now supports custom endpoint paths for session management, logout, login initiation, and custom callback redirect paths after successful authentication. This provides more flexibility in integrating OAuth2 authentication with your applications.
 
 ## Configuration Options
 
@@ -14,6 +14,7 @@ You can customize the following endpoint paths in your OAuth2 configuration:
 
 - `sessionEndpoint`: Custom path for the session endpoint (default: `/oauth/session`)
 - `logoutEndpoint`: Custom path for the logout endpoint (default: `/oauth/logout`)
+- `loginPath`: Custom path that initiates the OAuth2 login process (default: `/oauth/login`)
 - `callbackRedirectPath`: Custom path to redirect after successful OAuth2 callback (default: `/`)
 
 ### Configuration Example
@@ -38,11 +39,13 @@ routes:
       # Custom endpoint paths
       sessionEndpoint: "/auth/session"      # Custom session endpoint
       logoutEndpoint: "/auth/logout"        # Custom logout endpoint
+      loginPath: "/auth/login"              # Custom login path
       callbackRedirectPath: "/dashboard"    # Redirect to dashboard after login
     publicPaths:
       - "/auth/callback"
       - "/auth/session"
       - "/auth/logout"
+      - "/auth/login"
       - "/login"
       - "/static"
 ```
@@ -87,6 +90,19 @@ This endpoint clears the current session and logs the user out.
 }
 ```
 
+### Login Path (`loginPath`)
+
+**Default**: `/oauth/login`
+
+This path initiates the OAuth2 authentication flow. When users visit this path:
+
+1. If they're already authenticated, they're redirected to the `callbackRedirectPath`
+2. If they're not authenticated, they're redirected to the OAuth2 provider for authorization
+
+**Behavior**:
+- **Authenticated users**: Redirected to `callbackRedirectPath` (or `/` if not configured)
+- **Unauthenticated users**: Redirected to OAuth2 provider authorization URL
+
 ### Callback Redirect Path (`callbackRedirectPath`)
 
 **Default**: `/`
@@ -130,9 +146,16 @@ async function logout() {
   }
 }
 
+// Initiate login process
+function login() {
+  // Redirect to the custom login path
+  window.location.href = '/auth/login';
+}
+
 // Handle OAuth2 flow
 function initiateOAuth() {
-  // The middleware will automatically redirect to the OAuth provider
+  // The middleware will redirect unauthenticated users to the login path
+  // which then redirects to the OAuth provider
   window.location.href = '/protected-route';
 }
 ```
@@ -162,6 +185,33 @@ async function makeAuthenticatedRequest(url, options = {}) {
 }
 ```
 
+### Login Flow Integration
+
+```javascript
+// Handle login button click
+document.getElementById('login-btn').addEventListener('click', () => {
+  window.location.href = '/auth/login';
+});
+
+// Handle logout button click
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  await logout();
+  window.location.href = '/login';
+});
+
+// Check auth status on page load
+window.addEventListener('load', async () => {
+  const authData = await checkAuth();
+  if (!authData.authenticated) {
+    // Show login button or redirect to login
+    document.getElementById('login-section').style.display = 'block';
+  } else {
+    // Show authenticated content
+    document.getElementById('authenticated-section').style.display = 'block';
+  }
+});
+```
+
 ## Security Considerations
 
 1. **Public Paths**: Always include your custom endpoint paths in the `publicPaths` array to ensure they're accessible without authentication.
@@ -175,11 +225,13 @@ async function makeAuthenticatedRequest(url, options = {}) {
 
 4. **Token Storage**: Access tokens are stored server-side in memory. Consider implementing persistent storage for production use.
 
+5. **Login Path Security**: The login path should be included in `publicPaths` to allow unauthenticated access, but it will automatically redirect authenticated users to the appropriate destination.
+
 ## Migration Guide
 
 ### From Default Endpoints
 
-If you're currently using the default endpoints (`/oauth/session` and `/oauth/logout`), you can migrate to custom endpoints by:
+If you're currently using the default endpoints (`/oauth/session`, `/oauth/logout`, `/oauth/login`), you can migrate to custom endpoints by:
 
 1. Adding the custom endpoint configuration to your OAuth2 config
 2. Updating your frontend code to use the new endpoints
@@ -198,10 +250,28 @@ publicPaths:
 oauth2:
   sessionEndpoint: "/auth/session"
   logoutEndpoint: "/auth/logout"
+  loginPath: "/auth/login"
 publicPaths:
   - "/oauth/callback"
   - "/auth/session"
   - "/auth/logout"
+  - "/auth/login"
+```
+
+### From Direct OAuth Redirects
+
+If you were previously redirecting users directly to OAuth providers, you can now use the login path for better control:
+
+**Before**:
+```javascript
+// Direct redirect to OAuth provider
+window.location.href = '/protected-route'; // Would redirect directly to OAuth
+```
+
+**After**:
+```javascript
+// Use login path for better control
+window.location.href = '/auth/login'; // Redirects to login path first
 ```
 
 ## Troubleshooting
@@ -213,6 +283,8 @@ publicPaths:
 2. **Redirect Loops**: Check that the `callbackRedirectPath` doesn't point to a protected route that requires authentication.
 
 3. **Session Not Found**: Verify that the session endpoint path matches between your frontend requests and the OAuth2 configuration.
+
+4. **Login Path Not Working**: Make sure the `loginPath` is included in `publicPaths` and that your frontend is using the correct path.
 
 ### Debug Logging
 
@@ -227,4 +299,5 @@ The OAuth2 service logs detailed information about:
 - Authorization URL generation
 - Token exchange attempts
 - Session management
-- Middleware request handling 
+- Middleware request handling
+- Login path redirects 

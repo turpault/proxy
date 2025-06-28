@@ -56,6 +56,7 @@ const oauth2ConfigSchema = Joi.object({
   // Custom endpoint paths
   sessionEndpoint: Joi.string().optional(),
   logoutEndpoint: Joi.string().optional(),
+  loginPath: Joi.string().optional(),
   callbackRedirectPath: Joi.string().optional(),
 });
 

@@ -193,6 +193,7 @@ export interface OAuth2Config {
   // Custom endpoint paths
   sessionEndpoint?: string; // Default: /oauth/session
   logoutEndpoint?: string; // Default: /oauth/logout
+  loginPath?: string; // Default: /oauth/login - path that initiates login process
   callbackRedirectPath?: string; // Path to redirect after successful callback (default: /)
 }
 

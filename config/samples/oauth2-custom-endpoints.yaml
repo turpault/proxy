@@ -4,6 +4,7 @@
 # Features demonstrated:
 # - Custom session endpoint path
 # - Custom logout endpoint path
+# - Custom login path that initiates OAuth2 flow
 # - Custom callback redirect path
 # - OAuth2 provider integration
 # - Session management
@@ -22,7 +23,7 @@ letsEncrypt:
 
 # Routes configuration
 routes:
-  # Example 1: Custom OAuth2 endpoints with callback redirect
+  # Example 1: Custom OAuth2 endpoints with login path and callback redirect
   - domain: "app.example.com"
     type: "static"
     path: "/custom-oauth-app"
@@ -41,14 +42,16 @@ routes:
       scopes: ["openid", "profile", "email"]
       pkce: true
       # Custom endpoint paths
-      sessionEndpoint: "/auth/session"  # Custom session endpoint
-      logoutEndpoint: "/auth/logout"    # Custom logout endpoint
-      callbackRedirectPath: "/dashboard"  # Redirect to dashboard after login
+      sessionEndpoint: "/auth/session"      # Custom session endpoint
+      logoutEndpoint: "/auth/logout"        # Custom logout endpoint
+      loginPath: "/auth/login"              # Custom login path
+      callbackRedirectPath: "/dashboard"    # Redirect to dashboard after login
     # Public paths that don't require authentication
     publicPaths:
       - "/auth/callback"
       - "/auth/session"
       - "/auth/logout"
+      - "/auth/login"
       - "/login"
       - "/static"
       - "/assets"
@@ -72,11 +75,13 @@ routes:
       # Custom endpoint paths
       sessionEndpoint: "/api/oauth/session"
       logoutEndpoint: "/api/oauth/logout"
+      loginPath: "/api/oauth/login"
       callbackRedirectPath: "/api/docs"  # Redirect to API docs after login
     publicPaths:
       - "/oauth/callback"
       - "/api/oauth/session"
       - "/api/oauth/logout"
+      - "/api/oauth/login"
       - "/health"
       - "/docs"
     cors:
@@ -107,6 +112,7 @@ routes:
       # Custom endpoint paths
       sessionEndpoint: "/enterprise/auth/session"
       logoutEndpoint: "/enterprise/auth/logout"
+      loginPath: "/enterprise/auth/login"
       callbackRedirectPath: "/enterprise/admin"  # Redirect to admin panel after login
       # Additional OAuth2 parameters
       additionalParams:
@@ -119,6 +125,7 @@ routes:
       - "/auth/callback"
       - "/enterprise/auth/session"
       - "/enterprise/auth/logout"
+      - "/enterprise/auth/login"
       - "/static"
     # Route-specific CSP for enterprise OAuth
     csp:

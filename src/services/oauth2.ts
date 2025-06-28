@@ -346,6 +346,7 @@ export class OAuth2Service {
     // Get endpoint paths from config with defaults
     const sessionEndpoint = config.sessionEndpoint || '/oauth/session';
     const logoutEndpoint = config.logoutEndpoint || '/oauth/logout';
+    const loginPath = config.loginPath || '/oauth/login';
     
     return (req, res, next) => {
       // Add debug logging
@@ -400,6 +401,32 @@ export class OAuth2Service {
           message: 'Logged out successfully'
         });
       }
+
+      // Handle login endpoint - initiates OAuth2 flow
+      if (req.path === loginPath) {
+        // Get session ID from cookie or create new one
+        let sessionId = req.cookies?.['oauth2-session'];
+        if (!sessionId) {
+          sessionId = crypto.randomUUID();
+          res.cookie('oauth2-session', sessionId, {
+            httpOnly: true,
+            secure: req.secure,
+            sameSite: 'lax',
+            maxAge: 24 * 60 * 60 * 1000, // 24 hours
+          });
+        }
+
+        // Check if already authenticated
+        if (this.isAuthenticated(sessionId)) {
+          // If already authenticated, redirect to the callback redirect path or root
+          const redirectPath = config.callbackRedirectPath || '/';
+          return res.redirect(redirectPath);
+        }
+
+        // Redirect to OAuth2 authorization
+        const { url } = this.buildAuthorizationUrl(config);
+        return res.redirect(url);
+      }
       
       // Skip authentication for other public paths
       const isPublicPath = publicPaths.some(path => 
@@ -447,7 +474,7 @@ export class OAuth2Service {
             <h1>OAuth2 Authorization Failed</h1>
             <p><strong>Error:</strong> ${req.query.error}</p>
             <p><strong>Description:</strong> ${req.query.error_description || 'No description provided'}</p>
-            <p><a href="/">Try again</a></p>
+            <p><a href="${loginPath}">Try again</a></p>
           `);
         }
 
@@ -468,7 +495,7 @@ export class OAuth2Service {
               res.status(400).send(`
                 <h1>OAuth2 Callback Failed</h1>
                 <p><strong>Error:</strong> ${result.error}</p>
-                <p><a href="/">Try again</a></p>
+                <p><a href="${loginPath}">Try again</a></p>
               `);
             }
           }).catch(next);
@@ -478,13 +505,13 @@ export class OAuth2Service {
         return res.status(400).send(`
           <h1>Invalid OAuth2 Callback</h1>
           <p>No authorization code or error information provided.</p>
-          <p><a href="/">Try again</a></p>
+          <p><a href="${loginPath}">Try again</a></p>
         `);
       }
 
-      // Redirect to authorization
-      const { url } = this.buildAuthorizationUrl(config);
-      res.redirect(url);
+      // Redirect to login path instead of directly to OAuth provider
+      const fullLoginPath = req.baseUrl + loginPath;
+      res.redirect(fullLoginPath);
     };
   }
 } 
