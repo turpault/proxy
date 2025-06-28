@@ -224,6 +224,19 @@ function validateOAuth2Config(route, index) {
     if (oauth2.pkce !== undefined && typeof oauth2.pkce !== 'boolean') {
       issues.push(`Route ${index}: OAuth2.pkce must be a boolean`);
     }
+
+    // Validate custom endpoint paths (optional string fields)
+    if (oauth2.sessionEndpoint !== undefined && typeof oauth2.sessionEndpoint !== 'string') {
+      issues.push(`Route ${index}: OAuth2.sessionEndpoint must be a string`);
+    }
+
+    if (oauth2.logoutEndpoint !== undefined && typeof oauth2.logoutEndpoint !== 'string') {
+      issues.push(`Route ${index}: OAuth2.logoutEndpoint must be a string`);
+    }
+
+    if (oauth2.callbackRedirectPath !== undefined && typeof oauth2.callbackRedirectPath !== 'string') {
+      issues.push(`Route ${index}: OAuth2.callbackRedirectPath must be a string`);
+    }
   }
 
   return issues;

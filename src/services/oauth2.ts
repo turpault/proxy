@@ -119,7 +119,8 @@ export class OAuth2Service {
   async handleCallback(
     code: string,
     state: string,
-    sessionId: string
+    sessionId: string,
+    config: OAuth2Config
   ): Promise<{ success: boolean; error?: string; redirectUrl?: string }> {
     try {
       // Validate state
@@ -128,10 +129,10 @@ export class OAuth2Service {
         return { success: false, error: 'Invalid or expired state parameter' };
       }
 
-      const config = stateData.config;
+      const stateConfig = stateData.config;
       
       // Validate configuration
-      this.validateConfig(config);
+      this.validateConfig(stateConfig);
 
       // Clean up state
       this.states.delete(state);
@@ -139,14 +140,14 @@ export class OAuth2Service {
       // Prepare token request
       const tokenParams: Record<string, string> = {
         grant_type: 'authorization_code',
-        client_id: config.clientId,
-        client_secret: config.clientSecret,
+        client_id: stateConfig.clientId,
+        client_secret: stateConfig.clientSecret,
         code,
-        redirect_uri: config.callbackUrl,
+        redirect_uri: stateConfig.callbackUrl,
       };
 
       // Add PKCE code verifier if used
-      if (config.pkce) {
+      if (stateConfig.pkce) {
         const codeVerifier = this.codeVerifiers.get(state);
         if (codeVerifier) {
           tokenParams.code_verifier = codeVerifier;
@@ -156,8 +157,8 @@ export class OAuth2Service {
 
       // Exchange code for tokens
       logger.info(`Exchanging authorization code for tokens`, {
-        provider: config.provider,
-        tokenEndpoint: config.tokenEndpoint,
+        provider: stateConfig.provider,
+        tokenEndpoint: stateConfig.tokenEndpoint,
       });
 
       const headers: Record<string, string> = {
@@ -166,13 +167,13 @@ export class OAuth2Service {
       };
 
       // Add subscription key header if configured
-      if (config.subscriptionKey) {
-        const headerName = config.subscriptionKeyHeader!;
-        headers[headerName] = config.subscriptionKey;
+      if (stateConfig.subscriptionKey) {
+        const headerName = stateConfig.subscriptionKeyHeader!;
+        headers[headerName] = stateConfig.subscriptionKey;
       }
 
       const tokenResponse = await axios.post<OAuth2TokenResponse>(
-        config.tokenEndpoint,
+        stateConfig.tokenEndpoint,
         new URLSearchParams(tokenParams),
         {
           headers,
@@ -197,15 +198,18 @@ export class OAuth2Service {
       this.sessions.set(sessionId, session);
 
       logger.info(`OAuth2 authentication successful`, {
-        provider: config.provider,
+        provider: stateConfig.provider,
         sessionId,
         tokenType: tokens.token_type,
         expiresIn: tokens.expires_in,
       });
 
+      // Use custom redirect path from config if provided, otherwise default to '/'
+      const redirectPath = config.callbackRedirectPath || '/';
+
       return { 
         success: true, 
-        redirectUrl: '/' // Redirect to app root after successful auth
+        redirectUrl: redirectPath
       };
 
     } catch (error: any) {
@@ -339,12 +343,16 @@ export class OAuth2Service {
     // Validate configuration when middleware is created
     this.validateConfig(config);
     
+    // Get endpoint paths from config with defaults
+    const sessionEndpoint = config.sessionEndpoint || '/oauth/session';
+    const logoutEndpoint = config.logoutEndpoint || '/oauth/logout';
+    
     return (req, res, next) => {
       // Add debug logging
       logger.info(`[OAUTH2] ${req.method} ${req.originalUrl} - path: ${req.path} - baseUrl: ${req.baseUrl}`);
       
-      // Handle /oauth/session endpoint specifically
-      if (req.path === '/oauth/session') {
+      // Handle session endpoint
+      if (req.path === sessionEndpoint) {
         // Get session ID from cookie
         const sessionId = req.cookies?.['oauth2-session'];
         
@@ -380,8 +388,8 @@ export class OAuth2Service {
         }
       }
       
-      // Handle /oauth/logout endpoint
-      if (req.path === '/oauth/logout') {
+      // Handle logout endpoint
+      if (req.path === logoutEndpoint) {
         const sessionId = req.cookies?.['oauth2-session'];
         if (sessionId) {
           this.logout(sessionId);
@@ -448,11 +456,12 @@ export class OAuth2Service {
           return this.handleCallback(
             req.query.code as string,
             req.query.state as string,
-            sessionId
+            sessionId,
+            config
           ).then(result => {
             if (result.success) {
-              // Redirect to the original route path, not just root
-              const redirectPath = req.baseUrl || '/';
+              // Use the redirect URL from the result (which respects config.callbackRedirectPath)
+              const redirectPath = result.redirectUrl || '/';
               res.redirect(redirectPath);
             } else {
               logger.error('OAuth2 callback failed', { error: result.error });

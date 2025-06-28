@@ -1,0 +1,172 @@
+# OAuth2 Custom Endpoints Configuration
+# This example demonstrates OAuth2 authentication with custom endpoint paths and callback redirects
+#
+# Features demonstrated:
+# - Custom session endpoint path
+# - Custom logout endpoint path
+# - Custom callback redirect path
+# - OAuth2 provider integration
+# - Session management
+# - Route protection
+
+# Server configuration
+port: 80
+httpsPort: 443
+managementPort: 4481
+
+# Let's Encrypt configuration
+letsEncrypt:
+  email: "admin@example.com"
+  staging: false
+  certDir: "./certificates"
+
+# Routes configuration
+routes:
+  # Example 1: Custom OAuth2 endpoints with callback redirect
+  - domain: "app.example.com"
+    type: "static"
+    path: "/custom-oauth-app"
+    staticPath: "/var/www/custom-oauth-app/build"
+    spaFallback: true
+    ssl: true
+    requireAuth: true
+    oauth2:
+      enabled: true
+      provider: "google"
+      clientId: "${GOOGLE_CLIENT_ID}"
+      clientSecret: "${GOOGLE_CLIENT_SECRET}"
+      authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth"
+      tokenEndpoint: "https://oauth2.googleapis.com/token"
+      callbackUrl: "https://app.example.com/custom-oauth-app/auth/callback"
+      scopes: ["openid", "profile", "email"]
+      pkce: true
+      # Custom endpoint paths
+      sessionEndpoint: "/auth/session"  # Custom session endpoint
+      logoutEndpoint: "/auth/logout"    # Custom logout endpoint
+      callbackRedirectPath: "/dashboard"  # Redirect to dashboard after login
+    # Public paths that don't require authentication
+    publicPaths:
+      - "/auth/callback"
+      - "/auth/session"
+      - "/auth/logout"
+      - "/login"
+      - "/static"
+      - "/assets"
+
+  # Example 2: API with custom OAuth2 endpoints
+  - domain: "api.example.com"
+    path: "/api"
+    target: "http://localhost:3001"
+    ssl: true
+    requireAuth: true
+    oauth2:
+      enabled: true
+      provider: "github"
+      clientId: "${GITHUB_CLIENT_ID}"
+      clientSecret: "${GITHUB_CLIENT_SECRET}"
+      authorizationEndpoint: "https://github.com/login/oauth/authorize"
+      tokenEndpoint: "https://github.com/login/oauth/access_token"
+      callbackUrl: "https://api.example.com/api/oauth/callback"
+      scopes: ["read:user", "user:email"]
+      pkce: false
+      # Custom endpoint paths
+      sessionEndpoint: "/api/oauth/session"
+      logoutEndpoint: "/api/oauth/logout"
+      callbackRedirectPath: "/api/docs"  # Redirect to API docs after login
+    publicPaths:
+      - "/oauth/callback"
+      - "/api/oauth/session"
+      - "/api/oauth/logout"
+      - "/health"
+      - "/docs"
+    cors:
+      enabled: true
+      origin: ["https://app.example.com"]
+      credentials: true
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+      allowedHeaders: ["Content-Type", "Authorization"]
+
+  # Example 3: Enterprise app with custom endpoints and redirect to specific page
+  - domain: "enterprise.example.com"
+    type: "static"
+    path: "/enterprise"
+    staticPath: "/var/www/enterprise-app/build"
+    spaFallback: true
+    ssl: true
+    requireAuth: true
+    oauth2:
+      enabled: true
+      provider: "enterprise"
+      clientId: "${ENTERPRISE_CLIENT_ID}"
+      clientSecret: "${ENTERPRISE_CLIENT_SECRET}"
+      authorizationEndpoint: "https://auth.enterprise.com/oauth/authorize"
+      tokenEndpoint: "https://auth.enterprise.com/oauth/token"
+      callbackUrl: "https://enterprise.example.com/enterprise/auth/callback"
+      scopes: ["read", "write"]
+      pkce: true
+      # Custom endpoint paths
+      sessionEndpoint: "/enterprise/auth/session"
+      logoutEndpoint: "/enterprise/auth/logout"
+      callbackRedirectPath: "/enterprise/admin"  # Redirect to admin panel after login
+      # Additional OAuth2 parameters
+      additionalParams:
+        response_mode: "form_post"
+        prompt: "login"
+      # API subscription key for enterprise APIs
+      subscriptionKey: "${ENTERPRISE_SUBSCRIPTION_KEY}"
+      subscriptionKeyHeader: "X-Enterprise-Key"
+    publicPaths:
+      - "/auth/callback"
+      - "/enterprise/auth/session"
+      - "/enterprise/auth/logout"
+      - "/static"
+    # Route-specific CSP for enterprise OAuth
+    csp:
+      enabled: true
+      directives:
+        defaultSrc: ["'self'"]
+        scriptSrc: ["'self'", "'unsafe-inline'"]
+        styleSrc: ["'self'", "'unsafe-inline'"]
+        imgSrc: ["'self'", "data:", "https:"]
+        connectSrc: [
+          "'self'",
+          "https://auth.enterprise.com",
+          "https://api.enterprise.com"
+        ]
+        fontSrc: ["'self'", "data:"]
+        objectSrc: ["'none'"]
+        mediaSrc: ["'self'"]
+        frameSrc: ["'none'"]
+
+# Security configuration
+security:
+  # Rate limiting
+  rateLimitWindowMs: 900000  # 15 minutes
+  rateLimitMaxRequests: 100
+
+  # Global CSP configuration
+  csp:
+    enabled: true
+    directives:
+      defaultSrc: ["'self'"]
+      scriptSrc: ["'self'", "'unsafe-inline'"]
+      styleSrc: ["'self'", "'unsafe-inline'"]
+      imgSrc: ["'self'", "data:", "https:"]
+      connectSrc: [
+        "'self'",
+        "https://accounts.google.com",
+        "https://oauth2.googleapis.com",
+        "https://github.com",
+        "https://api.github.com",
+        "https://auth.enterprise.com",
+        "https://api.enterprise.com"
+      ]
+      fontSrc: ["'self'", "data:"]
+      objectSrc: ["'none'"]
+      mediaSrc: ["'self'"]
+      frameSrc: ["'none'"]
+
+# Logging configuration
+logging:
+  level: "info"
+  file: "./logs/proxy.log" 

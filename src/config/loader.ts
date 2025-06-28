@@ -53,6 +53,10 @@ const oauth2ConfigSchema = Joi.object({
   additionalParams: Joi.object().pattern(Joi.string(), Joi.string()).optional(),
   subscriptionKey: Joi.string().optional(),
   subscriptionKeyHeader: Joi.string().optional(),
+  // Custom endpoint paths
+  sessionEndpoint: Joi.string().optional(),
+  logoutEndpoint: Joi.string().optional(),
+  callbackRedirectPath: Joi.string().optional(),
 });
 
 // Process Configuration schema

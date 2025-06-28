@@ -190,6 +190,10 @@ export interface OAuth2Config {
   additionalParams?: Record<string, string>;
   subscriptionKey?: string;
   subscriptionKeyHeader?: string; // Required if subscriptionKey is provided
+  // Custom endpoint paths
+  sessionEndpoint?: string; // Default: /oauth/session
+  logoutEndpoint?: string; // Default: /oauth/logout
+  callbackRedirectPath?: string; // Path to redirect after successful callback (default: /)
 }
 
 export interface OAuth2TokenResponse {
