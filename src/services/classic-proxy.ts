@@ -28,6 +28,91 @@ export class ClassicProxy extends BaseProxy {
         const authResult = await this.checkOAuth2Authentication(req, route);
         if (!authResult.authenticated) {
           logger.warn(`[CLASSIC PROXY] OAuth2 authentication required but not authenticated for ${routeIdentifier}`);
+          // Check if the request accepts HTML
+          const acceptsHtml = req.accepts('html');
+          
+          if (acceptsHtml) {
+            // Generate a redirect page that redirects to login URL after 2 seconds
+            const redirectPage = `
+              <!DOCTYPE html>
+              <html lang="en">
+              <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Authentication Required</title>
+                <meta http-equiv="refresh" content="2;url=${authResult.loginUrl}">
+                <style>
+                  body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    min-height: 100vh;
+                    margin: 0;
+                    background-color: #f5f5f5;
+                  }
+                  .container {
+                    text-align: center;
+                    background: white;
+                    padding: 2rem;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                    max-width: 400px;
+                  }
+                  .spinner {
+                    border: 3px solid #f3f3f3;
+                    border-top: 3px solid #007bff;
+                    border-radius: 50%;
+                    width: 30px;
+                    height: 30px;
+                    animation: spin 1s linear infinite;
+                    margin: 1rem auto;
+                  }
+                  @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                  }
+                  .countdown {
+                    font-size: 1.2em;
+                    color: #007bff;
+                    margin: 1rem 0;
+                  }
+                  a {
+                    color: #007bff;
+                    text-decoration: none;
+                  }
+                  a:hover {
+                    text-decoration: underline;
+                  }
+                </style>
+              </head>
+              <body>
+                <div class="container">
+                  <h1>Authentication Required</h1>
+                  <p>You need to authenticate to access this resource.</p>
+                  <div class="spinner"></div>
+                  <div class="countdown">Redirecting in <span id="countdown">2</span> seconds...</div>
+                  <p><a href="${authResult.loginUrl}">Click here if you are not redirected automatically</a></p>
+                </div>
+                <script>
+                  let seconds = 2;
+                  const countdownElement = document.getElementById('countdown');
+                  const timer = setInterval(() => {
+                    seconds--;
+                    countdownElement.textContent = seconds;
+                    if (seconds <= 0) {
+                      clearInterval(timer);
+                      window.location.href = '${authResult.loginUrl}';
+                    }
+                  }, 1000);
+                </script>
+              </body>
+            </html>
+            `;
+            
+            res.status(401).type('html').send(redirectPage);
+            return;
+          }
           res.status(401).json({
             error: 'Unauthorized',
             message: 'OAuth2 authentication required',

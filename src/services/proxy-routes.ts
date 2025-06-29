@@ -3,22 +3,19 @@ import { ProxyRoute, ServerConfig } from '../types';
 import { logger } from '../utils/logger';
 import { ClassicProxy } from './classic-proxy';
 import { CorsProxy } from './cors-proxy';
+import { StaticProxy } from './static-proxy';
 import { ProxyRequestConfig } from './base-proxy';
 import { OAuth2Service } from './oauth2';
 import { geolocationService } from './geolocation';
 import path from 'path';
 
 export class ProxyRoutes {
-  private classicProxy: ClassicProxy;
-  private corsProxy: CorsProxy;
-  private oauth2Service: OAuth2Service;
   private statisticsService: any;
+  private tempDir?: string;
 
   constructor(tempDir?: string, statisticsService?: any) {
-    this.classicProxy = new ClassicProxy();
-    this.corsProxy = new CorsProxy(tempDir);
-    this.oauth2Service = new OAuth2Service();
     this.statisticsService = statisticsService;
+    this.tempDir = tempDir;
   }
 
   setupRoutes(app: express.Application, config: ServerConfig): void {
@@ -75,9 +72,17 @@ export class ProxyRoutes {
       return;
     }
 
+    // Create per-route proxy instances
+    const oauth2Service = new OAuth2Service();
+    const staticProxy = new StaticProxy({
+      staticPath: route.staticPath,
+      spaFallback: route.spaFallback,
+      publicPaths: route.publicPaths || []
+    }, this.tempDir);
+
     // Apply OAuth2 middleware if configured
     if (route.oauth2 && route.oauth2.enabled) {
-      const oauthMiddleware = this.oauth2Service.createMiddleware(route.oauth2, route.publicPaths || []);
+      const oauthMiddleware = oauth2Service.createMiddleware(route.oauth2, route.publicPaths || []);
       app.use(routePath, oauthMiddleware);
       logger.info(`OAuth2 middleware applied to static route: ${routePath}`);
     }
@@ -95,27 +100,28 @@ export class ProxyRoutes {
       next();
     });
     
-    app.use(routePath, express.static(route.staticPath));
-    
-    // Handle SPA fallback - serve index.html for routes that don't exist
-    if (route.spaFallback) {
-      app.use(routePath, (req, res, next) => {
-        // Skip if this is an API route or static asset
-        if (req.path.startsWith('/api/') || req.path.startsWith('/static/') || req.path.includes('.')) {
-          return next();
+    // Use the StaticProxy to handle the request
+    const config: ProxyRequestConfig = {
+      route,
+      target: route.staticPath,
+      routeIdentifier: `static ${routePath}`,
+      secure: false,
+      timeouts: { request: 30000, proxy: 30000 },
+      logRequests: true,
+      logErrors: true
+    };
+
+    app.use(routePath, (req, res, next) => {
+      staticProxy.handleProxyRequest(req, res, config).catch(error => {
+        logger.error(`[STATIC PROXY] Unhandled error for ${routePath}`, error);
+        if (!res.headersSent) {
+          res.status(500).json({
+            error: 'Internal Server Error',
+            message: 'An error occurred while serving static files'
+          });
         }
-        
-        // Serve index.html for SPA routes
-        const indexPath = path.join(route.staticPath!, 'index.html');
-        res.sendFile(indexPath, (err) => {
-          if (err) {
-            logger.error(`Failed to serve index.html for SPA route: ${req.path}`, err);
-            return next();
-          }
-        });
       });
-      logger.info(`SPA fallback enabled for static route: ${routePath}`);
-    }
+    });
     
     logger.info(`Static route configured: ${routePath} -> ${route.staticPath}${route.spaFallback ? ' (with SPA fallback)' : ''}`);
   }
@@ -174,9 +180,13 @@ export class ProxyRoutes {
   }
 
   private setupClassicProxyRoute(app: express.Application, route: ProxyRoute, routePath: string): void {
+    // Create per-route proxy instances
+    const oauth2Service = new OAuth2Service();
+    const classicProxy = new ClassicProxy();
+
     // Apply OAuth2 middleware if configured
     if (route.oauth2 && route.oauth2.enabled) {
-      const oauthMiddleware = this.oauth2Service.createMiddleware(route.oauth2, route.publicPaths || []);
+      const oauthMiddleware = oauth2Service.createMiddleware(route.oauth2, route.publicPaths || []);
       app.use(routePath, oauthMiddleware);
       logger.info(`OAuth2 middleware applied to classic proxy route: ${routePath}`);
     }
@@ -194,7 +204,7 @@ export class ProxyRoutes {
       };
       
       try {
-        await this.classicProxy.handleProxyRequest(req, res, config);
+        await classicProxy.handleProxyRequest(req, res, config);
         
         // Record statistics after successful request
         const responseTime = Date.now() - startTime;
@@ -214,9 +224,13 @@ export class ProxyRoutes {
   }
 
   private setupClassicProxyDomainRoute(app: express.Application, route: ProxyRoute): void {
+    // Create per-route proxy instances
+    const oauth2Service = new OAuth2Service();
+    const classicProxy = new ClassicProxy();
+
     // Apply OAuth2 middleware if configured
     if (route.oauth2 && route.oauth2.enabled) {
-      const oauthMiddleware = this.oauth2Service.createMiddleware(route.oauth2, route.publicPaths || []);
+      const oauthMiddleware = oauth2Service.createMiddleware(route.oauth2, route.publicPaths || []);
       app.use(oauthMiddleware);
       logger.info(`OAuth2 middleware applied to classic proxy domain route: ${route.domain}`);
     }
@@ -233,7 +247,7 @@ export class ProxyRoutes {
       };
       
       try {
-        await this.classicProxy.handleProxyRequest(req, res, config);
+        await classicProxy.handleProxyRequest(req, res, config);
       } catch (error) {
         logger.error(`[CLASSIC PROXY] Error in proxy request for ${route.domain}`, error);
         this.handleProxyError(error as Error, req, res, `classic ${route.domain}`, route.target!, route, true);
@@ -252,6 +266,9 @@ export class ProxyRoutes {
   }
 
   private setupCorsForwarderRoute(app: express.Application, route: ProxyRoute, routePath: string): void {
+    // Create per-route proxy instances
+    const corsProxy = new CorsProxy(this.tempDir);
+
     const proxy = async (req: express.Request, res: express.Response, next: express.NextFunction): Promise<void> => {
       const startTime = Date.now();
       
@@ -299,7 +316,7 @@ export class ProxyRoutes {
           logRequests: true,
           logErrors: true
         };
-        await this.corsProxy.handleProxyRequest(req, res, config);
+        await corsProxy.handleProxyRequest(req, res, config);
         
         // Record statistics after successful request
         const responseTime = Date.now() - startTime;
@@ -315,7 +332,7 @@ export class ProxyRoutes {
     };
     
     if (route.cors) {
-      app.use(routePath, this.corsProxy.createCorsMiddleware(route.cors));
+      app.use(routePath, corsProxy.createCorsMiddleware(route.cors));
     }
     app.use(routePath, proxy);
     const corsStatus = route.cors ? ' (with CORS)' : '';
@@ -323,6 +340,9 @@ export class ProxyRoutes {
   }
 
   private setupCorsForwarderDomainRoute(app: express.Application, route: ProxyRoute): void {
+    // Create per-route proxy instances
+    const corsProxy = new CorsProxy(this.tempDir);
+
     const proxy = async (req: express.Request, res: express.Response, next: express.NextFunction): Promise<void> => {
       const encodedUrl = req.query.url;
       if (!encodedUrl || typeof encodedUrl !== 'string') {
@@ -363,7 +383,7 @@ export class ProxyRoutes {
           logRequests: true,
           logErrors: true
         };
-        await this.corsProxy.handleProxyRequest(req, res, config);
+        await corsProxy.handleProxyRequest(req, res, config);
       } catch (error) {
         logger.error(`[CORS FORWARDER] Error in proxy request for ${route.domain}`, error);
         this.handleProxyError(error as Error, req, res, `cors-forwarder ${route.domain}`, target, route, true);
@@ -374,7 +394,7 @@ export class ProxyRoutes {
       const host = req.get('host');
       if (host === route.domain || host === `www.${route.domain}`) {
         if (route.cors) {
-          const corsMiddleware = this.corsProxy.createCorsMiddleware(route.cors);
+          const corsMiddleware = corsProxy.createCorsMiddleware(route.cors);
           corsMiddleware(req, res, () => proxy(req, res, next));
         } else {
           proxy(req, res, next);
