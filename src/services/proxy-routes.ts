@@ -174,6 +174,13 @@ export class ProxyRoutes {
   }
 
   private setupClassicProxyRoute(app: express.Application, route: ProxyRoute, routePath: string): void {
+    // Apply OAuth2 middleware if configured
+    if (route.oauth2 && route.oauth2.enabled) {
+      const oauthMiddleware = this.oauth2Service.createMiddleware(route.oauth2, route.publicPaths || []);
+      app.use(routePath, oauthMiddleware);
+      logger.info(`OAuth2 middleware applied to classic proxy route: ${routePath}`);
+    }
+
     const proxy = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
       const startTime = Date.now();
       const config: ProxyRequestConfig = {
@@ -207,6 +214,13 @@ export class ProxyRoutes {
   }
 
   private setupClassicProxyDomainRoute(app: express.Application, route: ProxyRoute): void {
+    // Apply OAuth2 middleware if configured
+    if (route.oauth2 && route.oauth2.enabled) {
+      const oauthMiddleware = this.oauth2Service.createMiddleware(route.oauth2, route.publicPaths || []);
+      app.use(oauthMiddleware);
+      logger.info(`OAuth2 middleware applied to classic proxy domain route: ${route.domain}`);
+    }
+
     const proxy = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
       const config: ProxyRequestConfig = {
         route,
@@ -238,36 +252,39 @@ export class ProxyRoutes {
   }
 
   private setupCorsForwarderRoute(app: express.Application, route: ProxyRoute, routePath: string): void {
-    const proxy = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const proxy = async (req: express.Request, res: express.Response, next: express.NextFunction): Promise<void> => {
       const startTime = Date.now();
       
       // Validate and decode target URL
       const encodedUrl = req.query.url;
       if (!encodedUrl || typeof encodedUrl !== 'string') {
-        return res.status(400).json({
+        res.status(400).json({
           error: 'Bad Request',
           message: 'Missing base64-encoded url parameter'
         });
+        return;
       }
 
       let target: string;
       try {
         target = Buffer.from(encodedUrl, 'base64').toString('utf-8');
       } catch {
-        return res.status(400).json({
+        res.status(400).json({
           error: 'Bad Request',
           message: 'Invalid base64 encoding in url parameter'
         });
+        return;
       }
 
       // Validate URL format
       try {
         new URL(target);
       } catch {
-        return res.status(400).json({
+        res.status(400).json({
           error: 'Bad Request',
           message: 'Decoded url is not a valid URL'
         });
+        return;
       }
       
       logger.info(`[CORS FORWARDER] ${req.method} ${req.originalUrl} -> ${target}`);
@@ -306,31 +323,34 @@ export class ProxyRoutes {
   }
 
   private setupCorsForwarderDomainRoute(app: express.Application, route: ProxyRoute): void {
-    const proxy = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const proxy = async (req: express.Request, res: express.Response, next: express.NextFunction): Promise<void> => {
       const encodedUrl = req.query.url;
       if (!encodedUrl || typeof encodedUrl !== 'string') {
-        return res.status(400).json({
+        res.status(400).json({
           error: 'Bad Request',
           message: 'Missing base64-encoded url query parameter'
         });
+        return;
       }
       let target: string;
       try {
         target = Buffer.from(encodedUrl, 'base64').toString('utf-8');
       } catch {
-        return res.status(400).json({
+        res.status(400).json({
           error: 'Bad Request',
           message: 'Invalid base64 encoding in url parameter'
         });
+        return;
       }
       // Validate target URL
       try {
         new URL(target);
       } catch {
-        return res.status(400).json({
+        res.status(400).json({
           error: 'Bad Request',
           message: 'Decoded url is not a valid URL'
         });
+        return;
       }
       logger.info(`[CORS FORWARDER] ${req.method} ${req.originalUrl} -> ${target}`);
       try {
