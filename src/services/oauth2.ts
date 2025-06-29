@@ -14,6 +14,18 @@ export class OAuth2Service {
     setInterval(() => this.cleanupExpiredStates(), 10 * 60 * 1000);
   }
 
+  // Generate unique cookie name for a route
+  private generateCookieName(config: OAuth2Config, baseUrl?: string): string {
+    // Create a unique identifier based on provider and baseUrl
+    const routeIdentifier = baseUrl ? baseUrl.replace(/[^a-zA-Z0-9]/g, '_') : 'default';
+    const providerIdentifier = config.provider.replace(/[^a-zA-Z0-9]/g, '_');
+    
+    // Generate a hash of the client ID to make it unique but not expose the full client ID
+    const clientIdHash = crypto.createHash('sha256').update(config.clientId).digest('hex').substring(0, 8);
+    
+    return `oauth2_${providerIdentifier}_${routeIdentifier}_${clientIdHash}`;
+  }
+
   // Generate secure random state parameter
   generateState(): string {
     return crypto.randomBytes(32).toString('hex');
@@ -349,13 +361,16 @@ export class OAuth2Service {
     const loginPath = config.loginPath || '/oauth/login';
     
     return (req, res, next) => {
+      // Generate unique cookie name for this route
+      const cookieName = this.generateCookieName(config, req.baseUrl);
+      
       // Add debug logging
-      logger.info(`[OAUTH2] ${req.method} ${req.originalUrl} - path: ${req.path} - baseUrl: ${req.baseUrl}`);
+      logger.info(`[OAUTH2] ${req.method} ${req.originalUrl} - path: ${req.path} - baseUrl: ${req.baseUrl} - cookie: ${cookieName}`);
       
       // Handle session endpoint
       if (req.path === sessionEndpoint) {
         // Get session ID from cookie
-        const sessionId = req.cookies?.['oauth2-session'];
+        const sessionId = req.cookies?.[cookieName];
         
         if (sessionId && this.isAuthenticated(sessionId)) {
           const session = this.getSession(sessionId);
@@ -391,10 +406,10 @@ export class OAuth2Service {
       
       // Handle logout endpoint
       if (req.path === logoutEndpoint) {
-        const sessionId = req.cookies?.['oauth2-session'];
+        const sessionId = req.cookies?.[cookieName];
         if (sessionId) {
           this.logout(sessionId);
-          res.clearCookie('oauth2-session');
+          res.clearCookie(cookieName);
         }
         return res.json({
           success: true,
@@ -405,10 +420,10 @@ export class OAuth2Service {
       // Handle login endpoint - initiates OAuth2 flow
       if (req.path === loginPath) {
         // Get session ID from cookie or create new one
-        let sessionId = req.cookies?.['oauth2-session'];
+        let sessionId = req.cookies?.[cookieName];
         if (!sessionId) {
           sessionId = crypto.randomUUID();
-          res.cookie('oauth2-session', sessionId, {
+          res.cookie(cookieName, sessionId, {
             httpOnly: true,
             secure: req.secure,
             sameSite: 'lax',
@@ -438,10 +453,10 @@ export class OAuth2Service {
       }
 
       // Get session ID from cookie or create new one
-      let sessionId = req.cookies?.['oauth2-session'];
+      let sessionId = req.cookies?.[cookieName];
       if (!sessionId) {
         sessionId = crypto.randomUUID();
-        res.cookie('oauth2-session', sessionId, {
+        res.cookie(cookieName, sessionId, {
           httpOnly: true,
           secure: req.secure,
           sameSite: 'lax',
@@ -469,7 +484,7 @@ export class OAuth2Service {
           });
           
           // Clear session and redirect with error
-          res.clearCookie('oauth2-session');
+          res.clearCookie(cookieName);
           return res.status(400).send(`
             <h1>OAuth2 Authorization Failed</h1>
             <p><strong>Error:</strong> ${req.query.error}</p>

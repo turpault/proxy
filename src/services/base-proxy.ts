@@ -40,10 +40,14 @@ export abstract class BaseProxy {
   protected getUserId(req: express.Request): string | undefined {
     // Try to get user ID from various sources in order of preference
     
-    // 1. OAuth2 session cookie
-    const oauthSessionId = req.cookies?.['oauth2-session'];
-    if (oauthSessionId) {
-      return `oauth:${oauthSessionId}`;
+    // 1. OAuth2 session cookie (look for unique cookie names)
+    const oauth2Cookies = Object.keys(req.cookies || {}).filter(key => key.startsWith('oauth2_'));
+    if (oauth2Cookies.length > 0) {
+      // Use the first OAuth2 cookie found
+      const oauthSessionId = req.cookies?.[oauth2Cookies[0]];
+      if (oauthSessionId) {
+        return `oauth:${oauthSessionId}`;
+      }
     }
     
     // 2. Authorization header (for API tokens)

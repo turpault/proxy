@@ -1,0 +1,184 @@
+# Multiple OAuth2 Routes with Unique Cookie Names
+# This example demonstrates how different OAuth2 routes use unique cookie names
+# to maintain independent sessions
+
+port: 80
+httpsPort: 443
+managementPort: 4481
+
+letsEncrypt:
+  email: "admin@example.com"
+  staging: false
+  certDir: "./certificates"
+
+routes:
+  # Route 1: Google OAuth2 for API
+  - domain: "api.example.com"
+    type: "proxy"
+    path: "/google-api"
+    target: "http://localhost:3001"
+    ssl: true
+    requireAuth: true
+    oauth2:
+      enabled: true
+      provider: "google"
+      clientId: "${GOOGLE_API_CLIENT_ID}"
+      clientSecret: "${GOOGLE_API_CLIENT_SECRET}"
+      authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth"
+      tokenEndpoint: "https://oauth2.googleapis.com/token"
+      callbackUrl: "https://api.example.com/google-api/oauth/callback"
+      scopes: ["openid", "profile", "email"]
+      pkce: true
+    publicPaths:
+      - "/oauth/callback"
+      - "/oauth/session"
+      - "/oauth/logout"
+      - "/health"
+    # Cookie name will be: oauth2_google_google_api_<clientIdHash>
+
+  # Route 2: GitHub OAuth2 for different API
+  - domain: "api.example.com"
+    type: "proxy"
+    path: "/github-api"
+    target: "http://localhost:3002"
+    ssl: true
+    requireAuth: true
+    oauth2:
+      enabled: true
+      provider: "github"
+      clientId: "${GITHUB_API_CLIENT_ID}"
+      clientSecret: "${GITHUB_API_CLIENT_SECRET}"
+      authorizationEndpoint: "https://github.com/login/oauth/authorize"
+      tokenEndpoint: "https://github.com/login/oauth/access_token"
+      callbackUrl: "https://api.example.com/github-api/oauth/callback"
+      scopes: ["read:user", "user:email"]
+      pkce: false
+    publicPaths:
+      - "/oauth/callback"
+      - "/oauth/session"
+      - "/oauth/logout"
+      - "/health"
+    # Cookie name will be: oauth2_github_github_api_<clientIdHash>
+
+  # Route 3: Same provider (Google) but different route
+  - domain: "app.example.com"
+    type: "proxy"
+    path: "/app"
+    target: "http://localhost:3003"
+    ssl: true
+    requireAuth: true
+    oauth2:
+      enabled: true
+      provider: "google"
+      clientId: "${GOOGLE_APP_CLIENT_ID}"
+      clientSecret: "${GOOGLE_APP_CLIENT_SECRET}"
+      authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth"
+      tokenEndpoint: "https://oauth2.googleapis.com/token"
+      callbackUrl: "https://app.example.com/app/oauth/callback"
+      scopes: ["openid", "profile", "email"]
+      pkce: true
+    publicPaths:
+      - "/oauth/callback"
+      - "/oauth/session"
+      - "/oauth/logout"
+      - "/static"
+    # Cookie name will be: oauth2_google_app_<clientIdHash>
+
+  # Route 4: Domain-based route
+  - domain: "admin.example.com"
+    type: "proxy"
+    target: "http://localhost:3004"
+    ssl: true
+    requireAuth: true
+    oauth2:
+      enabled: true
+      provider: "enterprise"
+      clientId: "${ENTERPRISE_CLIENT_ID}"
+      clientSecret: "${ENTERPRISE_CLIENT_SECRET}"
+      authorizationEndpoint: "https://auth.enterprise.com/oauth/authorize"
+      tokenEndpoint: "https://auth.enterprise.com/oauth/token"
+      callbackUrl: "https://admin.example.com/oauth/callback"
+      scopes: ["admin:read", "admin:write"]
+      pkce: true
+    publicPaths:
+      - "/oauth/callback"
+      - "/oauth/session"
+      - "/oauth/logout"
+      - "/health"
+    # Cookie name will be: oauth2_enterprise_default_<clientIdHash>
+
+  # Route 5: Custom OAuth2 provider with custom endpoints
+  - domain: "custom.example.com"
+    type: "proxy"
+    path: "/custom"
+    target: "http://localhost:3005"
+    ssl: true
+    requireAuth: true
+    oauth2:
+      enabled: true
+      provider: "custom"
+      clientId: "${CUSTOM_CLIENT_ID}"
+      clientSecret: "${CUSTOM_CLIENT_SECRET}"
+      authorizationEndpoint: "https://auth.custom.com/oauth/authorize"
+      tokenEndpoint: "https://auth.custom.com/oauth/token"
+      callbackUrl: "https://custom.example.com/custom/auth/callback"
+      scopes: ["api:read", "api:write"]
+      pkce: true
+      # Custom endpoint paths
+      sessionEndpoint: "/auth/session"
+      logoutEndpoint: "/auth/logout"
+      loginPath: "/auth/login"
+      callbackRedirectEndpoint: "/dashboard"
+    publicPaths:
+      - "/auth/callback"
+      - "/auth/session"
+      - "/auth/logout"
+      - "/auth/login"
+      - "/health"
+    # Cookie name will be: oauth2_custom_custom_<clientIdHash>
+
+security:
+  rateLimitWindowMs: 900000
+  rateLimitMaxRequests: 100
+  csp:
+    enabled: true
+    directives:
+      defaultSrc: ["'self'"]
+      scriptSrc: ["'self'", "'unsafe-inline'"]
+      styleSrc: ["'self'", "'unsafe-inline'"]
+      imgSrc: ["'self'", "data:", "https:"]
+      connectSrc: [
+        "'self'",
+        "https://accounts.google.com",
+        "https://oauth2.googleapis.com",
+        "https://github.com",
+        "https://api.github.com",
+        "https://auth.enterprise.com",
+        "https://auth.custom.com"
+      ]
+      fontSrc: ["'self'", "data:"]
+      objectSrc: ["'none'"]
+      mediaSrc: ["'self'"]
+      frameSrc: ["'none'"]
+
+logging:
+  level: "info"
+  file: "./logs/unique-cookies.log"
+
+statistics:
+  enabled: true
+  saveInterval: 300000
+  maxEntries: 10000
+  geolocation: true
+
+# Environment Variables Required:
+# GOOGLE_API_CLIENT_ID=your_google_api_client_id
+# GOOGLE_API_CLIENT_SECRET=your_google_api_client_secret
+# GITHUB_API_CLIENT_ID=your_github_api_client_id
+# GITHUB_API_CLIENT_SECRET=your_github_api_client_secret
+# GOOGLE_APP_CLIENT_ID=your_google_app_client_id
+# GOOGLE_APP_CLIENT_SECRET=your_google_app_client_secret
+# ENTERPRISE_CLIENT_ID=your_enterprise_client_id
+# ENTERPRISE_CLIENT_SECRET=your_enterprise_client_secret
+# CUSTOM_CLIENT_ID=your_custom_client_id
+# CUSTOM_CLIENT_SECRET=your_custom_client_secret 

@@ -10,6 +10,7 @@ Classic proxy routes now support OAuth2 authentication, allowing you to protect 
 
 - **Multiple OAuth2 Providers**: Support for Google, GitHub, and custom OAuth2 providers
 - **Session Management**: Automatic session handling with secure cookies
+- **Unique Cookie Names**: Each route uses unique cookie names to maintain independent sessions
 - **Route Protection**: Protect specific routes or entire domains
 - **Public Paths**: Configure paths that don't require authentication
 - **Session Data Forwarding**: OAuth session information is forwarded to target services
@@ -272,4 +273,56 @@ If you're migrating from static routes with OAuth2 to classic proxy routes:
 4. Keep the same OAuth2 configuration
 5. Update public paths if needed
 
-The OAuth2 authentication flow remains the same, but requests are now proxied to your backend service instead of serving static files. 
+The OAuth2 authentication flow remains the same, but requests are now proxied to your backend service instead of serving static files.
+
+## Unique Cookie Names
+
+Each OAuth2-protected route uses a unique cookie name to maintain independent sessions. This allows multiple OAuth2 routes to coexist without session conflicts.
+
+### Cookie Name Format
+
+Cookie names follow this pattern:
+```
+oauth2_{provider}_{routeIdentifier}_{clientIdHash}
+```
+
+Where:
+- `{provider}`: The OAuth2 provider name (e.g., "google", "github", "custom")
+- `{routeIdentifier}`: The route path or "default" for domain-based routes
+- `{clientIdHash}`: First 8 characters of the SHA-256 hash of the client ID
+
+### Examples
+
+```yaml
+# Route: /api/google
+# Provider: google
+# Cookie: oauth2_google_api_google_a1b2c3d4
+
+# Route: /app
+# Provider: google  
+# Cookie: oauth2_google_app_e5f6g7h8
+
+# Route: /api/github
+# Provider: github
+# Cookie: oauth2_github_api_github_i9j0k1l2
+
+# Domain: admin.example.com (no path)
+# Provider: enterprise
+# Cookie: oauth2_enterprise_default_m3n4o5p6
+```
+
+### Benefits
+
+1. **Independent Sessions**: Each route maintains its own OAuth2 session
+2. **Multiple Providers**: Can use different OAuth2 providers on different routes
+3. **Same Provider, Different Apps**: Can use the same OAuth2 provider with different client IDs
+4. **No Session Conflicts**: Users can be authenticated to multiple routes simultaneously
+5. **Security**: Cookie names are unique and don't expose sensitive information
+
+### Session Independence
+
+With unique cookie names, users can:
+- Be logged into `/api/google` with Google OAuth2
+- Be logged into `/api/github` with GitHub OAuth2  
+- Be logged into `/app` with a different Google OAuth2 client
+- All sessions remain independent and don't interfere with each other 

@@ -2,6 +2,7 @@ import express from 'express';
 import { logger } from '../utils/logger';
 import { BaseProxy, ProxyRequestConfig } from './base-proxy';
 import { OAuth2Service } from './oauth2';
+import * as crypto from 'crypto';
 
 export class ClassicProxy extends BaseProxy {
   private oauth2Service: OAuth2Service;
@@ -137,8 +138,11 @@ export class ClassicProxy extends BaseProxy {
       return { authenticated: true };
     }
 
+    // Generate unique cookie name for this route
+    const cookieName = this.generateCookieName(route.oauth2, req.baseUrl);
+
     // Get session ID from cookie
-    const sessionId = req.cookies?.['oauth2-session'];
+    const sessionId = req.cookies?.[cookieName];
     if (!sessionId) {
       // No session cookie, redirect to login
       const loginPath = route.oauth2.loginPath || '/oauth/login';
@@ -172,5 +176,17 @@ export class ClassicProxy extends BaseProxy {
     }
 
     return { authenticated: true, session };
+  }
+
+  // Generate unique cookie name for a route (same logic as OAuth2Service)
+  private generateCookieName(config: any, baseUrl?: string): string {
+    // Create a unique identifier based on provider and baseUrl
+    const routeIdentifier = baseUrl ? baseUrl.replace(/[^a-zA-Z0-9]/g, '_') : 'default';
+    const providerIdentifier = config.provider.replace(/[^a-zA-Z0-9]/g, '_');
+    
+    // Generate a hash of the client ID to make it unique but not expose the full client ID
+    const clientIdHash = crypto.createHash('sha256').update(config.clientId).digest('hex').substring(0, 8);
+    
+    return `oauth2_${providerIdentifier}_${routeIdentifier}_${clientIdHash}`;
   }
 } 
