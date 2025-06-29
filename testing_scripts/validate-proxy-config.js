@@ -238,8 +238,8 @@ function validateOAuth2Config(route, index) {
       issues.push(`Route ${index}: OAuth2.loginPath must be a string`);
     }
 
-    if (oauth2.callbackRedirectPath !== undefined && typeof oauth2.callbackRedirectPath !== 'string') {
-      issues.push(`Route ${index}: OAuth2.callbackRedirectPath must be a string`);
+    if (oauth2.callbackRedirectEndpoint !== undefined && typeof oauth2.callbackRedirectEndpoint !== 'string') {
+      issues.push(`Route ${index}: OAuth2.callbackRedirectEndpoint must be a string`);
     }
   }
 

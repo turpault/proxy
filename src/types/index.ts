@@ -194,7 +194,7 @@ export interface OAuth2Config {
   sessionEndpoint?: string; // Default: /oauth/session
   logoutEndpoint?: string; // Default: /oauth/logout
   loginPath?: string; // Default: /oauth/login - path that initiates login process
-  callbackRedirectPath?: string; // Path to redirect after successful callback (default: /)
+  callbackRedirectEndpoint?: string; // Endpoint to redirect after successful callback (default: /)
 }
 
 export interface OAuth2TokenResponse {

@@ -204,12 +204,12 @@ export class OAuth2Service {
         expiresIn: tokens.expires_in,
       });
 
-      // Use custom redirect path from config if provided, otherwise default to '/'
-      const redirectPath = config.callbackRedirectPath || '/';
+      // Use custom redirect endpoint from config if provided, otherwise default to '/'
+      const redirectEndpoint = config.callbackRedirectEndpoint || '/';
 
       return { 
         success: true, 
-        redirectUrl: redirectPath
+        redirectUrl: redirectEndpoint
       };
 
     } catch (error: any) {
@@ -418,9 +418,9 @@ export class OAuth2Service {
 
         // Check if already authenticated
         if (this.isAuthenticated(sessionId)) {
-          // If already authenticated, redirect to the callback redirect path or root
-          const redirectPath = config.callbackRedirectPath || '/';
-          return res.redirect(redirectPath);
+          // If already authenticated, redirect to the callback redirect endpoint or root
+          const redirectEndpoint = config.callbackRedirectEndpoint || '/';
+          return res.redirect(redirectEndpoint);
         }
 
         // Redirect to OAuth2 authorization
@@ -487,9 +487,10 @@ export class OAuth2Service {
             config
           ).then(result => {
             if (result.success) {
-              // Use the redirect URL from the result (which respects config.callbackRedirectPath)
-              const redirectPath = result.redirectUrl || '/';
-              res.redirect(redirectPath);
+              // Use the redirect endpoint from the result and make it relative to baseUrl
+              const redirectEndpoint = result.redirectUrl || '/';
+              const redirectUrl = req.baseUrl + redirectEndpoint;
+              res.redirect(redirectUrl);
             } else {
               logger.error('OAuth2 callback failed', { error: result.error });
               res.status(400).send(`

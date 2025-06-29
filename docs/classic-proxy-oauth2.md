@@ -43,6 +43,11 @@ routes:
       - "/oauth/session"
       - "/oauth/logout"
       - "/health"
+    # Custom endpoint paths
+    sessionEndpoint: "/auth/session"
+    logoutEndpoint: "/auth/logout"
+    loginPath: "/auth/login"
+    callbackRedirectEndpoint: "/dashboard"
 ```
 
 ### Configuration Options
@@ -66,7 +71,7 @@ routes:
 | `sessionEndpoint` | string | No | Custom session endpoint path (default: `/oauth/session`) |
 | `logoutEndpoint` | string | No | Custom logout endpoint path (default: `/oauth/logout`) |
 | `loginPath` | string | No | Custom login path (default: `/oauth/login`) |
-| `callbackRedirectPath` | string | No | Path to redirect after successful login (default: `/`) |
+| `callbackRedirectEndpoint` | string | No | Endpoint to redirect after successful login (default: `/`) |
 
 #### Route Configuration
 

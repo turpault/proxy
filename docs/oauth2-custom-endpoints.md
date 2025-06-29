@@ -4,7 +4,7 @@ This document describes the OAuth2 custom endpoint configuration features that a
 
 ## Overview
 
-The OAuth2 service now supports custom endpoint paths for session management, logout, login initiation, and custom callback redirect paths after successful authentication. This provides more flexibility in integrating OAuth2 authentication with your applications.
+The OAuth2 service now supports custom endpoint paths for session management, logout, login, and custom callback redirect paths after successful authentication. This provides more flexibility in integrating OAuth2 authentication with your applications.
 
 ## Configuration Options
 
@@ -15,7 +15,7 @@ You can customize the following endpoint paths in your OAuth2 configuration:
 - `sessionEndpoint`: Custom path for the session endpoint (default: `/oauth/session`)
 - `logoutEndpoint`: Custom path for the logout endpoint (default: `/oauth/logout`)
 - `loginPath`: Custom path that initiates the OAuth2 login process (default: `/oauth/login`)
-- `callbackRedirectPath`: Custom path to redirect after successful OAuth2 callback (default: `/`)
+- `callbackRedirectEndpoint`: Custom endpoint to redirect after successful OAuth2 callback (default: `/`)
 
 ### Configuration Example
 
@@ -40,7 +40,7 @@ routes:
       sessionEndpoint: "/auth/session"      # Custom session endpoint
       logoutEndpoint: "/auth/logout"        # Custom logout endpoint
       loginPath: "/auth/login"              # Custom login path
-      callbackRedirectPath: "/dashboard"    # Redirect to dashboard after login
+      callbackRedirectEndpoint: "/dashboard"    # Redirect to dashboard after login
     publicPaths:
       - "/auth/callback"
       - "/auth/session"
@@ -96,23 +96,23 @@ This endpoint clears the current session and logs the user out.
 
 This path initiates the OAuth2 authentication flow. When users visit this path:
 
-1. If they're already authenticated, they're redirected to the `callbackRedirectPath`
+1. If they're already authenticated, they're redirected to the `callbackRedirectEndpoint`
 2. If they're not authenticated, they're redirected to the OAuth2 provider for authorization
 
 **Behavior**:
-- **Authenticated users**: Redirected to `callbackRedirectPath` (or `/` if not configured)
+- **Authenticated users**: Redirected to `callbackRedirectEndpoint` (or `/` if not configured)
 - **Unauthenticated users**: Redirected to OAuth2 provider authorization URL
 
-### Callback Redirect Path (`callbackRedirectPath`)
+### Callback Redirect Endpoint (`callbackRedirectEndpoint`)
 
 **Default**: `/`
 
-This path determines where users are redirected after successful OAuth2 authentication. The path is relative to the route's base path.
+This endpoint determines where users are redirected after successful OAuth2 authentication. The endpoint is relative to the route's base path.
 
 **Examples**:
-- `callbackRedirectPath: "/dashboard"` - Redirects to `/my-app/dashboard`
-- `callbackRedirectPath: "/admin"` - Redirects to `/my-app/admin`
-- `callbackRedirectPath: "/"` - Redirects to `/my-app/`
+- `callbackRedirectEndpoint: "/dashboard"` - Redirects to `/my-app/dashboard`
+- `callbackRedirectEndpoint: "/admin"` - Redirects to `/my-app/admin`
+- `callbackRedirectEndpoint: "/"` - Redirects to `/my-app/`
 
 ## Usage Examples
 
@@ -280,7 +280,7 @@ window.location.href = '/auth/login'; // Redirects to login path first
 
 1. **404 Errors on Custom Endpoints**: Ensure the custom endpoints are included in the `publicPaths` array.
 
-2. **Redirect Loops**: Check that the `callbackRedirectPath` doesn't point to a protected route that requires authentication.
+2. **Redirect Loops**: Check that the `callbackRedirectEndpoint` doesn't point to a protected route that requires authentication.
 
 3. **Session Not Found**: Verify that the session endpoint path matches between your frontend requests and the OAuth2 configuration.
 

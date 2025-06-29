@@ -45,7 +45,7 @@ routes:
       sessionEndpoint: "/auth/session"      # Custom session endpoint
       logoutEndpoint: "/auth/logout"        # Custom logout endpoint
       loginPath: "/auth/login"              # Custom login path
-      callbackRedirectPath: "/dashboard"    # Redirect to dashboard after login
+      callbackRedirectEndpoint: "/dashboard"    # Redirect to dashboard after login
     # Public paths that don't require authentication
     publicPaths:
       - "/auth/callback"
@@ -76,7 +76,7 @@ routes:
       sessionEndpoint: "/api/oauth/session"
       logoutEndpoint: "/api/oauth/logout"
       loginPath: "/api/oauth/login"
-      callbackRedirectPath: "/api/docs"  # Redirect to API docs after login
+      callbackRedirectEndpoint: "/api/docs"  # Redirect to API docs after login
     publicPaths:
       - "/oauth/callback"
       - "/api/oauth/session"
@@ -110,10 +110,10 @@ routes:
       scopes: ["read", "write"]
       pkce: true
       # Custom endpoint paths
-      sessionEndpoint: "/enterprise/auth/session"
-      logoutEndpoint: "/enterprise/auth/logout"
-      loginPath: "/enterprise/auth/login"
-      callbackRedirectPath: "/enterprise/admin"  # Redirect to admin panel after login
+      sessionEndpoint: "/enterprise/oauth/session"
+      logoutEndpoint: "/enterprise/oauth/logout"
+      loginPath: "/enterprise/oauth/login"
+      callbackRedirectEndpoint: "/enterprise/admin"  # Redirect to admin panel after login
       # Additional OAuth2 parameters
       additionalParams:
         response_mode: "form_post"
@@ -123,9 +123,9 @@ routes:
       subscriptionKeyHeader: "X-Enterprise-Key"
     publicPaths:
       - "/auth/callback"
-      - "/enterprise/auth/session"
-      - "/enterprise/auth/logout"
-      - "/enterprise/auth/login"
+      - "/enterprise/oauth/session"
+      - "/enterprise/oauth/logout"
+      - "/enterprise/oauth/login"
       - "/static"
     # Route-specific CSP for enterprise OAuth
     csp:

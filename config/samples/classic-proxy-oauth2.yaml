@@ -129,7 +129,7 @@ routes:
       sessionEndpoint: "/auth/session"
       logoutEndpoint: "/auth/logout"
       loginPath: "/auth/login"
-      callbackRedirectPath: "/dashboard"
+      callbackRedirectEndpoint: "/dashboard"
     publicPaths:
       - "/auth/callback"
       - "/auth/session"
