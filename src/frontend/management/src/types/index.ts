@@ -82,7 +82,7 @@ export interface DetailedStatisticsResponse {
 }
 
 export interface WebSocketMessage {
-  type: 'processes' | 'processes_update' | 'status' | 'logs' | 'error' | 'pong';
+  type: 'processes' | 'processes_update' | 'status' | 'logs' | 'logs_update' | 'error' | 'pong';
   data: any;
   timestamp: string;
 }

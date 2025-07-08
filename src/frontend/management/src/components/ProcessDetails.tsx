@@ -18,7 +18,7 @@ export const ProcessDetails: React.FC<ProcessDetailsProps> = ({ process, onActio
 
   useEffect(() => {
     requestLogs(process.id, logLines);
-  }, [process.id, logLines, requestLogs]);
+  }, [process.id, logLines]);
 
   const filteredLogs = logs.filter(log => {
     if (logFilter === 'all') return true;

@@ -66,6 +66,7 @@ export class ProcessManager {
   private reinitializeTimeout: NodeJS.Timeout | null = null;
 
   private onProcessUpdate: (() => void) | null = null;
+  private onLogUpdate: ((processId: string, newLogs: string[]) => void) | null = null;
   private scheduler: ProcessScheduler;
 
   constructor() {
@@ -302,6 +303,10 @@ export class ProcessManager {
     this.onProcessUpdate = callback;
   }
 
+  public setLogUpdateCallback(callback: (processId: string, newLogs: string[]) => void): void {
+    this.onLogUpdate = callback;
+  }
+
   /**
    * Notify listeners of process updates
    */
@@ -487,6 +492,11 @@ export class ProcessManager {
                 logger.info(`[${id}] ${line}`);
               }
             });
+
+            // Notify listeners about new logs
+            if (lines.length > 0 && this.onLogUpdate) {
+              this.onLogUpdate(id, lines);
+            }
           });
 
           stream.on('error', (error) => {

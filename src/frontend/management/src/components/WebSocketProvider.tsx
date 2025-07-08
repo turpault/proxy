@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import { WebSocketMessage, Process, StatusData, LogLine } from '../types';
 
 interface WebSocketContextType {
@@ -72,6 +72,17 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
           }));
         }
         break;
+      case 'logs_update':
+        if (message.data && message.data.processId) {
+          setProcessLogs(prev => {
+            const existingLogs = prev[message.data.processId] || [];
+            return {
+              ...prev,
+              [message.data.processId]: [...existingLogs, ...message.data.logs]
+            };
+          });
+        }
+        break;
       case 'error':
         console.error('WebSocket error:', message.data);
         break;
@@ -83,19 +94,19 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     }
   };
 
-  const sendMessage = (message: any) => {
+  const sendMessage = useCallback((message: any) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(message));
     }
-  };
+  }, [ws]);
 
-  const requestLogs = (processId: string, lines: number | string) => {
+  const requestLogs = useCallback((processId: string, lines: number | string) => {
     sendMessage({
       type: 'request_logs',
       processId: processId,
       lines: lines
     });
-  };
+  }, [sendMessage]);
 
   useEffect(() => {
     connectWebSocket();

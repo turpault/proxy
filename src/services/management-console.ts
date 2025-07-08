@@ -16,6 +16,7 @@ export class ManagementConsole {
   private mainConfig?: MainConfig;
   private statisticsService: any;
   private managementWebSockets: Set<ServerWebSocket<unknown>> = new Set();
+  private logWatchers: Map<string, Set<ServerWebSocket<unknown>>> = new Map(); // processId -> Set of WebSocket clients
 
   constructor(config: ProxyConfig, mainConfig?: MainConfig) {
     this.config = config;
@@ -39,6 +40,20 @@ export class ManagementConsole {
 
     // Set up process configuration watching
     processManager.setupProcessConfigWatching();
+
+    // Set up process update callback
+    processManager.setProcessUpdateCallback(() => {
+      this.broadcastToManagementWebSockets({
+        type: 'processes_update',
+        data: processManager.getProcessStatus(),
+        timestamp: new Date().toISOString()
+      });
+    });
+
+    // Set up log update callback
+    processManager.setLogUpdateCallback((processId: string, newLogs: string[]) => {
+      this.broadcastLogUpdates(processId, newLogs);
+    });
 
     logger.info('Management console initialization complete');
   }
@@ -663,6 +678,16 @@ export class ManagementConsole {
         close: (ws: ServerWebSocket<unknown>) => {
           logger.info('WebSocket client disconnected');
           this.managementWebSockets.delete(ws);
+
+          // Remove from all log watchers
+          this.logWatchers.forEach((watchers, processId) => {
+            if (watchers.has(ws)) {
+              watchers.delete(ws);
+              if (watchers.size === 0) {
+                this.logWatchers.delete(processId);
+              }
+            }
+          });
         },
         drain: () => { },
       },
@@ -738,6 +763,12 @@ export class ManagementConsole {
         data: { processId, logs },
         timestamp: new Date().toISOString()
       }));
+
+      // Add this WebSocket to the watchers for this process
+      if (!this.logWatchers.has(processId)) {
+        this.logWatchers.set(processId, new Set());
+      }
+      this.logWatchers.get(processId)!.add(ws);
     } catch (error) {
       logger.error('Failed to get logs for process', { processId, error });
       ws.send(JSON.stringify({
@@ -875,6 +906,51 @@ export class ManagementConsole {
         ws.send(msg);
       } catch (error) {
         logger.error('Failed to send message to WebSocket client', error);
+        this.managementWebSockets.delete(ws);
+      }
+    });
+  }
+
+  private broadcastLogUpdates(processId: string, newLogs: string[]): void {
+    const watchers = this.logWatchers.get(processId);
+    if (!watchers || watchers.size === 0) {
+      return; // No clients watching this process
+    }
+
+    // Transform logs to LogLine format
+    const logLines = newLogs.map((logLine: string) => {
+      // Parse log line format: [timestamp] [STREAM] content
+      const timestampMatch = logLine.match(/^\[([^\]]+)\]\s+\[(STDOUT|STDERR)\]\s+(.*)$/);
+
+      if (timestampMatch) {
+        return {
+          line: timestampMatch[3],
+          stream: timestampMatch[2].toLowerCase() as 'stdout' | 'stderr',
+          timestamp: timestampMatch[1]
+        };
+      } else {
+        // Fallback for lines that don't match the expected format
+        return {
+          line: logLine,
+          stream: 'stdout' as const,
+          timestamp: new Date().toISOString()
+        };
+      }
+    });
+
+    const message = JSON.stringify({
+      type: 'logs_update',
+      data: { processId, logs: logLines },
+      timestamp: new Date().toISOString()
+    });
+
+    // Send to all watchers of this process
+    watchers.forEach((ws) => {
+      try {
+        ws.send(message);
+      } catch (error) {
+        logger.error('Failed to send log update to WebSocket client', error);
+        watchers.delete(ws);
         this.managementWebSockets.delete(ws);
       }
     });
