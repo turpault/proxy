@@ -46,7 +46,7 @@ export class ProxyProcesses {
     }
 
     const configFilePath = path.resolve(process.cwd(), this.config.processConfigFile);
-    
+
     try {
       // Stop existing watcher if any
       if (this.fileWatcher) {
@@ -90,7 +90,7 @@ export class ProxyProcesses {
 
     try {
       logger.info('Reinitializing process management from updated configuration file');
-      
+
       // Read and parse the updated configuration
       const configFilePath = path.resolve(process.cwd(), this.config.processConfigFile);
       const newConfig = await processManager.loadProcessConfig(configFilePath);
@@ -101,7 +101,7 @@ export class ProxyProcesses {
 
       // Handle the configuration update
       await this.handleProcessConfigUpdate(newConfig);
-      
+
     } catch (error) {
       logger.error('Failed to reinitialize process management', error);
     }
@@ -113,84 +113,26 @@ export class ProxyProcesses {
       processes: Object.keys(newConfig.processes)
     });
 
-    const currentProcesses = processManager.getProcessStatus();
-    const newProcessIds = new Set(Object.keys(newConfig.processes));
-    const currentProcessIds = new Set(currentProcesses.map(p => p.id));
+    // Create a target resolver function
+    const targetResolver = (processId: string, processConfig: ProcessConfig): string => {
+      return this.getTargetForProcess(processId, processConfig);
+    };
 
-    // Start new processes
-    for (const [processId, processConfig] of Object.entries(newConfig.processes)) {
-      if (!currentProcessIds.has(processId) && processConfig.enabled !== false) {
-        logger.info(`Starting new process: ${processId}`);
-        try {
-          const target = this.getTargetForProcess(processId, processConfig);
-          await processManager.startProcess(processId, processConfig, target);
-        } catch (error) {
-          logger.error(`Failed to start new process: ${processId}`, error);
-        }
-      }
-    }
+    // Use the ProcessManager's updateConfiguration method
+    await processManager.updateConfiguration(newConfig, targetResolver);
 
-    // Stop removed processes
-    for (const processId of currentProcessIds) {
-      if (!newProcessIds.has(processId)) {
-        logger.info(`Stopping removed process: ${processId}`);
-        try {
-          await processManager.stopProcess(processId);
-          processManager.markProcessAsRemoved(processId);
-        } catch (error) {
-          logger.error(`Failed to stop removed process: ${processId}`, error);
-        }
-      }
-    }
-
-    // Update existing processes if configuration changed
-    for (const [processId, newProcessConfig] of Object.entries(newConfig.processes)) {
-      if (currentProcessIds.has(processId)) {
-        // Get the current process config from the process management config
-        const currentProcessConfig = this.config.processManagement?.processes[processId];
-        if (currentProcessConfig && this.hasProcessConfigChanged(currentProcessConfig, newProcessConfig)) {
-          logger.info(`Configuration changed for process: ${processId}, restarting`);
-          try {
-            await processManager.stopProcess(processId);
-            const target = this.getTargetForProcess(processId, newProcessConfig);
-            await processManager.startProcess(processId, newProcessConfig, target);
-          } catch (error) {
-            logger.error(`Failed to restart process with new config: ${processId}`, error);
-          }
-        }
-      }
-    }
+    // Update the local config reference
+    this.config.processManagement = newConfig;
 
     logger.info('Process configuration update complete');
   }
 
-  private hasProcessConfigChanged(oldConfig: ProcessConfig, newConfig: ProcessConfig): boolean {
-    // Compare key configuration properties
-    const keysToCompare = [
-      'command', 'args', 'cwd', 'env', 'restartOnExit', 
-      'restartDelay', 'maxRestarts', 'healthCheck'
-    ];
 
-    for (const key of keysToCompare) {
-      const oldValue = (oldConfig as any)[key];
-      const newValue = (newConfig as any)[key];
-
-      if (JSON.stringify(oldValue) !== JSON.stringify(newValue)) {
-        logger.debug(`Process config changed for key: ${key}`, {
-          old: oldValue,
-          new: newValue
-        });
-        return true;
-      }
-    }
-
-    return false;
-  }
 
   private getTargetForProcess(processId: string, processConfig: ProcessConfig): string {
     // Find the route that corresponds to this process
     const route = this.config.routes.find(r => this.getProcessId(r) === processId);
-    
+
     if (route && route.target) {
       return route.target;
     }
@@ -213,7 +155,7 @@ export class ProxyProcesses {
   async getProcessLogs(processId: string, lines: number | string): Promise<string[]> {
     const processes = processManager.getProcessStatus();
     const process = processes.find(p => p.id === processId);
-    
+
     if (!process || !process.logFile) {
       return [];
     }
@@ -221,7 +163,7 @@ export class ProxyProcesses {
     try {
       const logContent = await fs.readFile(process.logFile, 'utf8');
       const logLines = logContent.split('\n').filter(line => line.trim());
-      
+
       const lineCount = typeof lines === 'string' ? parseInt(lines) : lines;
       return logLines.slice(-lineCount);
     } catch (error) {

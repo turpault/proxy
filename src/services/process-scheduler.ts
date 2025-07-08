@@ -75,7 +75,7 @@ export class ProcessScheduler {
         config,
         cronJob,
         lastRun: null,
-        nextRun: cronJob.nextDate().toDate(),
+        nextRun: cronJob.nextDate().toJSDate(),
         isRunning: false,
         runCount: 0,
         lastError: null
@@ -111,7 +111,7 @@ export class ProcessScheduler {
 
     try {
       logger.info(`Executing scheduled process ${id}`);
-      
+
       scheduledProcess.isRunning = true;
       scheduledProcess.lastRun = new Date();
       scheduledProcess.runCount++;
@@ -142,13 +142,13 @@ export class ProcessScheduler {
       }
 
       // Update next run time
-      scheduledProcess.nextRun = scheduledProcess.cronJob.nextDate().toDate();
+      scheduledProcess.nextRun = scheduledProcess.cronJob.nextDate().toJSDate();
 
     } catch (error) {
       logger.error(`Error executing scheduled process ${id}`, error);
       scheduledProcess.lastError = error instanceof Error ? error.message : String(error);
       scheduledProcess.isRunning = false;
-      
+
       if (this.onProcessStatusChange) {
         this.onProcessStatusChange(id, false);
       }
@@ -204,7 +204,7 @@ export class ProcessScheduler {
    */
   public validateCronExpression(cronExpression: string): boolean {
     try {
-      new CronJob(cronExpression, () => {}, null, false);
+      new CronJob(cronExpression, () => { }, null, false);
       return true;
     } catch (error) {
       return false;
@@ -216,8 +216,8 @@ export class ProcessScheduler {
    */
   public getNextRunTime(cronExpression: string, timezone: string = 'UTC'): Date | null {
     try {
-      const cronJob = new CronJob(cronExpression, () => {}, null, false, timezone);
-      return cronJob.nextDate().toDate();
+      const cronJob = new CronJob(cronExpression, () => { }, null, false, timezone);
+      return cronJob.nextDate().toJSDate();
     } catch (error) {
       return null;
     }
@@ -228,7 +228,7 @@ export class ProcessScheduler {
    */
   public shutdown(): void {
     logger.info('Shutting down process scheduler');
-    
+
     for (const [id, scheduledProcess] of this.scheduledProcesses) {
       try {
         scheduledProcess.cronJob.stop();
@@ -237,7 +237,25 @@ export class ProcessScheduler {
         logger.error(`Error stopping scheduled process ${id}`, error);
       }
     }
-    
+
     this.scheduledProcesses.clear();
+  }
+
+  /**
+   * Clear all scheduled processes
+   */
+  public clearSchedules(): void {
+    logger.info('Clearing all scheduled processes');
+
+    for (const [id, scheduledProcess] of this.scheduledProcesses) {
+      try {
+        scheduledProcess.cronJob.stop();
+      } catch (error) {
+        logger.error(`Error stopping cron job for process ${id}`, error);
+      }
+    }
+
+    this.scheduledProcesses.clear();
+    logger.info('All scheduled processes cleared');
   }
 } 
