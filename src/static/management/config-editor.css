@@ -99,6 +99,7 @@
 
 .config-editor-container {
   margin-bottom: 1.5rem;
+  position: relative;
 }
 
 .config-editor {
@@ -113,12 +114,64 @@
   resize: vertical;
   background: #f8f9fa;
   color: #2d3748;
+  transition: border-color 0.2s ease;
 }
 
 .config-editor:focus {
   outline: none;
   border-color: #4299e1;
   box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+}
+
+.config-editor.validating {
+  border-color: #f6ad55;
+}
+
+.config-editor.valid {
+  border-color: #68d391;
+}
+
+.config-editor.invalid {
+  border-color: #fc8181;
+}
+
+/* Validation status indicator */
+.validation-status {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.validation-status.validating {
+  background: #f6ad55;
+  animation: pulse 1.5s infinite;
+}
+
+.validation-status.valid {
+  background: #68d391;
+}
+
+.validation-status.invalid {
+  background: #fc8181;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+
+  100% {
+    opacity: 1;
+  }
 }
 
 .config-validation {
@@ -129,6 +182,13 @@
   padding: 1rem;
   border-radius: 4px;
   font-weight: 500;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+  line-height: 1.4;
 }
 
 .validation-message.success {
@@ -147,6 +207,25 @@
   background: #fff3cd;
   border: 1px solid #ffeaa7;
   color: #856404;
+}
+
+/* Validation message scrollbar styling */
+.validation-message::-webkit-scrollbar {
+  width: 8px;
+}
+
+.validation-message::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+
+.validation-message::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+}
+
+.validation-message::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.5);
 }
 
 /* Modal Styles */

@@ -31,7 +31,7 @@ export function registerManagementEndpoints(
 
   // Store WebSocket service reference for later initialization
   (managementApp as any).webSocketService = new WebSocketService(proxyServer);
-  
+
   // Set up process update callback for WebSocket broadcasts
   processManager.setProcessUpdateCallback(async () => {
     try {
@@ -45,7 +45,7 @@ export function registerManagementEndpoints(
       logger.error('Error broadcasting process updates', error);
     }
   });
-  
+
   // Initialize WebSocket after server starts listening
   (managementApp as any).initializeWebSocket = (httpServer: any) => {
     try {
@@ -61,7 +61,7 @@ export function registerManagementEndpoints(
     try {
       const certificates = proxyServer.proxyCertificates?.getAllCertificates() || new Map();
       const validCertificates = Array.from(certificates.values()).filter((cert: any) => cert.isValid);
-      
+
       res.json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
@@ -118,11 +118,11 @@ export function registerManagementEndpoints(
         } else if (runningProcess?.isReconnected) {
           status = 'starting';
         }
-        
+
         // Get scheduler information
         const scheduler = processManager.getScheduler();
         const scheduledProcess = scheduler.getScheduledProcess(processId);
-        
+
         return {
           id: processId,
           name: processConfig?.name || runningProcess?.name || `proxy-${processId}`,
@@ -155,8 +155,8 @@ export function registerManagementEndpoints(
           } : null
         };
       });
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         data: processList,
         timestamp: new Date().toISOString()
       });
@@ -204,8 +204,8 @@ export function registerManagementEndpoints(
         isStopped: runningProcess?.isStopped || false,
         isRemoved: isRemoved || runningProcess?.isRemoved || false,
       };
-      return res.json({ 
-        success: true, 
+      return res.json({
+        success: true,
         data: processInfo,
         timestamp: new Date().toISOString()
       });
@@ -263,7 +263,7 @@ export function registerManagementEndpoints(
 
   managementApp.post('/api/processes/reload', async (req, res) => {
     try {
-      const configFilePath = config.processConfigFile 
+      const configFilePath = config.processConfigFile
         ? path.resolve(process.cwd(), config.processConfigFile)
         : path.resolve(process.cwd(), 'config', 'processes.yaml');
       const newConfig = await processManager.loadProcessConfig(configFilePath);
@@ -296,8 +296,8 @@ export function registerManagementEndpoints(
       const logLines = logContent.split('\n').filter(line => line.trim());
       const requestedLines = Math.min(parseInt(lines as string) || 100, 10000); // Increased limit to 10,000 lines
       const recentLogs = logLines.slice(-requestedLines);
-      return res.json({ 
-        success: true, 
+      return res.json({
+        success: true,
         data: { logs: recentLogs },
         timestamp: new Date().toISOString()
       });
@@ -310,8 +310,8 @@ export function registerManagementEndpoints(
   managementApp.get('/api/status', async (req, res) => {
     try {
       const status = await proxyServer.getStatusData();
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         data: status,
         timestamp: new Date().toISOString()
       });
@@ -324,13 +324,13 @@ export function registerManagementEndpoints(
   managementApp.get('/api/statistics', (req, res) => {
     try {
       const period = (req.query.period as string) || '24h';
-      
+
       // Use getTimePeriodStats for better route data when period is specified
       if (period !== 'all') {
         // Pass route configs for name lookup
         const routeConfigs = config.routes.map(r => ({ domain: r.domain, path: r.path, target: r.target, name: r.name }));
         const timePeriodStats = statisticsService.getTimePeriodStats(period, routeConfigs);
-        
+
         // Aggregate country data from routes for heatmap
         const countryCounts = new Map<string, number>();
         timePeriodStats.routes.forEach((route: any) => {
@@ -340,19 +340,19 @@ export function registerManagementEndpoints(
             }
           });
         });
-        
+
         const topCountries = Array.from(countryCounts.entries())
           .map(([country, count]) => ({ country, count }))
           .sort((a, b) => b.count - a.count)
           .slice(0, 10);
-        
+
         // Calculate request type statistics from routes
         const requestTypeCounts = new Map<string, number>();
         timePeriodStats.routes.forEach((route: any) => {
           const requestType = route.requestType || 'proxy';
           requestTypeCounts.set(requestType, (requestTypeCounts.get(requestType) || 0) + route.requests);
         });
-        
+
         const requestTypes = Array.from(requestTypeCounts.entries())
           .map(([type, count]) => ({
             type,
@@ -360,9 +360,9 @@ export function registerManagementEndpoints(
             percentage: (count / timePeriodStats.totalRequests) * 100
           }))
           .sort((a, b) => b.count - a.count);
-        
-        res.json({ 
-          success: true, 
+
+        res.json({
+          success: true,
           data: {
             summary: {
               totalRequests: timePeriodStats.totalRequests,
@@ -385,9 +385,9 @@ export function registerManagementEndpoints(
       } else {
         // Use getCurrentStats for all-time data
         const stats = statisticsService.getCurrentStats();
-        
-        res.json({ 
-          success: true, 
+
+        res.json({
+          success: true,
           data: stats,
           timestamp: new Date().toISOString()
         });
@@ -402,7 +402,7 @@ export function registerManagementEndpoints(
     try {
       const status = proxyServer.getStatus();
       const certificatesMap = status.certificates;
-      
+
       // Convert Map to array of certificate objects
       const certificates: any[] = [];
       certificatesMap.forEach((certInfo: any, domain: string) => {
@@ -413,7 +413,7 @@ export function registerManagementEndpoints(
           createdAt: certInfo.createdAt?.toISOString()
         });
       });
-      
+
       // Get Let's Encrypt status from the proxy server
       const letsEncryptStatus = {
         email: config.letsEncrypt?.email || 'Not configured',
@@ -430,9 +430,9 @@ export function registerManagementEndpoints(
           return daysUntilExpiry <= 30;
         }).length
       };
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         data: {
           certificates,
           letsEncryptStatus
@@ -448,8 +448,8 @@ export function registerManagementEndpoints(
   managementApp.get('/api/statistics/summary', (req, res) => {
     try {
       const summary = statisticsService.getStatsSummary();
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         data: summary,
         timestamp: new Date().toISOString()
       });
@@ -469,8 +469,8 @@ export function registerManagementEndpoints(
       await fs.ensureDir(reportDir);
       await fs.writeFile(filepath, JSON.stringify(report, null, 2), 'utf8');
       logger.info(`Manual statistics report generated: ${filepath}`);
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         message: 'Statistics report generated successfully',
         data: {
           filepath,
@@ -490,8 +490,8 @@ export function registerManagementEndpoints(
   managementApp.post('/api/statistics/save', async (req, res) => {
     try {
       await statisticsService.forceSave();
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         message: 'Statistics saved successfully',
         timestamp: new Date().toISOString()
       });
@@ -512,8 +512,8 @@ export function registerManagementEndpoints(
       if (await fs.pathExists(currentFile)) {
         await fs.copy(currentFile, backupFile);
         const stats = await fs.stat(backupFile);
-        res.json({ 
-          success: true, 
+        res.json({
+          success: true,
           message: 'Statistics backup created successfully',
           data: {
             backupFile,
@@ -534,8 +534,8 @@ export function registerManagementEndpoints(
   managementApp.get('/api/cache/stats', async (req, res) => {
     try {
       const stats = await cacheService.getStats();
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         data: {
           ...stats,
           oldestEntry: stats.oldestEntry ? new Date(stats.oldestEntry).toISOString() : undefined,
@@ -557,26 +557,26 @@ export function registerManagementEndpoints(
       const offset = parseInt(req.query.offset as string) || 0;
       const userId = req.query.userId as string;
       const inMRU = req.query.inMRU as string;
-      
+
       let entries = await cacheService.getAllEntries();
-      
+
       // Filter by user if specified
       if (userId) {
         entries = entries.filter(entry => entry.userId === userId);
       }
-      
+
       // Filter by MRU status if specified
       if (inMRU !== undefined) {
         const mruFilter = inMRU === 'true';
         entries = entries.filter(entry => entry.inMRU === mruFilter);
       }
-      
+
       // Apply pagination
       const total = entries.length;
       const paginatedEntries = entries.slice(offset, offset + limit);
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         data: {
           entries: paginatedEntries.map(entry => ({
             ...entry,
@@ -601,7 +601,7 @@ export function registerManagementEndpoints(
   managementApp.get('/api/cache/users', async (req, res) => {
     try {
       const entries = await cacheService.getAllEntries();
-      
+
       // Group entries by user
       const userStats = new Map<string, {
         userId: string;
@@ -611,11 +611,11 @@ export function registerManagementEndpoints(
         lastActivity: number;
         userTypes: Set<string>;
       }>();
-      
+
       for (const entry of entries) {
         const userId = entry.userId || 'anonymous';
         const userType = entry.userId ? entry.userId.split(':')[0] : 'ip';
-        
+
         if (!userStats.has(userId)) {
           userStats.set(userId, {
             userId,
@@ -626,34 +626,34 @@ export function registerManagementEndpoints(
             userTypes: new Set(),
           });
         }
-        
+
         const stats = userStats.get(userId)!;
         stats.entryCount++;
         stats.totalSize += entry.bodySize;
         stats.userTypes.add(userType);
-        
+
         if (entry.inMRU) {
           stats.mruCount++;
         }
-        
+
         if (entry.lastAccessed && entry.lastAccessed > stats.lastActivity) {
           stats.lastActivity = entry.lastAccessed;
         } else if (entry.timestamp > stats.lastActivity) {
           stats.lastActivity = entry.timestamp;
         }
       }
-      
+
       const users = Array.from(userStats.values()).map(stats => ({
         ...stats,
         userTypes: Array.from(stats.userTypes),
         lastActivity: new Date(stats.lastActivity).toISOString(),
       }));
-      
+
       // Sort by last activity (most recent first)
       users.sort((a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime());
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         data: users,
         timestamp: new Date().toISOString()
       });
@@ -667,7 +667,7 @@ export function registerManagementEndpoints(
     try {
       const { userId } = req.params;
       const entries = await cacheService.getUserEntries(userId);
-      
+
       const userStats = {
         userId,
         entryCount: entries.length,
@@ -676,9 +676,9 @@ export function registerManagementEndpoints(
         lastActivity: entries.length > 0 ? Math.max(...entries.map(e => e.lastAccessed || e.timestamp)) : 0,
         userTypes: new Set(entries.map(e => e.userId?.split(':')[0] || 'ip')),
       };
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         data: {
           stats: {
             ...userStats,
@@ -702,8 +702,8 @@ export function registerManagementEndpoints(
   managementApp.post('/api/cache/clear', async (req, res) => {
     try {
       await cacheService.clear();
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         message: 'Cache cleared successfully',
         timestamp: new Date().toISOString()
       });
@@ -716,8 +716,8 @@ export function registerManagementEndpoints(
   managementApp.post('/api/cache/cleanup', async (req, res) => {
     try {
       await cacheService.cleanup();
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         message: 'Cache cleanup completed',
         timestamp: new Date().toISOString()
       });
@@ -731,8 +731,8 @@ export function registerManagementEndpoints(
     try {
       const { userId } = req.params;
       await cacheService.clearUserCache(userId);
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         message: `Cache cleared for user ${userId}`,
         timestamp: new Date().toISOString()
       });
@@ -748,10 +748,10 @@ export function registerManagementEndpoints(
       const method = req.query.method as string || 'GET';
       const userId = req.query.userId as string;
       const userIP = req.query.userIP as string;
-      
+
       await cacheService.delete(target, method, userId, userIP);
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         message: `Cache entry for ${method} ${target} deleted successfully`,
         timestamp: new Date().toISOString()
       });
@@ -776,7 +776,7 @@ export function registerManagementEndpoints(
     try {
       const scheduler = processManager.getScheduler();
       const scheduledProcesses = scheduler.getScheduledProcesses();
-      
+
       const schedulerInfo = {
         totalScheduled: scheduledProcesses.length,
         processes: scheduledProcesses.map(sp => ({
@@ -790,9 +790,9 @@ export function registerManagementEndpoints(
           isRunning: sp.isRunning
         }))
       };
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         data: schedulerInfo,
         timestamp: new Date().toISOString()
       });
@@ -805,17 +805,17 @@ export function registerManagementEndpoints(
   managementApp.post('/api/scheduler/validate-cron', (req, res) => {
     try {
       const { cronExpression, timezone = 'UTC' } = req.body;
-      
+
       if (!cronExpression) {
         return res.status(400).json({ success: false, error: 'Cron expression is required' });
       }
-      
+
       const scheduler = processManager.getScheduler();
       const isValid = scheduler.validateCronExpression(cronExpression);
       const nextRun = isValid ? scheduler.getNextRunTime(cronExpression, timezone) : null;
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         data: {
           isValid,
           nextRun,
@@ -826,6 +826,50 @@ export function registerManagementEndpoints(
     } catch (error) {
       logger.error('Failed to validate cron expression', error);
       res.status(500).json({ success: false, error: 'Failed to validate cron expression' });
+    }
+  });
+
+  // YAML validation endpoint
+  managementApp.post('/api/config/:type/validate', async (req, res) => {
+    try {
+      const { type } = req.params;
+      const { content } = req.body;
+
+      if (!content) {
+        return res.status(400).json({ success: false, error: 'Configuration content is required' });
+      }
+
+      // Enhanced YAML validation with detailed error information
+      const { validateYAML, validateProcessConfigYAML, formatYAMLError } = await import('../utils/yaml-validator');
+
+      let validationResult;
+      if (type === 'processes') {
+        validationResult = validateProcessConfigYAML(content);
+      } else {
+        validationResult = validateYAML(content);
+      }
+
+      if (validationResult.isValid) {
+        res.json({
+          success: true,
+          message: 'YAML is valid',
+          data: { isValid: true }
+        });
+      } else {
+        const formattedError = formatYAMLError(validationResult);
+        res.json({
+          success: false,
+          error: 'YAML validation failed',
+          details: formattedError,
+          line: validationResult.line,
+          column: validationResult.column,
+          suggestions: validationResult.suggestions,
+          data: validationResult
+        });
+      }
+    } catch (error) {
+      logger.error(`Failed to validate ${req.params.type} configuration`, error);
+      res.status(500).json({ success: false, error: 'Failed to validate configuration' });
     }
   });
 
@@ -855,8 +899,8 @@ export function registerManagementEndpoints(
       const { parse } = await import('yaml');
       configData = parse(configContent);
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         data: {
           content: configContent,
           parsed: configData,
@@ -897,11 +941,11 @@ export function registerManagementEndpoints(
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const configName = path.basename(configPath, '.yaml');
       const backupPath = path.join(backupDir, `${configName}.backup-${timestamp}.yaml`);
-      
+
       await fs.copyFile(configPath, backupPath);
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         data: {
           backupPath,
           originalPath: configPath,
@@ -919,7 +963,7 @@ export function registerManagementEndpoints(
     try {
       const { type } = req.params;
       const { content, createBackup = true } = req.body;
-      
+
       if (!content) {
         return res.status(400).json({ success: false, error: 'Configuration content is required' });
       }
@@ -937,15 +981,25 @@ export function registerManagementEndpoints(
           return res.status(400).json({ success: false, error: 'Invalid config type' });
       }
 
-      // Validate YAML syntax
-      try {
-        const { parse } = await import('yaml');
-        parse(content);
-      } catch (error) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'Invalid YAML syntax',
-          details: error instanceof Error ? error.message : 'Unknown error'
+      // Enhanced YAML validation with detailed error information
+      const { validateYAML, validateProcessConfigYAML, formatYAMLError } = await import('../utils/yaml-validator');
+
+      let validationResult;
+      if (type === 'processes') {
+        validationResult = validateProcessConfigYAML(content);
+      } else {
+        validationResult = validateYAML(content);
+      }
+
+      if (!validationResult.isValid) {
+        const formattedError = formatYAMLError(validationResult);
+        return res.status(400).json({
+          success: false,
+          error: 'YAML validation failed',
+          details: formattedError,
+          line: validationResult.line,
+          column: validationResult.column,
+          suggestions: validationResult.suggestions
         });
       }
 
@@ -962,9 +1016,9 @@ export function registerManagementEndpoints(
 
       // Write new configuration
       await fs.writeFile(configPath, content, 'utf8');
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         data: {
           configPath,
           backupPath,
@@ -998,7 +1052,7 @@ export function registerManagementEndpoints(
       const backupDir = mainConfig?.settings?.backupDir || './config/backup';
       const configName = path.basename(configPath, '.yaml');
       const backupPattern = `${configName}.backup-*.yaml`;
-      
+
       const files = await fs.readdir(backupDir);
       const backupFiles = files
         .filter(file => file.match(new RegExp(`${configName}\\.backup-.*\\.yaml`)))
@@ -1015,8 +1069,8 @@ export function registerManagementEndpoints(
         })
         .sort((a, b) => b.lastModified.getTime() - a.lastModified.getTime());
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         data: backupFiles
       });
     } catch (error) {
@@ -1029,7 +1083,7 @@ export function registerManagementEndpoints(
     try {
       const { type } = req.params;
       const { backupPath } = req.body;
-      
+
       if (!backupPath) {
         return res.status(400).json({ success: false, error: 'Backup path is required' });
       }
@@ -1061,9 +1115,9 @@ export function registerManagementEndpoints(
 
       // Restore from backup
       await fs.copyFile(backupPath, configPath);
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         data: {
           configPath,
           restoredFrom: backupPath,

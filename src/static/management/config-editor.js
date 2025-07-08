@@ -1,5 +1,9 @@
 // Configuration Editor Functions
 
+// Global variables for real-time validation
+let validationTimeouts = {};
+let currentConfigContent = {};
+
 function switchConfigTab(type) {
   document.querySelectorAll('.config-tab').forEach(tab => tab.classList.remove('active'));
   document.querySelectorAll('.config-tab-content').forEach(content => content.classList.remove('active'));
@@ -25,7 +29,16 @@ async function loadConfig(type) {
       const modifiedSpan = document.getElementById(`${type}-config-modified`);
       const validation = document.getElementById(`${type}-config-validation`);
 
-      if (editor) editor.value = data.data.content;
+      if (editor) {
+        editor.value = data.data.content;
+        currentConfigContent[type] = data.data.content;
+
+        // Set up real-time validation
+        setupRealTimeValidation(type, editor);
+
+        // Perform initial validation
+        validateYAMLContent(type, data.data.content);
+      }
       if (pathSpan) pathSpan.textContent = data.data.path;
       if (modifiedSpan) modifiedSpan.textContent = formatLocalTime(data.data.lastModified);
       if (validation) {
@@ -170,6 +183,115 @@ async function restoreBackup(type, backupPath) {
   } catch (error) {
     console.error(`Failed to restore ${type} backup:`, error);
     showNotification(`Failed to restore backup: ${error.message}`, 'error');
+  }
+}
+
+// Real-time YAML validation functions
+function setupRealTimeValidation(type, editor) {
+  // Remove existing event listeners to avoid duplicates
+  editor.removeEventListener('input', editor._validationHandler);
+
+  // Create debounced validation handler
+  editor._validationHandler = debounce((content) => {
+    validateYAMLContent(type, content);
+  }, 500); // 500ms debounce
+
+  // Add input event listener
+  editor.addEventListener('input', (e) => {
+    const content = e.target.value;
+    currentConfigContent[type] = content;
+    editor._validationHandler(content);
+  });
+}
+
+function debounce(func, wait) {
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(validationTimeouts[args[0]]);
+      func(...args);
+    };
+    clearTimeout(validationTimeouts[args[0]]);
+    validationTimeouts[args[0]] = setTimeout(later, wait);
+  };
+}
+
+async function validateYAMLContent(type, content) {
+  const validation = document.getElementById(`${type}-config-validation`);
+  const editor = document.getElementById(`${type}-config-editor`);
+  const statusIndicator = document.getElementById(`${type}-validation-status`);
+
+  if (!validation) return;
+
+  // Don't validate empty content
+  if (!content || content.trim() === '') {
+    validation.textContent = 'Enter YAML content to validate';
+    validation.className = 'validation-message warning';
+    updateValidationStatus(type, 'none');
+    return;
+  }
+
+  try {
+    // Show loading state
+    validation.textContent = 'Validating...';
+    validation.className = 'validation-message warning';
+    updateValidationStatus(type, 'validating');
+
+    const response = await fetch(`/api/config/${type}/validate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content })
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      validation.textContent = '✅ YAML is valid';
+      validation.className = 'validation-message success';
+      updateValidationStatus(type, 'valid');
+    } else {
+      // Format error message for display
+      let errorMessage = data.error || 'Validation failed';
+
+      if (data.line) {
+        errorMessage = `Line ${data.line}: ${errorMessage}`;
+      }
+
+      if (data.details) {
+        errorMessage += `\n\n${data.details}`;
+      }
+
+      if (data.suggestions && data.suggestions.length > 0) {
+        errorMessage += `\n\nSuggestions:\n${data.suggestions.map(s => `• ${s}`).join('\n')}`;
+      }
+
+      validation.textContent = errorMessage;
+      validation.className = 'validation-message error';
+      updateValidationStatus(type, 'invalid');
+    }
+  } catch (error) {
+    console.error(`Failed to validate ${type} configuration:`, error);
+    validation.textContent = `Validation error: ${error.message}`;
+    validation.className = 'validation-message error';
+    updateValidationStatus(type, 'invalid');
+  }
+}
+
+function updateValidationStatus(type, status) {
+  const editor = document.getElementById(`${type}-config-editor`);
+  const statusIndicator = document.getElementById(`${type}-validation-status`);
+
+  if (editor) {
+    editor.classList.remove('validating', 'valid', 'invalid');
+    if (status !== 'none') {
+      editor.classList.add(status);
+    }
+  }
+
+  if (statusIndicator) {
+    statusIndicator.className = 'validation-status';
+    if (status !== 'none') {
+      statusIndicator.classList.add(status);
+    }
   }
 }
 
