@@ -53,6 +53,7 @@ export class ManagementConsole {
     this.managementServer = Bun.serve({
       port: managementPort,
       hostname: managementHost,
+      development: process.env.NODE_ENV !== 'production',
       routes: {
         "/": managementHtml,
 
@@ -444,7 +445,7 @@ export class ManagementConsole {
           GET: async (req: Request) => {
             try {
               const certificates = this.getCertificates();
-              return new Response(JSON.stringify(Array.from(certificates.entries())), {
+              return new Response(JSON.stringify(Object.fromEntries(certificates)), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });

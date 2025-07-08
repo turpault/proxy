@@ -23,8 +23,8 @@ export class LetsEncryptService {
       await fs.ensureDir(path.join(this.certDir, 'accounts'));
 
       // Initialize ACME client
-      const directoryUrl = this.staging 
-        ? acme.directory.letsencrypt.staging 
+      const directoryUrl = this.staging
+        ? acme.directory.letsencrypt.staging
         : acme.directory.letsencrypt.production;
 
       this.client = new acme.Client({
@@ -34,7 +34,7 @@ export class LetsEncryptService {
 
       // Create account if it doesn't exist
       await this.createAccount();
-      
+
       logger.info(`Let's Encrypt service initialized (${this.staging ? 'staging' : 'production'})`);
     } catch (error) {
       logger.error('Failed to initialize Let\'s Encrypt service', error);
@@ -44,7 +44,7 @@ export class LetsEncryptService {
 
   private async getOrCreateAccountKey(): Promise<Buffer> {
     const keyPath = path.join(this.certDir, 'accounts', 'account.key');
-    
+
     try {
       return await fs.readFile(keyPath);
     } catch (error) {
@@ -96,7 +96,7 @@ export class LetsEncryptService {
 
       // Save certificate and key
       const certInfo = await this.saveCertificate(domain, cert, key);
-      
+
       logger.info(`Certificate obtained successfully for ${domain}`, {
         expiresAt: certInfo.expiresAt,
       });
@@ -109,9 +109,9 @@ export class LetsEncryptService {
   }
 
   private async createChallenge(authz: any, challenge: any, keyAuthorization: string): Promise<void> {
-    logger.debug('Creating challenge', { 
-      domain: authz.identifier.value, 
-      type: challenge.type 
+    logger.debug('Creating challenge', {
+      domain: authz.identifier.value,
+      type: challenge.type
     });
 
     if (challenge.type === 'http-01') {
@@ -122,9 +122,9 @@ export class LetsEncryptService {
   }
 
   private async removeChallenge(authz: any, challenge: any): Promise<void> {
-    logger.debug('Removing challenge', { 
-      domain: authz.identifier.value, 
-      type: challenge.type 
+    logger.debug('Removing challenge', {
+      domain: authz.identifier.value,
+      type: challenge.type
     });
 
     if (challenge.type === 'http-01') {
@@ -154,37 +154,57 @@ export class LetsEncryptService {
       keyPath,
       expiresAt: certInfo.expiresAt,
       isValid: certInfo.isValid,
+      issuer: certInfo.issuer,
     };
   }
 
-  private async parseCertificate(cert: string): Promise<{ expiresAt: Date; isValid: boolean }> {
+  private async parseCertificate(cert: string): Promise<{ expiresAt: Date; isValid: boolean; issuer?: string }> {
     try {
-      // Use openssl to parse the certificate and get the actual expiration date
+      // Use openssl to parse the certificate and get the actual expiration date and issuer
       const { exec } = require('child_process');
       const { promisify } = require('util');
       const execAsync = promisify(exec);
-      
+
       // Write certificate to temporary file for openssl processing
       const tempCertPath = path.join(process.cwd(), 'temp_cert.pem');
       await fs.writeFile(tempCertPath, cert);
-      
+
       try {
-        // Use openssl to get certificate expiration date
-        const { stdout } = await execAsync(`openssl x509 -in "${tempCertPath}" -noout -enddate`);
-        const match = stdout.match(/notAfter=(.+)/);
-        
-        if (match) {
-          const expiresAt = new Date(match[1]);
+        // Use openssl to get certificate expiration date and issuer
+        const [endDateResult, issuerResult] = await Promise.all([
+          execAsync(`openssl x509 -in "${tempCertPath}" -noout -enddate`),
+          execAsync(`openssl x509 -in "${tempCertPath}" -noout -issuer`)
+        ]);
+
+        const endDateMatch = endDateResult.stdout.match(/notAfter=(.+)/);
+        const issuerMatch = issuerResult.stdout.match(/issuer=(.+)/);
+
+        if (endDateMatch) {
+          const expiresAt = new Date(endDateMatch[1]);
           const now = new Date();
           const isValid = expiresAt > now;
-          
+
+          // Extract issuer name from the issuer string
+          let issuer: string | undefined;
+          if (issuerMatch) {
+            // Parse issuer string to extract common name (CN)
+            const cnMatch = issuerMatch[1].match(/CN=([^,]+)/);
+            if (cnMatch) {
+              issuer = cnMatch[1];
+            } else {
+              // Fallback to full issuer string if CN not found
+              issuer = issuerMatch[1];
+            }
+          }
+
           logger.debug(`Certificate parsed successfully`, {
             expiresAt: expiresAt.toISOString(),
             isValid,
+            issuer,
             daysUntilExpiry: Math.floor((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
           });
-          
-          return { expiresAt, isValid };
+
+          return { expiresAt, isValid, issuer };
         } else {
           throw new Error('Could not parse expiration date from certificate');
         }
@@ -196,7 +216,7 @@ export class LetsEncryptService {
       }
     } catch (error) {
       logger.error('Failed to parse certificate with openssl, falling back to basic validation', error);
-      
+
       // Fallback: basic certificate format validation
       const match = cert.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/);
       if (!match) {
@@ -205,12 +225,12 @@ export class LetsEncryptService {
           isValid: false,
         };
       }
-      
+
       // If we can't parse the date, assume it's valid for now but log a warning
       logger.warn('Certificate format appears valid but could not parse expiration date');
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 90); // Assume 90 days
-      
+
       return {
         expiresAt,
         isValid: true,
@@ -240,6 +260,7 @@ export class LetsEncryptService {
         keyPath,
         expiresAt: certInfo.expiresAt,
         isValid: certInfo.isValid,
+        issuer: certInfo.issuer,
       };
     } catch (error) {
       logger.error(`Failed to get certificate info for ${domain}`, error);
@@ -255,7 +276,7 @@ export class LetsEncryptService {
   async shouldRenewCertificate(certInfo: CertificateInfo): Promise<boolean> {
     const now = new Date();
     const daysUntilExpiry = Math.floor((certInfo.expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    
+
     // Renew if less than 30 days until expiry
     return daysUntilExpiry < 30;
   }

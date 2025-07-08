@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNotifications } from '../NotificationProvider';
 import { formatLocalTime } from '../../utils';
+import { CertificateInfo, CertificatesResponse } from '../../types/shared';
 
 export const CertificatesTab: React.FC = () => {
-  const [certificates, setCertificates] = useState<any[]>([]);
+  const [certificates, setCertificates] = useState<CertificateInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const { showNotification } = useNotifications();
 
@@ -16,7 +17,7 @@ export const CertificatesTab: React.FC = () => {
       setLoading(true);
       const response = await fetch('/api/certificates');
       if (response.ok) {
-        const data = await response.json();
+        const data: CertificatesResponse = await response.json();
         // Convert object to array format for compatibility
         const certificatesArray = Object.values(data);
         setCertificates(certificatesArray);
@@ -74,16 +75,17 @@ export const CertificatesTab: React.FC = () => {
                     <span className="value">{cert.issuer || 'N/A'}</span>
                   </div>
                   <div className="info-row">
-                    <span className="label">Valid From:</span>
-                    <span className="value">{formatLocalTime(cert.validFrom)}</span>
-                  </div>
-                  <div className="info-row">
                     <span className="label">Valid Until:</span>
                     <span className="value">{formatLocalTime(cert.expiresAt)}</span>
                   </div>
                   <div className="info-row">
                     <span className="label">Days Remaining:</span>
-                    <span className="value">{cert.daysRemaining || 'N/A'}</span>
+                    <span className="value">{(() => {
+                      const now = new Date();
+                      const expiry = new Date(cert.expiresAt);
+                      const daysRemaining = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                      return daysRemaining > 0 ? daysRemaining.toString() : 'Expired';
+                    })()}</span>
                   </div>
                 </div>
               </div>

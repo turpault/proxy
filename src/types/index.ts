@@ -127,6 +127,7 @@ export interface CertificateInfo {
   keyPath: string;
   expiresAt: Date;
   isValid: boolean;
+  issuer?: string;
 }
 
 export interface ProxyOptions {

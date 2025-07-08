@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "A Bun reverse proxy server with Let's Encrypt certificate generation and process management",
   "scripts": {
-    "start": "bun --watch src/index.ts",
+    "start": "bun --watch --inspect=localhost:6499/ src/index.ts",
     "test": "bun test",
     "lint": "eslint src/**/*.ts"
   },
