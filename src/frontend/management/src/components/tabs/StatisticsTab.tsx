@@ -122,18 +122,6 @@ export const StatisticsTab: React.FC = () => {
           </div>
         </div>
         <div className="stat-card">
-          <h4>HTTP Port</h4>
-          <div className="value" id="http-port">
-            {status?.httpPort || 'N/A'}
-          </div>
-        </div>
-        <div className="stat-card">
-          <h4>HTTPS Port</h4>
-          <div className="value" id="https-port">
-            {status?.httpsPort || 'N/A'}
-          </div>
-        </div>
-        <div className="stat-card">
           <h4>Routes</h4>
           <div className="value" id="routes-count">
             {detailedStatistics?.uniqueRoutes || status?.routes || '0'}
