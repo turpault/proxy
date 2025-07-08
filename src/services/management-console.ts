@@ -26,6 +26,21 @@ export class ManagementConsole {
     this.statisticsService = getStatisticsService(reportDir, dataDir);
   }
 
+  async initialize(): Promise<void> {
+    logger.info('Initializing management console...');
+
+    // Initialize process manager
+    processManager.initialize(this.config);
+
+    // Start managed processes
+    await processManager.startManagedProcesses();
+
+    // Set up process configuration watching
+    processManager.setupProcessConfigWatching();
+
+    logger.info('Management console initialization complete');
+  }
+
   async start(): Promise<void> {
     logger.info('Starting management console...');
 
@@ -96,6 +111,94 @@ export class ManagementConsole {
           });
         },
 
+        "/api/processes/:id/start": async (req: Request) => {
+          if (req.method === 'POST') {
+            const url = new URL(req.url);
+            const processId = url.pathname.split('/')[3];
+
+            try {
+              const processConfig = configService.getProcessConfig();
+              const process = processConfig?.processes?.[processId];
+              if (!process) {
+                return new Response(JSON.stringify({ error: 'Process not found' }), {
+                  status: 404,
+                  headers: { 'Content-Type': 'application/json' }
+                });
+              }
+              // Get target from route configuration if available
+              const serverConfig = configService.getServerConfig();
+              const route = serverConfig.routes.find(r => r.name === processId);
+              const target = route?.target || '';
+              await processManager.startProcess(processId, process, target);
+              return new Response(JSON.stringify({ success: true, message: `Process ${processId} started` }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({ error: 'Failed to start process', details: error instanceof Error ? error.message : 'Unknown error' }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+            status: 405,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        },
+
+        "/api/processes/:id/stop": async (req: Request) => {
+          if (req.method === 'POST') {
+            const url = new URL(req.url);
+            const processId = url.pathname.split('/')[3];
+
+            try {
+              await processManager.stopProcess(processId);
+              return new Response(JSON.stringify({ success: true, message: `Process ${processId} stopped` }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({ error: 'Failed to stop process', details: error instanceof Error ? error.message : 'Unknown error' }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+            status: 405,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        },
+
+        "/api/processes/:id/restart": async (req: Request) => {
+          if (req.method === 'POST') {
+            const url = new URL(req.url);
+            const processId = url.pathname.split('/')[3];
+
+            try {
+              // Get target from route configuration if available
+              const serverConfig = configService.getServerConfig();
+              const route = serverConfig.routes.find(r => r.name === processId);
+              const target = route?.target || '';
+              await processManager.restartProcess(processId, target);
+              return new Response(JSON.stringify({ success: true, message: `Process ${processId} restarted` }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({ error: 'Failed to restart process', details: error instanceof Error ? error.message : 'Unknown error' }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+            status: 405,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        },
+
         "/api/processes/:id/logs": async (req: Request) => {
           if (req.method === 'GET') {
             const url = new URL(req.url);
@@ -110,6 +213,34 @@ export class ManagementConsole {
               });
             } catch (error) {
               return new Response(JSON.stringify({ error: 'Failed to get logs', details: error instanceof Error ? error.message : 'Unknown error' }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+            status: 405,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        },
+
+        "/api/processes/config": async (req: Request) => {
+          if (req.method === 'GET') {
+            const processConfig = configService.getProcessConfig();
+            return new Response(JSON.stringify(processConfig), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          } else if (req.method === 'PUT') {
+            try {
+              const newConfig = await req.json();
+              await this.handleProcessConfigUpdate(newConfig);
+              return new Response(JSON.stringify({ success: true, message: 'Process configuration updated' }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({ error: 'Failed to update process configuration', details: error instanceof Error ? error.message : 'Unknown error' }), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -162,6 +293,9 @@ export class ManagementConsole {
       this.managementServer = null;
       logger.info('Management console stopped');
     }
+
+    // Shutdown process manager
+    await processManager.shutdown();
 
     logger.info('Management console stopped successfully');
   }
@@ -304,6 +438,11 @@ export class ManagementConsole {
 
   async getProcessLogs(processId: string, lines: number | string): Promise<string[]> {
     return processManager.getProcessLogs(processId, lines);
+  }
+
+  async handleProcessConfigUpdate(newConfig: any): Promise<void> {
+    // TODO: Implement or make this method public in ProcessManager
+    logger.info('Process config update not yet implemented for management console');
   }
 
   private getCertificates(): Map<string, any> {

@@ -2,12 +2,10 @@ import { ProxyConfig, MainConfig } from './types';
 import { logger } from './utils/logger';
 import { configService } from './services/config-service';
 import { ProxyServer } from './services/proxy-server';
-import { ProcessManagementServer } from './services/process-management-server';
 import { ManagementConsole } from './services/management-console';
 
 export class BunProxyServer {
   private proxyServer: ProxyServer;
-  private processManagementServer: ProcessManagementServer;
   private managementConsole: ManagementConsole;
   private config: ProxyConfig;
   private mainConfig?: MainConfig;
@@ -16,9 +14,8 @@ export class BunProxyServer {
     this.config = config;
     this.mainConfig = mainConfig;
 
-    // Initialize the three separate services
+    // Initialize the two separate services
     this.proxyServer = new ProxyServer(config, mainConfig);
-    this.processManagementServer = new ProcessManagementServer(config, mainConfig);
     this.managementConsole = new ManagementConsole(config, mainConfig);
   }
 
@@ -27,7 +24,7 @@ export class BunProxyServer {
 
     // Initialize all services
     await this.proxyServer.initialize();
-    await this.processManagementServer.initialize();
+    await this.managementConsole.initialize();
 
     logger.info('Bun proxy server initialization complete');
   }
@@ -37,9 +34,6 @@ export class BunProxyServer {
 
     // Start proxy server
     await this.proxyServer.start();
-
-    // Start process management server
-    await this.processManagementServer.start();
 
     // Start management console only if not disabled
     if (!disableManagementServer) {
@@ -54,7 +48,6 @@ export class BunProxyServer {
 
     // Stop all services
     await this.proxyServer.stop();
-    await this.processManagementServer.stop();
     await this.managementConsole.stop();
 
     logger.info('Bun proxy server stopped successfully');
@@ -63,7 +56,6 @@ export class BunProxyServer {
   getStatus(): any {
     return {
       proxy: this.proxyServer.getStatus(),
-      processManagement: this.processManagementServer.getStatus(),
       management: this.managementConsole.getStatus(),
       timestamp: new Date().toISOString()
     };
@@ -78,7 +70,7 @@ export class BunProxyServer {
   }
 
   async getProcesses(): Promise<any[]> {
-    return this.processManagementServer.getProcesses();
+    return this.managementConsole.getProcesses();
   }
 
   async getStatusData(): Promise<any> {
@@ -86,11 +78,11 @@ export class BunProxyServer {
   }
 
   async getProcessLogs(processId: string, lines: number | string): Promise<string[]> {
-    return this.processManagementServer.getProcessLogs(processId, lines);
+    return this.managementConsole.getProcessLogs(processId, lines);
   }
 
   async handleProcessConfigUpdate(newConfig: any): Promise<void> {
-    await this.processManagementServer.handleProcessConfigUpdate(newConfig);
+    await this.managementConsole.handleProcessConfigUpdate(newConfig);
   }
 
   // Add broadcast helpers if needed for process/status/logs updates

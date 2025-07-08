@@ -4,7 +4,6 @@ import { configService } from './services/config-service';
 import { logger } from './utils/logger';
 
 let currentServer: BunProxyServer | null = null;
-let isRestarting = false;
 
 async function startServer(): Promise<BunProxyServer> {
   logger.info('Starting Bun Proxy Server and Process Manager...');
@@ -32,60 +31,12 @@ async function startServer(): Promise<BunProxyServer> {
 
 async function stopServer(): Promise<void> {
   if (currentServer) {
-    logger.info('Stopping proxy server...');
+    logger.info('Stopping server...');
     await currentServer.stop();
     currentServer = null;
-    logger.info('Proxy server stopped');
+    logger.info('Stopped Server');
   }
 }
-
-async function restartServer(): Promise<void> {
-  if (isRestarting) {
-    logger.debug('Restart already in progress, ignoring additional restart request');
-    return;
-  }
-
-  isRestarting = true;
-  logger.info('Configuration file changed, restarting server...');
-
-  try {
-    // First, validate the new configuration without stopping the server
-    logger.info('Validating new configuration...');
-    const isValid = await configService.validateConfig();
-    if (!isValid) {
-      throw new Error('Configuration validation failed');
-    }
-    logger.info('New configuration is valid');
-
-    // Stop current server
-    await stopServer();
-
-    // Small delay to ensure clean shutdown
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    // Start new server with the validated configuration
-    currentServer = await startServer();
-
-    logger.info('Server restarted successfully with new configuration');
-  } catch (error: any) {
-    logger.error('Failed to restart server with new configuration', error);
-
-    // If we don't have a running server, try to start with the old configuration
-    if (!currentServer) {
-      logger.info('Attempting to start server with previous working configuration...');
-      try {
-        currentServer = await startServer();
-        logger.warn('Server started with previous configuration after config validation failed');
-      } catch (fallbackError: any) {
-        logger.error('Failed to start server with fallback configuration', fallbackError);
-        process.exit(1);
-      }
-    }
-  } finally {
-    isRestarting = false;
-  }
-}
-
 
 
 async function main(): Promise<void> {
@@ -135,7 +86,7 @@ async function main(): Promise<void> {
 
 // Handle command line arguments
 if (process.argv.includes('--create-config')) {
-  const configPath = process.argv[process.argv.indexOf('--create-config') + 1] || './config/proxy.yaml';
+  const configPath = process.argv[process.argv.indexOf('--create-config') + 1] || './config/main.yaml';
 
   import('./config/loader').then(({ ConfigLoader }) => {
     ConfigLoader.createExampleConfig(configPath)
