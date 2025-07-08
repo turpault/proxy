@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { ProxyServer } from './services/proxy-server';
-import { ConfigLoader } from './config/loader';
+import { configService } from './services/config-service';
 import { logger } from './utils/logger';
 import * as fs from 'fs-extra';
 import * as path from 'path';
@@ -8,59 +8,29 @@ import * as path from 'path';
 let currentServer: ProxyServer | null = null;
 let isWatchingConfig = false;
 let isRestarting = false;
-let mainConfig: any = null;
 
 async function startServer(): Promise<ProxyServer> {
   logger.info('Starting Proxy Server and Process Manager...');
-  
-  // Try to load main configuration first
-  try {
-    mainConfig = await ConfigLoader.loadMainConfig();
-    logger.info('Using main configuration structure');
-    
-    // Load proxy configuration
-    const proxyConfig = await ConfigLoader.loadProxyConfig(mainConfig.config.proxy);
-    
-    // Load process management configuration if it exists
-    try {
-      const processConfig = await ConfigLoader.loadProcessConfig(mainConfig.config.processes);
-      proxyConfig.processManagement = processConfig;
-    } catch (error) {
-      logger.warn('Failed to load process management configuration, continuing without it');
-    }
-    
-    // Create and start proxy server with built-in management server
-    const server = new ProxyServer(proxyConfig, mainConfig);
-    await server.initialize();
-    await server.start(); // Use built-in management server
-    
-    logger.info('Proxy server and management console started successfully');
-    
-    // Log server status
-    const status = server.getStatus();
-    logger.info('Server status', status);
-    
-    return server;
-  } catch (error) {
-    logger.info('Main configuration not found or invalid, falling back to legacy configuration');
-    logger.debug('Main config error:', error);
-    
-    // Fall back to legacy configuration
-    const config = await ConfigLoader.load();
-    
-    // Create and start proxy server
-    const server = new ProxyServer(config, mainConfig || undefined);
-    await server.initialize();
-    await server.start(); // Use built-in management server
-    
-    logger.info('Proxy server started successfully (legacy mode)');
-    
-    // Log server status
-    const status = server.getStatus();
-    logger.info('Server status', status);
-    
-    return server;
-  }
+
+  // Initialize configuration service
+  await configService.initialize();
+
+  // Get configurations from the service
+  const serverConfig = configService.getServerConfig();
+  const mainConfig = configService.getMainConfig();
+
+  // Create and start proxy server with built-in management server
+  const server = new ProxyServer(serverConfig, mainConfig || undefined);
+  await server.initialize();
+  await server.start(); // Use built-in management server
+
+  logger.info('Proxy server and management console started successfully');
+
+  // Log server status
+  const status = server.getStatus();
+  logger.info('Server status', status);
+
+  return server;
 }
 
 async function stopServer(): Promise<void> {
@@ -84,29 +54,32 @@ async function restartServer(): Promise<void> {
   try {
     // First, validate the new configuration without stopping the server
     logger.info('Validating new configuration...');
-    await ConfigLoader.load();
+    const isValid = await configService.validateConfig();
+    if (!isValid) {
+      throw new Error('Configuration validation failed');
+    }
     logger.info('New configuration is valid');
-    
+
     // Stop current server
     await stopServer();
-    
+
     // Small delay to ensure clean shutdown
     await new Promise(resolve => setTimeout(resolve, 1000));
-    
+
     // Start new server with the validated configuration
     currentServer = await startServer();
-    
+
     logger.info('Server restarted successfully with new configuration');
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Failed to restart server with new configuration', error);
-    
+
     // If we don't have a running server, try to start with the old configuration
     if (!currentServer) {
       logger.info('Attempting to start server with previous working configuration...');
       try {
         currentServer = await startServer();
         logger.warn('Server started with previous configuration after config validation failed');
-      } catch (fallbackError) {
+      } catch (fallbackError: any) {
         logger.error('Failed to start server with fallback configuration', fallbackError);
         process.exit(1);
       }
@@ -118,9 +91,9 @@ async function restartServer(): Promise<void> {
 
 function setupConfigWatcher(): void {
   // Check if config watching is disabled
-  const watchDisabled = process.env.DISABLE_CONFIG_WATCH === 'true' || 
-                       process.argv.includes('--no-watch');
-                       
+  const watchDisabled = process.env.DISABLE_CONFIG_WATCH === 'true' ||
+    process.argv.includes('--no-watch');
+
   if (watchDisabled) {
     logger.info('Configuration file watching disabled');
     return;
@@ -129,16 +102,16 @@ function setupConfigWatcher(): void {
   // Watch main config file if it exists, otherwise watch legacy config
   const mainConfigFile = process.env.MAIN_CONFIG_FILE || './config/main.yaml';
   const legacyConfigFile = process.env.CONFIG_FILE || './config/proxy.yaml';
-  
+
   let configFile: string;
   if (fs.existsSync(path.resolve(mainConfigFile))) {
     configFile = mainConfigFile;
   } else {
     configFile = legacyConfigFile;
   }
-  
+
   const absoluteConfigPath = path.resolve(configFile);
-  
+
   // Check if config file exists
   if (!fs.existsSync(absoluteConfigPath)) {
     logger.warn(`Configuration file not found for watching: ${absoluteConfigPath}`);
@@ -184,21 +157,21 @@ async function main(): Promise<void> {
   try {
     // Start the server
     currentServer = await startServer();
-    
+
     // Setup configuration file watcher
     setupConfigWatcher();
-    
+
     // Handle graceful shutdown
     const shutdown = async (signal: string): Promise<void> => {
       logger.info(`Received ${signal}, shutting down gracefully...`);
-      
+
       try {
         // Stop config watcher
         stopConfigWatcher();
-        
+
         // Stop server
         await stopServer();
-        
+
         logger.info('Server stopped successfully');
         process.exit(0);
       } catch (error) {
@@ -210,18 +183,18 @@ async function main(): Promise<void> {
     // Register signal handlers
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
-    
+
     // Handle uncaught exceptions
     process.on('uncaughtException', (error) => {
       logger.error('Uncaught exception', error);
       process.exit(1);
     });
-    
+
     process.on('unhandledRejection', (reason, promise) => {
       logger.error('Unhandled promise rejection', { reason, promise });
       process.exit(1);
     });
-    
+
   } catch (error) {
     logger.error('Failed to start proxy server', error);
     process.exit(1);
@@ -231,20 +204,22 @@ async function main(): Promise<void> {
 // Handle command line arguments
 if (process.argv.includes('--create-config')) {
   const configPath = process.argv[process.argv.indexOf('--create-config') + 1] || './config/proxy.yaml';
-  
-  ConfigLoader.createExampleConfig(configPath)
-    .then(() => {
-      console.log(`Example configuration created at ${configPath}`);
-      console.log('Please edit the configuration file and restart the server.');
-      process.exit(0);
-    })
-    .catch((error) => {
-      console.error('Failed to create example configuration:', error.message);
-      process.exit(1);
-    });
+
+  import('./config/loader').then(({ ConfigLoader }) => {
+    ConfigLoader.createExampleConfig(configPath)
+      .then(() => {
+        console.log(`Example configuration created at ${configPath}`);
+        console.log('Please edit the configuration file and restart the server.');
+        process.exit(0);
+      })
+      .catch((error: any) => {
+        console.error('Failed to create example configuration:', error.message);
+        process.exit(1);
+      });
+  });
 } else {
   // Start the main application
-  main().catch((error) => {
+  main().catch((error: any) => {
     console.error('Application failed to start:', error.message);
     process.exit(1);
   });

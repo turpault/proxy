@@ -9,6 +9,7 @@ import { WebSocketServiceInterface } from './websocket';
 import { ProxyRoutes } from './proxy-routes';
 import { ProxyMiddleware } from './proxy-middleware';
 import { ProxyCertificates } from './proxy-certificates';
+import { configService } from './config-service';
 
 import { registerManagementEndpoints } from './management';
 import { processManager } from './process-manager';
@@ -34,19 +35,20 @@ export class ProxyServer implements WebSocketServiceInterface {
     this.managementApp = express();
 
     // Initialize statistics service with configuration
-    const reportDir = mainConfig?.settings?.logsDir ? path.join(mainConfig.settings.logsDir, 'statistics') : undefined;
-    const dataDir = mainConfig?.settings?.statsDir;
+    const logsDir = configService.getSetting<string>('logsDir');
+    const reportDir = logsDir ? path.join(logsDir, 'statistics') : undefined;
+    const dataDir = configService.getSetting<string>('statsDir');
     this.statisticsService = getStatisticsService(reportDir, dataDir);
 
     // Get temp directory from main config
-    const tempDir = mainConfig?.settings?.tempDir;
+    const tempDir = configService.getSetting<string>('tempDir');
     this.proxyRoutes = new ProxyRoutes(tempDir, this.statisticsService);
     this.proxyMiddleware = new ProxyMiddleware();
     this.proxyCertificates = new ProxyCertificates(config);
     processManager.initialize(config);
 
     // Set cache expiration from main config if available
-    const cacheMaxAge = mainConfig?.settings?.cache?.maxAge;
+    const cacheMaxAge = configService.getSetting('cache.maxAge');
     setCacheExpiration(typeof cacheMaxAge === 'number' ? cacheMaxAge : 24 * 60 * 60 * 1000);
 
     this.setupMiddleware();
@@ -169,9 +171,10 @@ export class ProxyServer implements WebSocketServiceInterface {
     if (!disableManagementServer) {
       this.managementServer = http.createServer(this.managementApp);
 
-      // Use management port from mainConfig if available, otherwise fall back to port + 1000
-      const managementPort = this.mainConfig?.management?.port || (this.config.port + 1000);
-      const managementHost = this.mainConfig?.management?.host || '0.0.0.0';
+      // Use management port from config service if available, otherwise fall back to port + 1000
+      const managementConfig = configService.getManagementConfig();
+      const managementPort = managementConfig?.port || (this.config.port + 1000);
+      const managementHost = managementConfig?.host || '0.0.0.0';
 
       this.managementServer.listen(managementPort, managementHost, () => {
         logger.info(`Management server started on ${managementHost}:${managementPort}`);

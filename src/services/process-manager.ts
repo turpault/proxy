@@ -4,6 +4,7 @@ import * as fs from 'fs-extra';
 import { watch } from 'fs';
 import { logger } from '../utils/logger';
 import { ProcessConfig, ProcessManagementConfig, ServerConfig } from '../types';
+import { configService } from './config-service';
 import axios from 'axios';
 import { ProcessScheduler } from './process-scheduler';
 
@@ -97,20 +98,27 @@ export class ProcessManager {
    */
   public initialize(config: ServerConfig): void {
     this.config = config;
+
+    // Initialize schedules if process management config is available
+    const processConfig = configService.getProcessConfig();
+    if (processConfig) {
+      this.initializeSchedules(processConfig);
+    }
   }
 
   /**
    * Start all managed processes from configuration
    */
   async startManagedProcesses(): Promise<void> {
-    if (!this.config?.processManagement?.processes) {
+    const processManagementConfig = configService.getProcessConfig();
+    if (!processManagementConfig?.processes) {
       logger.info('No process management configuration found');
       return;
     }
 
     logger.info('Starting managed processes...');
 
-    for (const [processId, processConfig] of Object.entries(this.config.processManagement.processes)) {
+    for (const [processId, processConfig] of Object.entries(processManagementConfig.processes)) {
       if (processConfig.enabled !== false) {
         try {
           const target = this.getTargetForProcess(processId, processConfig);
@@ -233,14 +241,10 @@ export class ProcessManager {
    * Get target for a process based on route configuration
    */
   private getTargetForProcess(processId: string, processConfig: ProcessConfig): string {
-    if (!this.config) {
-      // Fallback to localhost with a default port
-      const defaultPort = 3000 + parseInt(processId.replace(/\D/g, '0'));
-      return `http://localhost:${defaultPort}`;
-    }
+    const serverConfig = configService.getServerConfig();
 
     // Find the route that corresponds to this process
-    const route = this.config.routes.find(r => this.getProcessId(r) === processId);
+    const route = serverConfig.routes.find(r => this.getProcessId(r) === processId);
 
     if (route && route.target) {
       return route.target;

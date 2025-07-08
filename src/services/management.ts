@@ -7,6 +7,7 @@ import { WebSocketService } from './websocket';
 
 // Types for config and proxyServer are imported from their respective modules
 import { ServerConfig, MainConfig } from '../types';
+import { configService } from './config-service';
 import { processManager } from './process-manager';
 import { statisticsService } from './statistics';
 import { cacheService } from './cache';
@@ -77,9 +78,9 @@ export function registerManagementEndpoints(
           management: !!proxyServer.managementServer,
         },
         config: {
-          httpPort: config.port,
-          httpsPort: config.httpsPort,
-          routes: config.routes.length,
+          httpPort: configService.getServerConfig().port,
+          httpsPort: configService.getServerConfig().httpsPort,
+          routes: configService.getServerConfig().routes.length,
         },
       });
     } catch (error) {
@@ -96,7 +97,7 @@ export function registerManagementEndpoints(
   managementApp.get('/api/processes', (req, res) => {
     try {
       const processes = processManager.getProcessStatus();
-      const availableProcesses = config.processManagement?.processes || {};
+      const availableProcesses = configService.getProcesses() || {};
       // Ensure processes is an array
       const processesArray = Array.isArray(processes) ? processes : [];
       // Create a set of all process IDs (both configured and managed)
@@ -169,7 +170,7 @@ export function registerManagementEndpoints(
   managementApp.get('/api/processes/:id', (req, res) => {
     try {
       const { id } = req.params;
-      const availableProcesses = config.processManagement?.processes || {};
+      const availableProcesses = configService.getProcesses() || {};
       const processConfig = availableProcesses[id];
       const processes = processManager.getProcessStatus();
       const processesArray = Array.isArray(processes) ? processes : [];
@@ -247,10 +248,10 @@ export function registerManagementEndpoints(
   managementApp.post('/api/processes/:id/restart', async (req, res) => {
     try {
       const { id } = req.params;
-      if (!config.processManagement?.processes[id]) {
+      const processConfig = configService.getProcessById(id);
+      if (!processConfig) {
         return res.status(404).json({ success: false, error: 'Process configuration not found' });
       }
-      const processConfig = config.processManagement.processes[id];
       const target = proxyServer.getTargetForProcess(id, processConfig);
       await processManager.forceKillAndRestartProcess(id, target);
       logger.info(`Process ${id} restarted via management interface`);
@@ -263,14 +264,7 @@ export function registerManagementEndpoints(
 
   managementApp.post('/api/processes/reload', async (req, res) => {
     try {
-      const configFilePath = config.processConfigFile
-        ? path.resolve(process.cwd(), config.processConfigFile)
-        : path.resolve(process.cwd(), 'config', 'processes.yaml');
-      const newConfig = await processManager.loadProcessConfig(configFilePath);
-      if (!newConfig) {
-        return res.status(500).json({ success: false, error: 'Failed to load process configuration file' });
-      }
-      await proxyServer.handleProcessConfigUpdate(newConfig);
+      await configService.reload();
       logger.info('Process configuration reloaded via management interface');
       return res.json({ success: true, message: 'Process configuration reloaded successfully' });
     } catch (error) {
@@ -328,7 +322,7 @@ export function registerManagementEndpoints(
       // Use getTimePeriodStats for better route data when period is specified
       if (period !== 'all') {
         // Pass route configs for name lookup
-        const routeConfigs = config.routes.map(r => ({ domain: r.domain, path: r.path, target: r.target, name: r.name }));
+        const routeConfigs = configService.getRoutes().map(r => ({ domain: r.domain, path: r.path, target: r.target, name: r.name }));
         const timePeriodStats = statisticsService.getTimePeriodStats(period, routeConfigs);
 
         // Aggregate country data from routes for heatmap
@@ -415,10 +409,11 @@ export function registerManagementEndpoints(
       });
 
       // Get Let's Encrypt status from the proxy server
+      const serverConfig = configService.getServerConfig();
       const letsEncryptStatus = {
-        email: config.letsEncrypt?.email || 'Not configured',
-        staging: config.letsEncrypt?.staging || false,
-        certDir: config.letsEncrypt?.certDir || 'Not configured',
+        email: serverConfig.letsEncrypt?.email || 'Not configured',
+        staging: serverConfig.letsEncrypt?.staging || false,
+        certDir: serverConfig.letsEncrypt?.certDir || 'Not configured',
         totalCertificates: certificates.length,
         validCertificates: certificates.filter((cert: any) => cert && cert.isValid).length,
         expired: certificates.filter((cert: any) => cert && !cert.isValid).length,
@@ -934,8 +929,8 @@ export function registerManagementEndpoints(
         return res.status(404).json({ success: false, error: 'Configuration file not found' });
       }
 
-      // Get backup directory from main config or use default
-      const backupDir = mainConfig?.settings?.backupDir || './config/backup';
+      // Get backup directory from config service or use default
+      const backupDir = configService.getSetting<string>('backupDir') || './config/backup';
       await fs.ensureDir(backupDir);
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -1007,7 +1002,7 @@ export function registerManagementEndpoints(
       let backupPath: string | null = null;
       if (createBackup && await fs.pathExists(configPath)) {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const backupDir = mainConfig?.settings?.backupDir || './config/backup';
+        const backupDir = configService.getSetting<string>('backupDir') || './config/backup';
         await fs.ensureDir(backupDir);
         const configName = path.basename(configPath, '.yaml');
         backupPath = path.join(backupDir, `${configName}.backup-${timestamp}.yaml`);
@@ -1048,8 +1043,8 @@ export function registerManagementEndpoints(
           return res.status(400).json({ success: false, error: 'Invalid config type' });
       }
 
-      // Get backup directory from main config or use default
-      const backupDir = mainConfig?.settings?.backupDir || './config/backup';
+      // Get backup directory from config service or use default
+      const backupDir = configService.getSetting<string>('backupDir') || './config/backup';
       const configName = path.basename(configPath, '.yaml');
       const backupPattern = `${configName}.backup-*.yaml`;
 
@@ -1107,7 +1102,7 @@ export function registerManagementEndpoints(
 
       // Create backup of current config before restoring
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const backupDir = mainConfig?.settings?.backupDir || './config/backup';
+      const backupDir = configService.getSetting<string>('backupDir') || './config/backup';
       await fs.ensureDir(backupDir);
       const configName = path.basename(configPath, '.yaml');
       const currentBackupPath = path.join(backupDir, `${configName}.backup-${timestamp}.yaml`);
