@@ -421,6 +421,11 @@ body {
   font-size: 0.9rem;
 }
 
+.log-output-container {
+  position: relative;
+  max-height: 400px;
+}
+
 .log-output {
   background: #1a202c;
   color: #e2e8f0;
@@ -431,6 +436,52 @@ body {
   line-height: 1.4;
   max-height: 400px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #4a5568 #1a202c;
+}
+
+.log-output::-webkit-scrollbar {
+  width: 8px;
+}
+
+.log-output::-webkit-scrollbar-track {
+  background: #1a202c;
+  border-radius: 4px;
+}
+
+.log-output::-webkit-scrollbar-thumb {
+  background: #4a5568;
+  border-radius: 4px;
+}
+
+.log-output::-webkit-scrollbar-thumb:hover {
+  background: #718096;
+}
+
+.scroll-to-bottom-btn {
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
+  background: #4299e1;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.scroll-to-bottom-btn:hover {
+  background: #3182ce;
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 .log-line {

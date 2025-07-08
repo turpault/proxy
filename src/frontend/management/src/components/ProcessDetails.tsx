@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Process, LogLine, LogFilter } from '../types';
 import { useWebSocket } from './WebSocketProvider';
 import { formatLocalTime, formatUptime, escapeHtml } from '../utils';
@@ -13,7 +13,10 @@ export const ProcessDetails: React.FC<ProcessDetailsProps> = ({ process, onActio
   const [logLines, setLogLines] = useState<number | string>(100);
   const [logFilter, setLogFilter] = useState<LogFilter>('all');
   const [showLogsSinceRestart, setShowLogsSinceRestart] = useState(false);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [showScrollButton, setShowScrollButton] = useState(false);
 
+  const logsContainerRef = useRef<HTMLDivElement>(null);
   const logs = processLogs[process.id] || [];
 
   useEffect(() => {
@@ -24,6 +27,40 @@ export const ProcessDetails: React.FC<ProcessDetailsProps> = ({ process, onActio
     if (logFilter === 'all') return true;
     return log.stream === logFilter;
   });
+
+  // Check if user is at bottom of logs
+  const checkIfAtBottom = useCallback(() => {
+    const container = logsContainerRef.current;
+    if (!container) return true;
+
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const threshold = 10; // 10px threshold for "at bottom"
+    return scrollHeight - scrollTop - clientHeight < threshold;
+  }, []);
+
+  // Handle scroll events
+  const handleScroll = useCallback(() => {
+    const atBottom = checkIfAtBottom();
+    setIsAtBottom(atBottom);
+    setShowScrollButton(!atBottom);
+  }, [checkIfAtBottom]);
+
+  // Auto-scroll to bottom when new logs arrive (only if user was already at bottom)
+  useEffect(() => {
+    if (isAtBottom && logsContainerRef.current) {
+      const container = logsContainerRef.current;
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [filteredLogs, isAtBottom]);
+
+  // Scroll to bottom function
+  const scrollToBottom = useCallback(() => {
+    if (logsContainerRef.current) {
+      logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight;
+      setIsAtBottom(true);
+      setShowScrollButton(false);
+    }
+  }, []);
 
   const renderLogs = () => {
     return filteredLogs.map((log, index) => (
@@ -132,11 +169,26 @@ export const ProcessDetails: React.FC<ProcessDetailsProps> = ({ process, onActio
             </label>
           </div>
 
-          <div className="log-output">
-            {logs.length === 0 ? (
-              <div className="no-logs">No logs available</div>
-            ) : (
-              renderLogs()
+          <div className="log-output-container">
+            <div
+              ref={logsContainerRef}
+              className="log-output"
+              onScroll={handleScroll}
+            >
+              {logs.length === 0 ? (
+                <div className="no-logs">No logs available</div>
+              ) : (
+                renderLogs()
+              )}
+            </div>
+            {showScrollButton && (
+              <button
+                className="scroll-to-bottom-btn"
+                onClick={scrollToBottom}
+                title="Scroll to bottom"
+              >
+                ↓
+              </button>
             )}
           </div>
         </div>
