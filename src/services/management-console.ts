@@ -1,13 +1,13 @@
 import { Server, ServerWebSocket } from 'bun';
-import { ProxyConfig, MainConfig } from '../types';
+import * as path from 'path';
+import managementHtml from '../frontend/management/index.html';
+import { MainConfig, ProxyConfig } from '../types';
 import { logger } from '../utils/logger';
+import { cacheService } from './cache';
 import { configService } from './config-service';
 import { processManager } from './process-manager';
 import { getStatisticsService } from './statistics';
-import { cacheService } from './cache';
-import * as managementHtml from '../frontend/management/index.html';
-import * as path from 'path';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 
 export class ManagementConsole {
   private managementServer: Server | null = null;
@@ -53,54 +53,65 @@ export class ManagementConsole {
       port: managementPort,
       hostname: managementHost,
       routes: {
-        "/": { GET: managementHtml },
+        "/": managementHtml,
 
-
-
-        "/api/status": async (req: Request) => {
-          if (req.method === 'GET') {
+        "/api/status": {
+          GET: async (req: Request) => {
             const status = this.getStatus();
             return new Response(JSON.stringify(status), {
               status: 200,
               headers: { 'Content-Type': 'application/json' }
             });
           }
-          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' }
-          });
         },
 
-        "/api/config": async (req: Request) => {
-          if (req.method === 'GET') {
+        "/api/config": {
+          GET: async (req: Request) => {
             const config = this.getConfig();
             return new Response(JSON.stringify(config), {
               status: 200,
               headers: { 'Content-Type': 'application/json' }
             });
           }
-          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' }
-          });
         },
 
-        "/api/config/:type": async (req: Request) => {
-          if (req.method === 'GET') {
+        "/api/config/:type": {
+          GET: async (req: Request) => {
             const url = new URL(req.url);
             const type = url.pathname.split('/')[3];
 
             try {
               let configData: any;
+              let configPath: string;
+
               switch (type) {
                 case 'proxy':
                   configData = configService.getServerConfig();
+                  // Determine proxy config path
+                  const mainConfig = configService.getMainConfig();
+                  if (mainConfig?.config?.proxy) {
+                    configPath = path.isAbsolute(mainConfig.config.proxy)
+                      ? mainConfig.config.proxy
+                      : path.resolve(process.cwd(), mainConfig.config.proxy);
+                  } else {
+                    configPath = process.env.CONFIG_FILE || './config/proxy.yaml';
+                  }
                   break;
                 case 'processes':
                   configData = configService.getProcessConfig();
+                  // Determine process config path
+                  const mainConfigForProcesses = configService.getMainConfig();
+                  if (mainConfigForProcesses?.config?.processes) {
+                    configPath = path.isAbsolute(mainConfigForProcesses.config.processes)
+                      ? mainConfigForProcesses.config.processes
+                      : path.resolve(process.cwd(), mainConfigForProcesses.config.processes);
+                  } else {
+                    configPath = './config/processes.yaml';
+                  }
                   break;
                 case 'main':
                   configData = configService.getMainConfig();
+                  configPath = process.env.MAIN_CONFIG_FILE || './config/main.yaml';
                   break;
                 default:
                   return new Response(JSON.stringify({ error: 'Invalid config type' }), {
@@ -109,7 +120,26 @@ export class ManagementConsole {
                   });
               }
 
-              return new Response(JSON.stringify({ success: true, data: configData }), {
+              // Read the actual file content
+              let content = '';
+              let lastModified = new Date().toISOString();
+
+              if (existsSync(configPath)) {
+                content = readFileSync(configPath, 'utf-8');
+                const stats = require('fs').statSync(configPath);
+                lastModified = stats.mtime.toISOString();
+              } else {
+                // If file doesn't exist, stringify the config object
+                content = JSON.stringify(configData, null, 2);
+              }
+
+              const responseData = {
+                content,
+                path: configPath,
+                lastModified
+              };
+
+              return new Response(JSON.stringify({ success: true, data: responseData }), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -120,14 +150,10 @@ export class ManagementConsole {
               });
             }
           }
-          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' }
-          });
         },
 
-        "/api/config/:type/save": async (req: Request) => {
-          if (req.method === 'POST') {
+        "/api/config/:type/save": {
+          POST: async (req: Request) => {
             const url = new URL(req.url);
             const type = url.pathname.split('/')[3];
 
@@ -147,14 +173,10 @@ export class ManagementConsole {
               });
             }
           }
-          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' }
-          });
         },
 
-        "/api/config/:type/backup": async (req: Request) => {
-          if (req.method === 'POST') {
+        "/api/config/:type/backup": {
+          POST: async (req: Request) => {
             const url = new URL(req.url);
             const type = url.pathname.split('/')[3];
 
@@ -173,14 +195,10 @@ export class ManagementConsole {
               });
             }
           }
-          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' }
-          });
         },
 
-        "/api/config/:type/backups": async (req: Request) => {
-          if (req.method === 'GET') {
+        "/api/config/:type/backups": {
+          GET: async (req: Request) => {
             const url = new URL(req.url);
             const type = url.pathname.split('/')[3];
 
@@ -199,14 +217,10 @@ export class ManagementConsole {
               });
             }
           }
-          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' }
-          });
         },
 
-        "/api/config/:type/restore": async (req: Request) => {
-          if (req.method === 'POST') {
+        "/api/config/:type/restore": {
+          POST: async (req: Request) => {
             const url = new URL(req.url);
             const type = url.pathname.split('/')[3];
 
@@ -226,42 +240,30 @@ export class ManagementConsole {
               });
             }
           }
-          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' }
-          });
         },
 
-        "/api/statistics": async (req: Request) => {
-          if (req.method === 'GET') {
+        "/api/statistics": {
+          GET: async (req: Request) => {
             const stats = this.statisticsService.getStatsSummary();
             return new Response(JSON.stringify({ success: true, data: stats }), {
               status: 200,
               headers: { 'Content-Type': 'application/json' }
             });
           }
-          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' }
-          });
         },
 
-        "/api/statistics/summary": async (req: Request) => {
-          if (req.method === 'GET') {
+        "/api/statistics/summary": {
+          GET: async (req: Request) => {
             const stats = this.statisticsService.getStatsSummary();
             return new Response(JSON.stringify({ success: true, data: stats }), {
               status: 200,
               headers: { 'Content-Type': 'application/json' }
             });
           }
-          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' }
-          });
         },
 
-        "/api/statistics/generate-report": async (req: Request) => {
-          if (req.method === 'POST') {
+        "/api/statistics/generate-report": {
+          POST: async (req: Request) => {
             try {
               // TODO: Implement manual report generation
               logger.info('Manual statistics report generation requested');
@@ -284,28 +286,20 @@ export class ManagementConsole {
               });
             }
           }
-          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' }
-          });
         },
 
-        "/api/processes": async (req: Request) => {
-          if (req.method === 'GET') {
+        "/api/processes": {
+          GET: async (req: Request) => {
             const processes = await this.getProcesses();
             return new Response(JSON.stringify({ success: true, data: processes }), {
               status: 200,
               headers: { 'Content-Type': 'application/json' }
             });
           }
-          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' }
-          });
         },
 
-        "/api/processes/reload": async (req: Request) => {
-          if (req.method === 'POST') {
+        "/api/processes/reload": {
+          POST: async (req: Request) => {
             try {
               // TODO: Implement process configuration reload
               logger.info('Process configuration reload requested');
@@ -321,14 +315,10 @@ export class ManagementConsole {
               });
             }
           }
-          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' }
-          });
         },
 
-        "/api/processes/:id/start": async (req: Request) => {
-          if (req.method === 'POST') {
+        "/api/processes/:id/start": {
+          POST: async (req: Request) => {
             const url = new URL(req.url);
             const processId = url.pathname.split('/')[3];
 
@@ -357,14 +347,10 @@ export class ManagementConsole {
               });
             }
           }
-          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' }
-          });
         },
 
-        "/api/processes/:id/stop": async (req: Request) => {
-          if (req.method === 'POST') {
+        "/api/processes/:id/stop": {
+          POST: async (req: Request) => {
             const url = new URL(req.url);
             const processId = url.pathname.split('/')[3];
 
@@ -381,14 +367,10 @@ export class ManagementConsole {
               });
             }
           }
-          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' }
-          });
         },
 
-        "/api/processes/:id/restart": async (req: Request) => {
-          if (req.method === 'POST') {
+        "/api/processes/:id/restart": {
+          POST: async (req: Request) => {
             const url = new URL(req.url);
             const processId = url.pathname.split('/')[3];
 
@@ -409,14 +391,10 @@ export class ManagementConsole {
               });
             }
           }
-          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' }
-          });
         },
 
-        "/api/processes/:id/logs": async (req: Request) => {
-          if (req.method === 'GET') {
+        "/api/processes/:id/logs": {
+          GET: async (req: Request) => {
             const url = new URL(req.url);
             const processId = url.pathname.split('/')[3];
             const lines = url.searchParams.get('lines') || '100';
@@ -434,20 +412,17 @@ export class ManagementConsole {
               });
             }
           }
-          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' }
-          });
         },
 
-        "/api/processes/config": async (req: Request) => {
-          if (req.method === 'GET') {
+        "/api/processes/config": {
+          GET: async (req: Request) => {
             const processConfig = configService.getProcessConfig();
             return new Response(JSON.stringify({ success: true, data: processConfig }), {
               status: 200,
               headers: { 'Content-Type': 'application/json' }
             });
-          } else if (req.method === 'PUT') {
+          },
+          PUT: async (req: Request) => {
             try {
               const newConfig = await req.json();
               await this.handleProcessConfigUpdate(newConfig);
@@ -462,17 +437,13 @@ export class ManagementConsole {
               });
             }
           }
-          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' }
-          });
         },
 
-        "/api/certificates": async (req: Request) => {
-          if (req.method === 'GET') {
+        "/api/certificates": {
+          GET: async (req: Request) => {
             try {
               const certificates = this.getCertificates();
-              return new Response(JSON.stringify({ success: true, data: Array.from(certificates.entries()) }), {
+              return new Response(JSON.stringify(Array.from(certificates.entries())), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -483,14 +454,10 @@ export class ManagementConsole {
               });
             }
           }
-          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' }
-          });
         },
 
-        "/api/cache/stats": async (req: Request) => {
-          if (req.method === 'GET') {
+        "/api/cache/stats": {
+          GET: async (req: Request) => {
             try {
               const stats = cacheService.getStats();
               return new Response(JSON.stringify({ success: true, data: stats }), {
@@ -504,14 +471,10 @@ export class ManagementConsole {
               });
             }
           }
-          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' }
-          });
         },
 
-        "/api/cache/entries": async (req: Request) => {
-          if (req.method === 'GET') {
+        "/api/cache/entries": {
+          GET: async (req: Request) => {
             try {
               const url = new URL(req.url);
               const page = parseInt(url.searchParams.get('page') || '1');
@@ -533,14 +496,10 @@ export class ManagementConsole {
               });
             }
           }
-          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' }
-          });
         },
 
-        "/api/cache/clear": async (req: Request) => {
-          if (req.method === 'POST') {
+        "/api/cache/clear": {
+          POST: async (req: Request) => {
             try {
               await cacheService.cleanup();
               return new Response(JSON.stringify({ success: true, message: 'Cache cleared successfully' }), {
@@ -554,14 +513,10 @@ export class ManagementConsole {
               });
             }
           }
-          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' }
-          });
         },
 
-        "/api/cache/delete/:key": async (req: Request) => {
-          if (req.method === 'DELETE') {
+        "/api/cache/delete/:key": {
+          DELETE: async (req: Request) => {
             try {
               const url = new URL(req.url);
               const key = url.pathname.split('/')[3];
@@ -580,10 +535,6 @@ export class ManagementConsole {
               });
             }
           }
-          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' }
-          });
         },
 
         "/health": () => this.handleHealthRequest(),
@@ -781,8 +732,29 @@ export class ManagementConsole {
     return this.getStatus();
   }
 
-  async getProcessLogs(processId: string, lines: number | string): Promise<string[]> {
-    return processManager.getProcessLogs(processId, lines);
+  async getProcessLogs(processId: string, lines: number | string): Promise<any[]> {
+    const rawLogs = await processManager.getProcessLogs(processId, lines);
+
+    // Transform string logs into LogLine objects
+    return rawLogs.map((logLine: string) => {
+      // Parse log line format: [timestamp] [STREAM] content
+      const timestampMatch = logLine.match(/^\[([^\]]+)\]\s+\[(STDOUT|STDERR)\]\s+(.*)$/);
+
+      if (timestampMatch) {
+        return {
+          line: timestampMatch[3],
+          stream: timestampMatch[2].toLowerCase() as 'stdout' | 'stderr',
+          timestamp: timestampMatch[1]
+        };
+      } else {
+        // Fallback for lines that don't match the expected format
+        return {
+          line: logLine,
+          stream: 'stdout' as const,
+          timestamp: new Date().toISOString()
+        };
+      }
+    });
   }
 
   async handleProcessConfigUpdate(newConfig: any): Promise<void> {
