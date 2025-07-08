@@ -1,13 +1,13 @@
 import 'dotenv/config';
-import { ProxyServer } from './services/proxy-server';
+import { BunProxyServer } from './server';
 import { configService } from './services/config-service';
 import { logger } from './utils/logger';
 
-let currentServer: ProxyServer | null = null;
+let currentServer: BunProxyServer | null = null;
 let isRestarting = false;
 
-async function startServer(): Promise<ProxyServer> {
-  logger.info('Starting Proxy Server and Process Manager...');
+async function startServer(): Promise<BunProxyServer> {
+  logger.info('Starting Bun Proxy Server and Process Manager...');
 
   // Initialize configuration service
   await configService.initialize();
@@ -17,11 +17,11 @@ async function startServer(): Promise<ProxyServer> {
   const mainConfig = configService.getMainConfig();
 
   // Create and start proxy server with built-in management server
-  const server = new ProxyServer(serverConfig, mainConfig || undefined);
+  const server = new BunProxyServer(serverConfig, mainConfig || undefined);
   await server.initialize();
   await server.start(); // Use built-in management server
 
-  logger.info('Proxy server and management console started successfully');
+  logger.info('Bun proxy server and management console started successfully');
 
   // Log server status
   const status = server.getStatus();
