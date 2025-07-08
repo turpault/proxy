@@ -31,6 +31,56 @@ export interface StatusData {
   timestamp: string;
 }
 
+// Statistics API Types
+export interface StatisticsSummary {
+  totalRequests: number;
+  uniqueIPs: number;
+  uniqueCountries: number;
+  cacheSize: number;
+  lastSaved?: string;
+  dataFileSize?: number;
+}
+
+export interface RouteStatistics {
+  name?: string;
+  domain: string;
+  target: string;
+  requests: number;
+  avgResponseTime: number;
+  topCountries: Array<{
+    country: string;
+    city?: string;
+    count: number;
+    percentage: number;
+  }>;
+  uniqueIPs: number;
+  methods: string[];
+  requestType?: string;
+  uniquePaths?: string[];
+}
+
+export interface DetailedStatistics {
+  totalRequests: number;
+  uniqueRoutes: number;
+  uniqueCountries: number;
+  avgResponseTime: number;
+  routes: RouteStatistics[];
+  period: {
+    start: string;
+    end: string;
+  };
+}
+
+export interface StatisticsResponse {
+  success: boolean;
+  data: StatisticsSummary;
+}
+
+export interface DetailedStatisticsResponse {
+  success: boolean;
+  data: DetailedStatistics;
+}
+
 export interface WebSocketMessage {
   type: 'processes' | 'processes_update' | 'status' | 'logs' | 'error' | 'pong';
   data: any;

@@ -25,6 +25,7 @@ export class StatisticsPersistence {
       userAgents: Array.from(stats.userAgents),
       routes: Array.from(stats.routes),
       methods: Array.from(stats.methods),
+      requestTypes: Array.from(stats.requestTypes),
       responseTimes: stats.responseTimes,
       routeDetails: stats.routeDetails.map(detail => ({
         ...detail,
@@ -46,6 +47,7 @@ export class StatisticsPersistence {
       userAgents: new Set(serialized.userAgents),
       routes: new Set(serialized.routes),
       methods: new Set(serialized.methods),
+      requestTypes: new Set(serialized.requestTypes),
       responseTimes: serialized.responseTimes,
       routeDetails: serialized.routeDetails.map(detail => ({
         ...detail,
@@ -59,7 +61,7 @@ export class StatisticsPersistence {
    */
   async saveStats(stats: Map<string, RequestStats>): Promise<void> {
     try {
-      const statsData: SerializableRequestStats[] = Array.from(stats.values()).map(stat => 
+      const statsData: SerializableRequestStats[] = Array.from(stats.values()).map(stat =>
         this.serializeStats(stat)
       );
 
@@ -81,17 +83,17 @@ export class StatisticsPersistence {
    */
   async loadPersistedStats(): Promise<Map<string, RequestStats>> {
     const stats = new Map<string, RequestStats>();
-    
+
     try {
       const dataFile = path.join(this.dataDir, 'current-stats.json');
-      
+
       if (!await fs.pathExists(dataFile)) {
         logger.info('No existing statistics file found, starting fresh');
         return stats;
       }
 
       const data = await fs.readJson(dataFile);
-      
+
       if (data.stats && Array.isArray(data.stats)) {
         for (const serializedStat of data.stats) {
           try {
@@ -101,13 +103,13 @@ export class StatisticsPersistence {
             logger.warn('Failed to deserialize stat entry', { error, stat: serializedStat });
           }
         }
-        
+
         logger.info(`Loaded ${stats.size} statistics entries from disk`);
       }
     } catch (error) {
       logger.error('Failed to load persisted statistics', error);
     }
-    
+
     return stats;
   }
 
@@ -129,27 +131,27 @@ export class StatisticsPersistence {
   async cleanupOldStats(): Promise<void> {
     try {
       const dataFile = path.join(this.dataDir, 'current-stats.json');
-      
+
       if (!await fs.pathExists(dataFile)) {
         return;
       }
 
       const data = await fs.readJson(dataFile);
       const cutoffTime = Date.now() - (30 * 24 * 60 * 60 * 1000); // 30 days ago
-      
+
       if (data.stats && Array.isArray(data.stats)) {
         const filteredStats = data.stats.filter((stat: any) => {
           const lastSeen = new Date(stat.lastSeen).getTime();
           return lastSeen > cutoffTime;
         });
-        
+
         if (filteredStats.length < data.stats.length) {
           await fs.writeJson(dataFile, {
             timestamp: new Date().toISOString(),
             stats: filteredStats,
             totalEntries: filteredStats.length
           }, { spaces: 2 });
-          
+
           const removedCount = data.stats.length - filteredStats.length;
           logger.info(`Cleaned up ${removedCount} old statistics entries`);
         }
@@ -166,7 +168,7 @@ export class StatisticsPersistence {
     try {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const reportFile = path.join(this.reportDir, `statistics-report-${timestamp}.json`);
-      
+
       await fs.writeJson(reportFile, report, { spaces: 2 });
       logger.info(`Statistics report saved: ${reportFile}`);
     } catch (error) {
@@ -192,7 +194,7 @@ export class StatisticsPersistence {
   async getDataFileSize(): Promise<number | undefined> {
     try {
       const dataFile = path.join(this.dataDir, 'current-stats.json');
-      
+
       if (await fs.pathExists(dataFile)) {
         const stats = await fs.stat(dataFile);
         return stats.size;
@@ -200,7 +202,7 @@ export class StatisticsPersistence {
     } catch (error) {
       logger.error('Failed to get data file size', error);
     }
-    
+
     return undefined;
   }
 
@@ -210,7 +212,7 @@ export class StatisticsPersistence {
   async getLastSavedTimestamp(): Promise<string | undefined> {
     try {
       const dataFile = path.join(this.dataDir, 'current-stats.json');
-      
+
       if (await fs.pathExists(dataFile)) {
         const data = await fs.readJson(dataFile);
         return data.timestamp;
@@ -218,7 +220,7 @@ export class StatisticsPersistence {
     } catch (error) {
       logger.error('Failed to get last saved timestamp', error);
     }
-    
+
     return undefined;
   }
 } 

@@ -254,6 +254,48 @@ export class ManagementConsole {
           }
         },
 
+        "/api/statistics/detailed": {
+          GET: async (req: Request) => {
+            try {
+              const url = new URL(req.url);
+              const period = url.searchParams.get('period') || '24h';
+
+              // Get route configurations for naming
+              const serverConfig = configService.getServerConfig();
+              const routeConfigs = serverConfig.routes.map(route => ({
+                domain: route.domain,
+                path: route.path,
+                target: route.target,
+                name: route.name
+              }));
+
+              const detailedStats = this.statisticsService.getTimePeriodStats(period, routeConfigs);
+
+              // Convert dates to ISO strings for JSON serialization
+              const serializedStats = {
+                ...detailedStats,
+                period: {
+                  start: detailedStats.period.start.toISOString(),
+                  end: detailedStats.period.end.toISOString()
+                }
+              };
+
+              return new Response(JSON.stringify({ success: true, data: serializedStats }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({
+                error: 'Failed to get detailed statistics',
+                details: error instanceof Error ? error.message : 'Unknown error'
+              }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+        },
+
         "/api/statistics/summary": {
           GET: async (req: Request) => {
             const stats = this.statisticsService.getStatsSummary();
