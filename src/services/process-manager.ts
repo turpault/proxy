@@ -70,16 +70,16 @@ export class ProcessManager {
   constructor() {
     // Initialize the process scheduler
     this.scheduler = new ProcessScheduler();
-    
+
     // Set up scheduler callbacks
     this.scheduler.setProcessStartCallback(async (id: string, config: ProcessConfig) => {
       await this.startProcess(id, config, 'scheduled');
     });
-    
+
     this.scheduler.setProcessStopCallback(async (id: string) => {
       await this.stopProcess(id);
     });
-    
+
     this.scheduler.setProcessStatusChangeCallback((id: string, isRunning: boolean) => {
       this.updateSchedulerProcessStatus(id, isRunning);
     });
@@ -116,17 +116,17 @@ export class ProcessManager {
       const configContent = await fs.readFile(configFilePath, 'utf8');
       const { parse } = await import('yaml');
       const config = parse(configContent) as ProcessManagementConfig;
-      
+
       // Basic validation
       if (!config.processes) {
         throw new Error('Invalid process configuration: missing processes section');
       }
-      
+
       logger.info(`Process management configuration loaded from ${configFilePath}`, {
         processCount: Object.keys(config.processes).length,
         processes: Object.keys(config.processes)
       });
-      
+
       return config;
     } catch (error) {
       logger.error(`Failed to load process management configuration from ${configFilePath}`, error);
@@ -140,10 +140,10 @@ export class ProcessManager {
   public setupFileWatching(configFilePath: string, onConfigUpdate: (config: ProcessManagementConfig) => void): void {
     this.configFilePath = configFilePath;
     this.onConfigUpdate = onConfigUpdate;
-    
+
     // Start watching the file
     this.startFileWatcher();
-    
+
     logger.info(`Process manager watching for changes in ${configFilePath}`);
   }
 
@@ -204,7 +204,7 @@ export class ProcessManager {
 
     try {
       logger.info('Reinitializing process management from updated configuration file');
-      
+
       // Read and parse the updated configuration
       const configContent = await fs.readFile(this.configFilePath, 'utf8');
       const { parse } = await import('yaml');
@@ -217,7 +217,7 @@ export class ProcessManager {
 
       // Call the update callback to notify the proxy server
       this.onConfigUpdate(newConfig);
-      
+
       logger.info('Process management configuration updated successfully');
     } catch (error) {
       logger.error('Failed to reinitialize process management from file', error);
@@ -232,15 +232,15 @@ export class ProcessManager {
       this.fileWatcher.close();
       this.fileWatcher = null;
     }
-    
+
     if (this.reinitializeTimeout) {
       clearTimeout(this.reinitializeTimeout);
       this.reinitializeTimeout = null;
     }
-    
+
     this.configFilePath = null;
     this.onConfigUpdate = null;
-    
+
     logger.info('Process manager file watching stopped');
   }
 
@@ -281,10 +281,10 @@ export class ProcessManager {
     try {
       // Ensure directory exists
       await fs.ensureDir(path.dirname(pidFilePath));
-      
+
       // Write PID to file
       await fs.writeFile(pidFilePath, pid.toString(), 'utf8');
-      
+
       logger.debug(`PID file written: ${pidFilePath} (PID: ${pid})`);
     } catch (error) {
       logger.error(`Failed to write PID file ${pidFilePath}`, error);
@@ -332,13 +332,13 @@ export class ProcessManager {
       if (await fs.pathExists(pidFilePath)) {
         const pidContent = await fs.readFile(pidFilePath, 'utf8');
         const pid = parseInt(pidContent.trim(), 10);
-        
+
         if (isNaN(pid)) {
           logger.warn(`Invalid PID in file ${pidFilePath}, removing`);
           await this.removePidFile(pidFilePath);
           return null;
         }
-        
+
         if (this.isPidRunning(pid)) {
           logger.info(`Found existing process ${id} with PID ${pid}, reconnecting`);
           // We'll set up the monitor later when we have access to the managedProcess
@@ -435,15 +435,15 @@ export class ProcessManager {
             fileWatcher = null;
           }
         },
-        on: () => {},
-        unref: () => {},
-        ref: () => {},
+        on: () => { },
+        unref: () => { },
+        ref: () => { },
         exitCode: null,
         killed: false,
         spawnargs: [],
         spawnfile: '',
         connected: false,
-        disconnect: () => {},
+        disconnect: () => { },
         send: () => false,
         channel: null,
         sendHandle: null,
@@ -485,7 +485,7 @@ export class ProcessManager {
     // Generate PID and log file paths
     const pidFilePath = this.generatePidFilePath(id, config);
     const logFilePath = this.generateLogFilePath(id, config);
-    
+
     // Check if process is already running and try to reconnect
     const existingProcess = await this.checkAndReconnectProcess(id, pidFilePath, logFilePath);
 
@@ -526,11 +526,11 @@ export class ProcessManager {
       managedProcess.processMonitor = monitorProcessByPid(pid, () => {
         logger.warn(`Reconnected process ${id} (PID ${pid}) has died`);
         clearInterval(managedProcess.processMonitor);
-        
+
         // Handle process death
         managedProcess.isRunning = false;
         this.scheduler.updateProcessStatus(id, false);
-        
+
         if (managedProcess.process) {
           managedProcess.process.kill(); // Kill the tail process
         }
@@ -543,9 +543,9 @@ export class ProcessManager {
           });
         }
       });
-      
+
       managedProcess.processMonitor.unref(); // Don't keep process alive just for monitoring
-      
+
       logger.info(`Reconnected to existing process ${id}`, {
         pid: existingProcess.pid,
         command: config.command,
@@ -572,13 +572,13 @@ export class ProcessManager {
 
       try {
         await this.spawnProcess(managedProcess, target);
-        
+
         // Update scheduler status
         this.scheduler.updateProcessStatus(id, managedProcess.isRunning);
-        
+
         // Notify listeners of process update
         this.notifyProcessUpdate();
-        
+
         logger.info(`Process ${config.name || `proxy-${id}`} started successfully`, {
           pid: managedProcess.process?.pid,
           pidFile: managedProcess.pidFilePath,
@@ -623,10 +623,10 @@ export class ProcessManager {
 
     managedProcess.isRunning = false;
     managedProcess.isStopped = true;
-    
+
     // Notify listeners of process update
     this.notifyProcessUpdate();
-    
+
     logger.info(`Process ${managedProcess.config.name || `proxy-${id}`} stopped successfully`);
   }
 
@@ -641,7 +641,7 @@ export class ProcessManager {
     }
 
     logger.info(`Restarting process ${id}`);
-    
+
     // Check restart limits
     const maxRestarts = managedProcess.config.maxRestarts || 5;
     if (managedProcess.restartCount >= maxRestarts) {
@@ -671,12 +671,12 @@ export class ProcessManager {
 
     // First try to reconnect to existing process
     const existingProcess = await this.checkAndReconnectProcess(id, managedProcess.pidFilePath, managedProcess.logFilePath);
-    
+
     if (existingProcess) {
       // Reconnected to existing process
       managedProcess.isRunning = true;
       managedProcess.isReconnected = true;
-      
+
       logger.info(`Reconnected to existing process ${id} during restart`, {
         pid: existingProcess.pid,
       });
@@ -694,10 +694,10 @@ export class ProcessManager {
       // Start new process
       try {
         await this.spawnProcess(managedProcess, target);
-        
+
         // Notify listeners of process update
         this.notifyProcessUpdate();
-        
+
         logger.info(`Process ${id} restarted successfully`, {
           pid: managedProcess.process?.pid,
           restartCount: managedProcess.restartCount,
@@ -721,29 +721,13 @@ export class ProcessManager {
     return new Promise((resolve, reject) => {
       // Generate process name for ps output
       const processName = config.name || `proxy-${id}`;
-      
+
+      // Build environment variables with enhanced support
+      const processEnv = this.buildProcessEnvironment(id, config, processName);
+
       const processOptions: any = {
         cwd: config.cwd ? path.resolve(config.cwd) : process.cwd(),
-        env: {
-          // Start with a clean environment, excluding proxy-specific variables
-          ...Object.fromEntries(
-            Object.entries(process.env).filter(([key]) => 
-              key !== 'PORT' &&
-              key !== 'HTTPS_PORT' &&
-              key !== 'CONFIG_FILE' &&
-              key !== 'LOG_LEVEL' &&
-              key !== 'LOG_FILE' &&
-              key !== 'RATE_LIMIT_' &&
-              key !== 'PRIMARY_DOMAIN' &&
-              key !== 'CERT_DIR'
-            )
-          ),
-          ...config.env,
-          // Set process name environment variables for the child process
-          PROCESS_NAME: processName,
-          PROXY_PROCESS_ID: id,
-          PROXY_PROCESS_NAME: processName,
-        },
+        env: processEnv,
         // Detach the process so it survives parent exit
         detached: true,
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -751,13 +735,13 @@ export class ProcessManager {
 
       // Create command array with process name
       let commandArgs = config.args || [];
-      
+
       // For Node.js processes, we can set the process title more reliably
       if (config.command === 'node' || config.command.endsWith('/node')) {
         // Add process name to the command line arguments
         // This will show up in ps output as part of the command line
         commandArgs = ['--title', processName, ...commandArgs];
-        
+
         // Set additional Node.js options for process naming
         const existingNodeOptions = processOptions.env.NODE_OPTIONS || '';
         processOptions.env.NODE_OPTIONS = `${existingNodeOptions} --max-old-space-size=4096`.trim();
@@ -765,30 +749,30 @@ export class ProcessManager {
         // For ts-node processes, we can't use --title as it's not supported
         // Instead, we'll use environment variables and let the child process set its own title
         // Don't add --title argument to avoid the error
-        
+
         // Set additional Node.js options for ts-node process naming
         const existingNodeOptions = processOptions.env.NODE_OPTIONS || '';
         processOptions.env.NODE_OPTIONS = `${existingNodeOptions} --max-old-space-size=4096`.trim();
-        
+
         // Set ts-node specific environment variables
         processOptions.env.TS_NODE_PROJECT = processOptions.env.TS_NODE_PROJECT || 'tsconfig.json';
       } else if (config.command === 'bun' || config.command.endsWith('/bun')) {
         // For Bun processes, we can set the process title via environment variables
         // Don't add --title argument to avoid potential conflicts
-        
+
         // Set Bun-specific environment variables for process naming
         processOptions.env.BUN_PROCESS_NAME = processName;
-        
+
         // Set additional Bun options if needed
         const existingBunOptions = processOptions.env.BUN_OPTIONS || '';
         processOptions.env.BUN_OPTIONS = `${existingBunOptions}`.trim();
       } else if (config.command === 'deno' || config.command.endsWith('/deno')) {
         // For Deno processes, we can set the process title
         commandArgs = ['--title', processName, ...commandArgs];
-        
+
         // Set Deno-specific environment variables for process naming
         processOptions.env.DENO_PROCESS_NAME = processName;
-        
+
         // Set additional Deno options for better process visibility
         const existingDenoOptions = processOptions.env.DENO_OPTIONS || '';
         processOptions.env.DENO_OPTIONS = `${existingDenoOptions} --allow-all`.trim();
@@ -820,7 +804,7 @@ export class ProcessManager {
 
       // Redirect stdout and stderr to log file
       const logStream = fs.createWriteStream(logFilePath, { flags: 'a' });
-      
+
       if (childProcess.stdout) {
         childProcess.stdout.pipe(logStream, { end: false });
         childProcess.stdout.on('data', (data) => {
@@ -853,7 +837,7 @@ export class ProcessManager {
         managedProcess.isRunning = true;
         managedProcess.isStopped = false;
         managedProcess.startTime = new Date();
-        
+
         // Write PID file
         if (childProcess.pid) {
           try {
@@ -862,11 +846,11 @@ export class ProcessManager {
             logger.error(`Failed to write PID file for process ${processName}`, error);
           }
         }
-        
+
         // Detach the process from the parent to prevent it from being killed
         if (childProcess.pid) {
           childProcess.unref();
-          
+
           // On Unix-like systems, create a new process group for the child
           // This ensures it won't be killed when the parent process group is terminated
           if (process.platform !== 'win32') {
@@ -879,7 +863,7 @@ export class ProcessManager {
             }
           }
         }
-        
+
         logger.info(`Process ${processName} started successfully`, {
           id,
           pid: childProcess.pid,
@@ -889,6 +873,7 @@ export class ProcessManager {
           pidFile: managedProcess.pidFilePath,
           logFile: managedProcess.logFilePath,
           detached: true,
+          envVarsCount: Object.keys(processEnv).length,
           // Note: This process will survive when the process manager is terminated
         });
 
@@ -903,7 +888,7 @@ export class ProcessManager {
       // Handle process exit
       childProcess.on('exit', async (code, signal) => {
         managedProcess.isRunning = false;
-        
+
         // Only remove PID file if cleanup is enabled AND the process exited normally
         // This preserves PID files for unexpected exits to allow reconnection
         if (config.cleanupPidOnExit !== false && code === 0) {
@@ -913,7 +898,7 @@ export class ProcessManager {
             logger.error(`Failed to remove PID file for process ${processName}`, error);
           }
         }
-        
+
         const exitInfo = {
           id,
           processName,
@@ -974,6 +959,190 @@ export class ProcessManager {
   }
 
   /**
+   * Build environment variables for a process with enhanced support
+   */
+  private buildProcessEnvironment(id: string, config: ProcessConfig, processName: string): NodeJS.ProcessEnv {
+    // Start with a clean environment, excluding proxy-specific variables
+    const baseEnv = Object.fromEntries(
+      Object.entries(process.env).filter(([key]) =>
+        key !== 'PORT' &&
+        key !== 'HTTPS_PORT' &&
+        key !== 'CONFIG_FILE' &&
+        key !== 'LOG_LEVEL' &&
+        key !== 'LOG_FILE' &&
+        key !== 'RATE_LIMIT_' &&
+        key !== 'PRIMARY_DOMAIN' &&
+        key !== 'CERT_DIR'
+      )
+    );
+
+    // Process custom environment variables with substitution
+    const customEnv = this.processEnvironmentVariables(config.env || {}, id, processName);
+
+    // Set process identification environment variables
+    const processEnv = {
+      PROCESS_NAME: processName,
+      PROXY_PROCESS_ID: id,
+      PROXY_PROCESS_NAME: processName,
+    };
+
+    // Merge all environment variables (custom env overrides base env)
+    const finalEnv = {
+      ...baseEnv,
+      ...customEnv,
+      ...processEnv,
+    };
+
+    // Validate environment variables if configured
+    if (config.envValidation?.validateOnStart !== false) {
+      this.validateEnvironmentVariables(id, finalEnv, config);
+    }
+
+    // Log environment variable information (without sensitive values)
+    this.logEnvironmentVariables(id, finalEnv, config.env || {});
+
+    return finalEnv;
+  }
+
+  /**
+   * Validate environment variables for a process
+   */
+  private validateEnvironmentVariables(id: string, env: NodeJS.ProcessEnv, config: ProcessConfig): void {
+    const validation = config.envValidation;
+    if (!validation) return;
+
+    const missing: string[] = [];
+    const invalid: string[] = [];
+
+    // Check required environment variables
+    const requiredVars = validation.required || config.requiredEnv || [];
+    for (const varName of requiredVars) {
+      if (!env[varName] || env[varName].trim() === '') {
+        missing.push(varName);
+      }
+    }
+
+    // Check optional environment variables (if they exist, validate their format)
+    const optionalVars = validation.optional || [];
+    for (const varName of optionalVars) {
+      if (env[varName] !== undefined) {
+        // Add custom validation logic here if needed
+        // For now, just check if it's not empty if it exists
+        if (env[varName] && env[varName].trim() === '') {
+          invalid.push(varName);
+        }
+      }
+    }
+
+    // Log validation results
+    if (missing.length > 0) {
+      const message = `Missing required environment variables for process ${id}: ${missing.join(', ')}`;
+      if (validation.failOnMissing !== false) {
+        throw new Error(message);
+      } else {
+        logger.warn(message);
+      }
+    }
+
+    if (invalid.length > 0) {
+      logger.warn(`Invalid environment variables for process ${id}: ${invalid.join(', ')}`);
+    }
+
+    if (missing.length === 0 && invalid.length === 0) {
+      logger.debug(`Environment variable validation passed for process ${id}`);
+    }
+  }
+
+  /**
+   * Process environment variables with substitution support
+   */
+  private processEnvironmentVariables(envConfig: Record<string, string>, id: string, processName: string): Record<string, string> {
+    const processed: Record<string, string> = {};
+
+    for (const [key, value] of Object.entries(envConfig)) {
+      try {
+        // Support environment variable substitution in values
+        const substitutedValue = this.substituteEnvironmentVariables(value, id, processName);
+        processed[key] = substitutedValue;
+      } catch (error) {
+        logger.warn(`Failed to process environment variable ${key} for process ${id}: ${error}`);
+        // Use original value if substitution fails
+        processed[key] = value;
+      }
+    }
+
+    return processed;
+  }
+
+  /**
+   * Substitute environment variables in a string value
+   */
+  private substituteEnvironmentVariables(value: string, id: string, processName: string): string {
+    return value.replace(/\$\{([^}]+)\}/g, (match, varName) => {
+      // Handle special variables
+      switch (varName) {
+        case 'PROCESS_ID':
+        case 'PROXY_PROCESS_ID':
+          return id;
+        case 'PROCESS_NAME':
+        case 'PROXY_PROCESS_NAME':
+          return processName;
+        case 'PID':
+          // This will be available after process spawn
+          return '${PID}'; // Keep as placeholder for now
+        case 'TIMESTAMP':
+          return new Date().toISOString();
+        case 'RANDOM':
+          return Math.random().toString(36).substring(2, 15);
+        default:
+          // Check if it's an environment variable
+          const envValue = process.env[varName];
+          if (envValue !== undefined) {
+            return envValue;
+          }
+
+          // Check if it's a built-in Node.js variable
+          const builtInValue = process[varName as keyof NodeJS.Process];
+          if (builtInValue !== undefined) {
+            return String(builtInValue);
+          }
+
+          // If not found, log a warning and keep the placeholder
+          logger.warn(`Environment variable ${varName} not found for process ${id}, keeping placeholder: ${match}`);
+          return match;
+      }
+    });
+  }
+
+  /**
+   * Log environment variable information (without sensitive values)
+   */
+  private logEnvironmentVariables(id: string, env: NodeJS.ProcessEnv, customEnv: Record<string, string>): void {
+    const sensitiveKeys = [
+      'PASSWORD', 'SECRET', 'KEY', 'TOKEN', 'AUTH', 'CREDENTIAL', 'PRIVATE',
+      'API_KEY', 'API_SECRET', 'DATABASE_URL', 'DB_PASSWORD', 'JWT_SECRET',
+      'OAUTH_SECRET', 'CLIENT_SECRET', 'ACCESS_TOKEN', 'REFRESH_TOKEN'
+    ];
+
+    const customEnvKeys = Object.keys(customEnv);
+    const sensitiveCustomKeys = customEnvKeys.filter(key =>
+      sensitiveKeys.some(sensitive => key.toUpperCase().includes(sensitive))
+    );
+
+    logger.debug(`Environment variables for process ${id}`, {
+      totalEnvVars: Object.keys(env).length,
+      customEnvVars: customEnvKeys.length,
+      sensitiveCustomVars: sensitiveCustomKeys.length,
+      customEnvKeys: customEnvKeys.filter(key => !sensitiveCustomKeys.includes(key)),
+      // Don't log sensitive environment variable names or values
+    });
+
+    if (sensitiveCustomKeys.length > 0) {
+      logger.debug(`Sensitive environment variables detected for process ${id} (values not logged): ${sensitiveCustomKeys.join(', ')}`);
+    }
+  }
+
+  /**
    * Start health check for a process
    */
   private startHealthCheck(id: string, target: string): void {
@@ -994,7 +1163,7 @@ export class ProcessManager {
       try {
         // Update last health check time
         managedProcess.lastHealthCheckTime = new Date();
-        
+
         // Check if healthCheckPath is already a full URL
         if (healthCheckPath.startsWith('http://') || healthCheckPath.startsWith('https://')) {
           // Use the full URL directly
@@ -1012,14 +1181,14 @@ export class ProcessManager {
 
         // Reset failure count on successful health check
         managedProcess.healthCheckFailures = 0;
-        
+
         logger.debug(`Health check passed for process ${processName}`, {
           url: healthUrl,
           status: response.status,
         });
       } catch (error) {
         managedProcess.healthCheckFailures++;
-        
+
         logger.warn(`Health check failed for process ${processName}`, {
           url: healthUrl,
           failures: managedProcess.healthCheckFailures,
@@ -1059,7 +1228,7 @@ export class ProcessManager {
     if (interval) {
       clearInterval(interval);
       this.healthCheckIntervals.delete(id);
-      
+
       const managedProcess = this.processes.get(id);
       const processName = managedProcess?.config.name || `proxy-${id}`;
       logger.debug(`Health check stopped for process ${processName}`);
@@ -1125,7 +1294,7 @@ export class ProcessManager {
         // If explicitly stopped, mark as not running
         actualIsRunning = false;
       }
-      
+
       return {
         id: proc.id,
         name: proc.config.name || `proxy-${proc.id}`,
@@ -1177,7 +1346,7 @@ export class ProcessManager {
     }
 
     // Detach from all processes without killing them
-    const shutdownPromises = Array.from(this.processes.keys()).map(id => 
+    const shutdownPromises = Array.from(this.processes.keys()).map(id =>
       this.stopProcess(id)
     );
 
@@ -1249,7 +1418,7 @@ export class ProcessManager {
    */
   public initializeSchedules(config: ProcessManagementConfig): void {
     logger.info('Initializing process schedules');
-    
+
     for (const [id, processConfig] of Object.entries(config.processes)) {
       if (processConfig.schedule?.enabled) {
         this.scheduler.scheduleProcess(id, processConfig);

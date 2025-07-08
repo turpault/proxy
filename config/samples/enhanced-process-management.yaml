@@ -1,0 +1,200 @@
+# Enhanced Process Management Configuration
+# This example demonstrates advanced environment variable support features
+
+processes:
+  # Example 1: Basic environment variable usage
+  basic-app:
+    name: "Basic Application"
+    enabled: true
+    command: "node"
+    args: ["app.js"]
+    cwd: "/app/basic"
+    env:
+      NODE_ENV: "production"
+      PORT: "3000"
+      APP_NAME: "Basic App"
+    restartOnExit: true
+    healthCheck:
+      enabled: true
+      path: "/health"
+
+  # Example 2: Environment variable substitution
+  substitution-app:
+    name: "Substitution App"
+    enabled: true
+    command: "node"
+    args: ["app.js"]
+    cwd: "/app/substitution"
+    env:
+      NODE_ENV: "production"
+      PORT: "3001"
+      APP_NAME: "Substitution App"
+      # Use substitution to reference other environment variables
+      DATABASE_URL: "postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"  # Use default value if not set
+      # Use process-specific variables
+      PROCESS_INFO: "Process ${PROCESS_NAME} (ID: ${PROCESS_ID}) started at ${TIMESTAMP}"
+      # Use random values
+      SESSION_SECRET: "${RANDOM}"
+    envValidation:
+      required: ["DB_USER", "DB_PASSWORD", "DB_HOST", "DB_PORT", "DB_NAME"]
+      validateOnStart: true
+      failOnMissing: true
+    restartOnExit: true
+    healthCheck:
+      enabled: true
+      path: "/health"
+
+  # Example 3: Sensitive environment variables (will be masked in logs)
+  secure-app:
+    name: "Secure Application"
+    enabled: true
+    command: "node"
+    args: ["secure-app.js"]
+    cwd: "/app/secure"
+    env:
+      NODE_ENV: "production"
+      PORT: "3002"
+      # These will be detected as sensitive and masked in logs
+      JWT_SECRET: "${JWT_SECRET}"
+      API_KEY: "${API_KEY}"
+      DATABASE_PASSWORD: "${DB_PASSWORD}"
+      OAUTH_CLIENT_SECRET: "${OAUTH_SECRET}"
+    envValidation:
+      required: ["JWT_SECRET", "API_KEY", "DATABASE_PASSWORD", "OAUTH_CLIENT_SECRET"]
+      validateOnStart: true
+      failOnMissing: true
+    restartOnExit: true
+    healthCheck:
+      enabled: true
+      path: "/health"
+
+  # Example 4: Environment variable inheritance and overrides
+  inherited-app:
+    name: "Inherited App"
+    enabled: true
+    command: "python"
+    args: ["app.py"]
+    cwd: "/app/inherited"
+    env:
+      # Inherit from parent environment
+      PYTHONPATH: "${PYTHONPATH}:/app/inherited"
+      # Override parent environment variables
+      LOG_LEVEL: "DEBUG"  # Override parent LOG_LEVEL
+      # Add process-specific variables
+      APP_ENV: "production"
+      DEBUG: "true"
+    # Use legacy requiredEnv for backward compatibility
+    requiredEnv: ["PYTHONPATH"]
+    restartOnExit: true
+    healthCheck:
+      enabled: true
+      path: "/health"
+
+  # Example 5: Conditional environment variables
+  conditional-app:
+    name: "Conditional App"
+    enabled: true
+    command: "node"
+    args: ["conditional-app.js"]
+    cwd: "/app/conditional"
+    env:
+      NODE_ENV: "production"
+      PORT: "3004"
+      # Use conditional logic based on environment
+      FEATURE_FLAG: "${FEATURE_FLAG:-disabled}"
+      CACHE_TTL: "${CACHE_TTL:-3600}"
+      # Use process-specific variables for dynamic configuration
+      INSTANCE_ID: "${PROCESS_ID}"
+      START_TIME: "${TIMESTAMP}"
+    envValidation:
+      required: ["NODE_ENV", "PORT"]
+      optional: ["FEATURE_FLAG", "CACHE_TTL"]
+      validateOnStart: true
+      failOnMissing: false  # Don't fail if optional vars are missing
+    restartOnExit: true
+    healthCheck:
+      enabled: true
+      path: "/health"
+
+  # Example 6: Multi-language environment setup
+  multi-lang-app:
+    name: "Multi-Language App"
+    enabled: true
+    command: "java"
+    args: ["-jar", "app.jar"]
+    cwd: "/app/java"
+    env:
+      # Java-specific environment variables
+      JAVA_OPTS: "-Xmx2g -Xms1g -Dprocess.name=${PROCESS_NAME}"
+      SPRING_PROFILES_ACTIVE: "production"
+      SERVER_PORT: "3005"
+      # Database configuration
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}"
+      SPRING_DATASOURCE_USERNAME: "${DB_USER}"
+      SPRING_DATASOURCE_PASSWORD: "${DB_PASSWORD}"
+      # Application-specific variables
+      APP_VERSION: "${APP_VERSION:-1.0.0}"
+      BUILD_NUMBER: "${BUILD_NUMBER:-0}"
+    envValidation:
+      required: ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"]
+      validateOnStart: true
+      failOnMissing: true
+    restartOnExit: true
+    healthCheck:
+      enabled: true
+      path: "/actuator/health"
+
+# Global process management settings
+settings:
+  defaultHealthCheck:
+    enabled: true
+    interval: 30000
+    timeout: 5000
+    retries: 3
+  defaultRestart:
+    restartOnExit: true
+    restartDelay: 2000
+    maxRestarts: 10
+  pidManagement:
+    defaultPidDir: "./pids"
+    cleanupPidOnExit: true
+  logging:
+    logProcessOutput: true
+    logHealthChecks: false
+    logRestarts: true
+
+# Environment Variables Required for this Configuration:
+# 
+# Required for substitution-app:
+# - DB_USER: Database username
+# - DB_PASSWORD: Database password  
+# - DB_HOST: Database host
+# - DB_PORT: Database port
+# - DB_NAME: Database name
+#
+# Required for secure-app:
+# - JWT_SECRET: JWT signing secret
+# - API_KEY: API authentication key
+# - DB_PASSWORD: Database password
+# - OAUTH_SECRET: OAuth client secret
+#
+# Optional for all apps:
+# - LOG_LEVEL: Logging level (default: info)
+# - FEATURE_FLAG: Feature flag status (default: disabled)
+# - CACHE_TTL: Cache TTL in seconds (default: 3600)
+# - APP_VERSION: Application version (default: 1.0.0)
+# - BUILD_NUMBER: Build number (default: 0)
+#
+# Environment Variable Substitution Features:
+# - ${VAR_NAME}: Substitute environment variable
+# - ${VAR_NAME:-default}: Use default value if variable not set
+# - ${PROCESS_ID}: Process ID
+# - ${PROCESS_NAME}: Process name
+# - ${TIMESTAMP}: Current timestamp
+# - ${RANDOM}: Random string
+#
+# Security Features:
+# - Sensitive environment variables are automatically detected and masked in logs
+# - Environment variable validation on process start
+# - Configurable failure behavior for missing required variables 

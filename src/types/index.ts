@@ -5,6 +5,13 @@ export interface ProcessConfig {
   args?: string[];
   cwd?: string;
   env?: Record<string, string>;
+  requiredEnv?: string[]; // List of required environment variables (can be from parent or custom env)
+  envValidation?: {
+    required?: string[]; // Required environment variables for this process
+    optional?: string[]; // Optional environment variables to validate if present
+    validateOnStart?: boolean; // Whether to validate environment variables on process start
+    failOnMissing?: boolean; // Whether to fail process start if required env vars are missing
+  };
   restartOnExit?: boolean;
   restartDelay?: number; // milliseconds
   maxRestarts?: number;
