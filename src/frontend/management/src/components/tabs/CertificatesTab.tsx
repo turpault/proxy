@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNotifications } from '../NotificationProvider';
-import { formatLocalTime } from '../../utils';
+import { formatLocalTime, formatDateOnly } from '../../utils';
 import { CertificateInfo, CertificatesResponse } from '../../types/shared';
 
 export const CertificatesTab: React.FC = () => {
@@ -76,7 +76,7 @@ export const CertificatesTab: React.FC = () => {
                   </div>
                   <div className="info-row">
                     <span className="label">Valid Until:</span>
-                    <span className="value">{formatLocalTime(cert.expiresAt)}</span>
+                    <span className="value">{formatDateOnly(cert.expiresAt)}</span>
                   </div>
                   <div className="info-row">
                     <span className="label">Days Remaining:</span>

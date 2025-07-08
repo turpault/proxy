@@ -41,6 +41,27 @@ export function formatLocalTime(timestamp: string | null): string {
   }
 }
 
+export function formatDateOnly(timestamp: string | null): string {
+  if (!timestamp) return 'N/A';
+
+  try {
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return 'Invalid Date';
+
+    return date.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+  } catch (error) {
+    return 'Invalid Date';
+  }
+}
+
 export function formatRelativeTime(timestamp: string | null): string {
   if (!timestamp) return 'N/A';
 
