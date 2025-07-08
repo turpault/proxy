@@ -1133,3 +1133,210 @@ body {
     justify-content: flex-end;
   }
 }
+
+/* GeoMap Styles */
+.geo-map-container {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e2e8f0;
+  margin-bottom: 2rem;
+}
+
+.geo-map-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.geo-map-header h3 {
+  margin: 0;
+  color: #2d3748;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.geo-map-stats {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.85rem;
+  color: #718096;
+}
+
+.geo-map-stats span {
+  background: #f7fafc;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+}
+
+.geo-map-wrapper {
+  position: relative;
+  background: #fafbfc;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+}
+
+.geo-map-svg {
+  display: block;
+}
+
+.world-outline path {
+  fill: #f7fafc;
+  stroke: #cbd5e0;
+  stroke-width: 0.5;
+}
+
+.country-marker {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.country-marker:hover {
+  transform: scale(1.1);
+}
+
+.marker-circle {
+  transition: all 0.2s;
+}
+
+.country-marker:hover .marker-circle {
+  stroke-width: 1;
+  stroke: #2b6cb0;
+}
+
+.marker-label {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-weight: 500;
+  pointer-events: none;
+}
+
+.geo-map-legend {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.legend-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #4a5568;
+  margin-bottom: 0.5rem;
+}
+
+.legend-items {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #718096;
+}
+
+.legend-circle {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid #3182ce;
+}
+
+.legend-circle.small {
+  background: rgba(66, 153, 225, 0.3);
+  width: 8px;
+  height: 8px;
+}
+
+.legend-circle.medium {
+  background: rgba(66, 153, 225, 0.6);
+  width: 12px;
+  height: 12px;
+}
+
+.legend-circle.large {
+  background: rgba(66, 153, 225, 0.9);
+  width: 16px;
+  height: 16px;
+}
+
+.geo-map-countries {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.geo-map-countries h4 {
+  margin-bottom: 0.75rem;
+  color: #4a5568;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.geo-map-countries .countries-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.5rem;
+}
+
+.geo-map-countries .country-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  background: #f7fafc;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  border: 1px solid #e2e8f0;
+}
+
+.geo-map-countries .country-name {
+  font-weight: 500;
+  color: #2d3748;
+  flex: 1;
+}
+
+.geo-map-countries .country-count {
+  color: #4299e1;
+  font-weight: 600;
+  margin: 0 0.5rem;
+}
+
+.geo-map-countries .country-percentage {
+  color: #718096;
+  font-size: 0.8rem;
+}
+
+/* Responsive adjustments for geo map */
+@media (max-width: 768px) {
+  .geo-map-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .geo-map-stats {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .legend-items {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .geo-map-countries .countries-list {
+    grid-template-columns: 1fr;
+  }
+}

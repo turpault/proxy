@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useWebSocket } from '../WebSocketProvider';
 import { StatisticsSummary, DetailedStatistics, RouteStatistics } from '../../types';
+import { GeoMap } from '../GeoMap';
 
 export const StatisticsTab: React.FC = () => {
   const { status } = useWebSocket();
@@ -57,6 +58,43 @@ export const StatisticsTab: React.FC = () => {
     if (route.domain === 'Unmatched') return 'Unmatched Requests';
     return `${route.domain} → ${route.target}`;
   };
+
+  // Aggregate country data from all routes for the geo map
+  const aggregatedCountryData = useMemo(() => {
+    if (!detailedStatistics?.routes) return [];
+
+    const countryMap = new Map<string, { count: number; routes: string[] }>();
+
+    detailedStatistics.routes.forEach(route => {
+      if (route.topCountries) {
+        route.topCountries.forEach(country => {
+          const existing = countryMap.get(country.country);
+          if (existing) {
+            existing.count += country.count;
+            if (!existing.routes.includes(route.domain)) {
+              existing.routes.push(route.domain);
+            }
+          } else {
+            countryMap.set(country.country, {
+              count: country.count,
+              routes: [route.domain]
+            });
+          }
+        });
+      }
+    });
+
+    const totalRequests = Array.from(countryMap.values()).reduce((sum, data) => sum + data.count, 0);
+
+    return Array.from(countryMap.entries())
+      .map(([country, data]) => ({
+        country,
+        count: data.count,
+        percentage: totalRequests > 0 ? (data.count / totalRequests) * 100 : 0,
+        routes: data.routes
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [detailedStatistics]);
 
   return (
     <div className="statistics-tab">
@@ -171,18 +209,27 @@ export const StatisticsTab: React.FC = () => {
         </div>
       </div>
 
-      <div className="charts-container">
-        <div className="chart-section">
-          <h3>Request Distribution</h3>
-          <div id="geo-heatmap-chart" className="chart">
-            <p>Geographic heatmap chart will be rendered here</p>
-          </div>
-        </div>
+      {/* Geolocation Map */}
+      {aggregatedCountryData.length > 0 && (
+        <GeoMap
+          countryData={aggregatedCountryData}
+          title="Request Distribution by Country"
+          height={500}
+        />
+      )}
 
+      <div className="charts-container">
         <div className="chart-section">
           <h3>Response Time Distribution</h3>
           <div className="chart">
             <p>Response time chart will be rendered here</p>
+          </div>
+        </div>
+
+        <div className="chart-section">
+          <h3>Request Methods Distribution</h3>
+          <div className="chart">
+            <p>Request methods chart will be rendered here</p>
           </div>
         </div>
       </div>
