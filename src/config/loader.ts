@@ -259,7 +259,7 @@ export class ConfigLoader {
   static async loadMainConfig(configPath?: string): Promise<MainConfig> {
     // Check for command-line argument first, then environment variable, then default
     let configFile = configPath;
-    
+
     if (!configFile) {
       // Check for --config argument
       const configArgIndex = process.argv.indexOf('--config');
@@ -269,18 +269,23 @@ export class ConfigLoader {
         configFile = process.env.MAIN_CONFIG_FILE || './config/main.yaml';
       }
     }
-    
+
     try {
       logger.info(`Loading main configuration from ${configFile}`);
-      
+
+      // Resolve the main config file path
+      const resolvedPath = path.isAbsolute(configFile)
+        ? configFile
+        : path.resolve(process.cwd(), configFile);
+
       // Check if config file exists
-      const configExists = await fs.pathExists(configFile);
+      const configExists = await fs.pathExists(resolvedPath);
       if (!configExists) {
-        throw new Error(`Main configuration file not found: ${configFile}`);
+        throw new Error(`Main configuration file not found: ${resolvedPath}`);
       }
 
       // Read and parse YAML config
-      const configContent = await fs.readFile(configFile, 'utf8');
+      const configContent = await fs.readFile(resolvedPath, 'utf8');
       const rawConfig = parseYaml(configContent);
 
       // Validate main configuration
@@ -311,12 +316,12 @@ export class ConfigLoader {
   static async loadProxyConfig(proxyConfigPath: string): Promise<ServerConfig> {
     try {
       logger.info(`Loading proxy configuration from ${proxyConfigPath}`);
-      
+
       // Resolve the proxy config file path
-      const resolvedPath = path.isAbsolute(proxyConfigPath) 
-        ? proxyConfigPath 
+      const resolvedPath = path.isAbsolute(proxyConfigPath)
+        ? proxyConfigPath
         : path.resolve(process.cwd(), proxyConfigPath);
-      
+
       // Check if config file exists
       const configExists = await fs.pathExists(resolvedPath);
       if (!configExists) {
@@ -359,12 +364,12 @@ export class ConfigLoader {
   static async loadProcessConfig(processConfigPath: string): Promise<ProcessManagementConfig> {
     try {
       logger.info(`Loading process configuration from ${processConfigPath}`);
-      
+
       // Resolve the process config file path
-      const resolvedPath = path.isAbsolute(processConfigPath) 
-        ? processConfigPath 
+      const resolvedPath = path.isAbsolute(processConfigPath)
+        ? processConfigPath
         : path.resolve(process.cwd(), processConfigPath);
-      
+
       // Check if config file exists
       const configExists = await fs.pathExists(resolvedPath);
       if (!configExists) {
@@ -374,13 +379,13 @@ export class ConfigLoader {
       // Read and parse YAML config
       const configContent = await fs.readFile(resolvedPath, 'utf8');
       const processConfig = parseYaml(configContent);
-      
+
       // Validate process management configuration
       const { error: processError } = processManagementConfigSchema.validate(processConfig);
       if (processError) {
         throw new Error(`Process management configuration validation failed: ${processError.message}`);
       }
-      
+
       logger.info(`Loaded process management configuration from ${resolvedPath}`);
       return processConfig as ProcessManagementConfig;
     } catch (error) {
@@ -394,7 +399,7 @@ export class ConfigLoader {
     try {
       const mainConfig = await this.loadMainConfig();
       const proxyConfig = await this.loadProxyConfig(mainConfig.config.proxy);
-      
+
       // Merge process management config if it exists
       try {
         const processConfig = await this.loadProcessConfig(mainConfig.config.processes);
@@ -402,7 +407,7 @@ export class ConfigLoader {
       } catch (error) {
         logger.warn('Failed to load process management configuration, continuing without it');
       }
-      
+
       return proxyConfig;
     } catch (error) {
       logger.info('Main configuration not found, falling back to legacy single-file configuration');
@@ -412,18 +417,23 @@ export class ConfigLoader {
 
   private static async loadLegacyConfig(configPath?: string): Promise<ServerConfig> {
     const configFile = configPath || process.env.CONFIG_FILE || './config/proxy.yaml';
-    
+
     try {
       logger.info(`Loading legacy configuration from ${configFile}`);
-      
+
+      // Resolve the legacy config file path
+      const resolvedPath = path.isAbsolute(configFile)
+        ? configFile
+        : path.resolve(process.cwd(), configFile);
+
       // Check if config file exists
-      const configExists = await fs.pathExists(configFile);
+      const configExists = await fs.pathExists(resolvedPath);
       if (!configExists) {
-        throw new Error(`Configuration file not found: ${configFile}`);
+        throw new Error(`Configuration file not found: ${resolvedPath}`);
       }
 
       // Read and parse YAML config
-      const configContent = await fs.readFile(configFile, 'utf8');
+      const configContent = await fs.readFile(resolvedPath, 'utf8');
       const rawConfig = parseYaml(configContent);
 
       // Load process management configuration if specified
@@ -434,19 +444,19 @@ export class ConfigLoader {
           processConfigPath = rawConfig.processConfigFile;
         } else {
           // Resolve relative to the main config file directory
-          processConfigPath = path.resolve(path.dirname(configFile), rawConfig.processConfigFile);
+          processConfigPath = path.resolve(path.dirname(resolvedPath), rawConfig.processConfigFile);
         }
-        
+
         try {
           const processConfigContent = await fs.readFile(processConfigPath, 'utf8');
           const processConfig = parseYaml(processConfigContent);
-          
+
           // Validate process management configuration
           const { error: processError } = processManagementConfigSchema.validate(processConfig);
           if (processError) {
             throw new Error(`Process management configuration validation failed: ${processError.message}`);
           }
-          
+
           // Store process configuration in the main config for access by the process manager
           rawConfig.processManagement = processConfig;
           logger.info(`Loaded process management configuration from ${processConfigPath}`);
@@ -528,11 +538,11 @@ export class ConfigLoader {
       },
       security: {
         ...config.security,
-        rateLimitWindowMs: process.env.RATE_LIMIT_WINDOW_MS 
-          ? parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) 
+        rateLimitWindowMs: process.env.RATE_LIMIT_WINDOW_MS
+          ? parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10)
           : config.security?.rateLimitWindowMs,
-        rateLimitMaxRequests: process.env.RATE_LIMIT_MAX_REQUESTS 
-          ? parseInt(process.env.RATE_LIMIT_MAX_REQUESTS, 10) 
+        rateLimitMaxRequests: process.env.RATE_LIMIT_MAX_REQUESTS
+          ? parseInt(process.env.RATE_LIMIT_MAX_REQUESTS, 10)
           : config.security?.rateLimitMaxRequests,
       },
     };
@@ -613,7 +623,7 @@ export class ConfigLoader {
       },
     };
 
-        const yamlContent = `# Nginx-like Proxy Server Configuration
+    const yamlContent = `# Nginx-like Proxy Server Configuration
 # This file configures the reverse proxy server with automatic Let's Encrypt SSL certificates
 
 # HTTP and HTTPS ports
@@ -649,7 +659,7 @@ security:
 
     await fs.ensureDir(path.dirname(configPath));
     await fs.writeFile(configPath, yamlContent);
-    
+
     logger.info(`Example configuration created at ${configPath}`);
   }
 

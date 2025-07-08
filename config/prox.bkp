@@ -1,0 +1,199 @@
+# Nginx-like Proxy Server Configuration
+# This file configures the reverse proxy server with automatic Let's Encrypt SSL certificates
+
+# HTTP and HTTPS ports
+port: 4480
+httpsPort: 4443
+
+# Proxy routes configuration
+routes:
+  # New path-based routes from nginx.conf
+  # Serve Blackbaud App from /blackbaud subpath
+  - name: "Blackbaud App"
+    domain: "home.turpault.me"
+    type: "static"
+    path: "/blackbaud"
+    staticPath: "/Users/turpault/dev/blackbaud/build"
+    spaFallback: true
+    ssl: true
+    geolocationFilter:
+      enabled: true
+      mode: "allow"
+      cities: ["Saint-Sauveur", "Montreal"]
+      customResponse:
+        statusCode: 403
+        message: "Access from your location is not permitted"
+      logBlocked: true
+    requireAuth: true
+    # OAuth2 configuration for Blackbaud
+    oauth2:
+      enabled: true
+      provider: "blackbaud"
+      clientId: "${BLACKBAUD_CLIENT_ID}"
+      clientSecret: "${BLACKBAUD_CLIENT_SECRET}"
+      authorizationEndpoint: "https://app.blackbaud.com/oauth/authorize"
+      tokenEndpoint: "https://oauth2.sky.blackbaud.com/token"
+      callbackUrl: "https://home.turpault.me/blackbaud/callback"
+      subscriptionKey: "${BLACKBAUD_SUBSCRIPTION_KEY}"
+      subscriptionKeyHeader: "Bb-Api-Subscription-Key" 
+      scopes: ["read", "write"]
+      pkce: false
+      # additionalParams:
+        # response_type is automatically set by OAuth2Service
+    # Public paths that don't require authentication
+    publicPaths:
+      - "/oauth/callback"
+      - "/oauth/session"
+      - "/oauth/logout"
+      - "/login"
+      - "/static"
+    # Route-specific CSP configuration for Blackbaud OAuth
+    csp:
+      enabled: true
+      reportOnly: false
+      directives:
+        defaultSrc: ["'self'"]
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdnjs.cloudflare.com", "https://cdn.jsdelivr.net"]
+        styleSrc: ["'self'", "'unsafe-inline'"]
+        imgSrc: ["'self'", "data:", "https:", "blob:"]
+        connectSrc: 
+          - "'self'"
+          - "https://oauth2.sky.blackbaud.com"
+          - "https://app.blackbaud.com"
+          - "https://api.sky.blackbaud.com"
+          - "https://*.blackbaud.net"
+          - "https://fil-pcan01.app.blackbaud.net"
+          - "blob:"
+        fontSrc: ["'self'", "data:"]
+        objectSrc: ["'self'", "blob:"]
+        mediaSrc: ["'self'", "blob:"]
+        frameSrc: ["'self'", "blob:"]
+        workerSrc: ["'self'", "https://cdn.jsdelivr.net", "blob:"]
+
+
+  # CORS proxy for Blackbaud PDF downloads
+  - name: "Blackbaud PDF Proxy"
+    domain: "home.turpault.me"
+    type: "cors-forwarder"
+    path: "/blackbaud-proxy"
+    ssl: true
+    geolocationFilter:
+      enabled: true
+      mode: "allow"
+      cities: ["Saint-Sauveur", "Montreal"]
+      customResponse:
+        statusCode: 403
+        message: "Access from your location is not permitted"
+      logBlocked: true
+    cors:
+      enabled: true
+      origin: ["https://home.turpault.me", "http://localhost:3000", "http://localhost:3001"]
+      credentials: false
+      methods: ["GET", "HEAD", "OPTIONS"]
+      allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "Bb-Api-Subscription-Key"]
+      exposedHeaders: ["Content-Length", "Content-Type", "Content-Disposition", "Content-Range", "Accept-Ranges"]
+      maxAge: 3600  # 1 hour
+
+  # Proxy /bds to local port 8888 (rewrite path to root)
+  - name: "BDS Server"
+    domain: "home.turpault.me"
+    type: "proxy"
+    path: "/bds"
+    target: "http://localhost:8888"
+    ssl: true
+    rewrite:
+      "^/bds/": "/"
+    oauth2:
+      enabled: true
+      provider: "auth0"
+      clientId: "${AUTH0_CLIENT_ID}"
+      clientSecret: "${AUTH0_CLIENT_SECRET}"
+      authorizationEndpoint: "https://dev-botz5581rpqqwayb.us.auth0.com/authorize"
+      tokenEndpoint: "https://dev-botz5581rpqqwayb.us.auth0.com/oauth/token"
+      callbackUrl: "https://home.turpault.me/bds/callback"
+      scopes: ["read", "write"]
+      pkce: false
+      sessionEndpoint: "/session"      # Custom session endpoint
+      logoutEndpoint: "/logout"        # Custom logout endpoint
+      callbackRedirectEndpoint: "/bds/app2"        # Redirect to / after login
+      loginPath: "/login"
+    # Public paths that don't require authentication
+    publicPaths:
+      - "/static"
+
+  # Proxy /uscomics to local port 8890 (rewrite path to root)
+  - name: "US Comics Server"
+    domain: "home.turpault.me"
+    type: "proxy"
+    path: "/uscomics"
+    target: "http://localhost:8890"
+    ssl: true
+    rewrite:
+      "^/uscomics/": "/"
+
+  # Proxy /photos to local port 8892 (rewrite path to root)
+  - name: "Photos Server"
+    domain: "home.turpault.me"
+    type: "proxy"
+    path: "/photos"
+    target: "http://localhost:8892"
+    ssl: true
+    rewrite:
+      "^/photos/": "/"
+
+  # Redirect /app2 to /photos
+  - name: "App2 Redirect"
+    domain: "home.turpault.me"
+    type: "redirect"
+    path: "/app2"
+    redirectTo: "/photos"
+    ssl: true
+
+
+# Let's Encrypt configuration
+letsEncrypt:
+  email: "turpault@gmail.com"
+  staging: false
+  certDir: "./certificates"
+
+# Logging configuration
+logging:
+  level: "debug"
+  file: "./logs/proxy.log"
+
+# Security configuration
+security:
+  rateLimitWindowMs: 900000
+  rateLimitMaxRequests: 100
+  
+  # Global CSP configuration (applies to all routes unless overridden)
+  csp:
+    enabled: true
+    reportOnly: false
+    directives:
+      defaultSrc: ["'self'"]
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com", "https://cdn.jsdelivr.net"]
+      styleSrc: ["'self'", "'unsafe-inline'"]
+      imgSrc: ["'self'", "data:", "https:", "blob:"]
+      connectSrc: 
+        - "'self'"
+        - "https://oauth2.sky.blackbaud.com"
+        - "https://app.blackbaud.com"
+        - "https://api.sky.blackbaud.com"
+        - "https://*.blackbaud.net"
+        - "https://fil-pcan01.app.blackbaud.net"
+        - "blob:"
+      fontSrc: ["'self'", "data:"]
+      objectSrc: ["'self'", "blob:"]
+      mediaSrc: ["'self'", "blob:"]
+      frameSrc: ["'self'", "blob:"]
+      workerSrc: ["'self'", "https://cdn.jsdelivr.net", "blob:"]
+
+  # Route-specific CSP overrides (alternative to route-level CSP)
+  routeCSP:
+    - path: "/api"
+      csp:
+        enabled: true
+        directives:
+          defaultSrc: ["'self'"]
+          connectSrc: ["'self'", "https://api.example.com"]

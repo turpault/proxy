@@ -215,20 +215,28 @@ export class ConfigService extends EventEmitter {
       if (this.mainConfig) {
         // Watch main config and its referenced files
         const mainConfigFile = this.configPath || process.env.MAIN_CONFIG_FILE || './config/main.yaml';
-        const resolvedMainPath = path.resolve(mainConfigFile);
+        const resolvedMainPath = path.isAbsolute(mainConfigFile)
+          ? mainConfigFile
+          : path.resolve(process.cwd(), mainConfigFile);
         filesToWatch.push(resolvedMainPath);
 
         // Watch proxy config
-        const proxyConfigPath = path.resolve(this.mainConfig.config.proxy);
+        const proxyConfigPath = path.isAbsolute(this.mainConfig.config.proxy)
+          ? this.mainConfig.config.proxy
+          : path.resolve(process.cwd(), this.mainConfig.config.proxy);
         filesToWatch.push(proxyConfigPath);
 
         // Watch process config
-        const processConfigPath = path.resolve(this.mainConfig.config.processes);
+        const processConfigPath = path.isAbsolute(this.mainConfig.config.processes)
+          ? this.mainConfig.config.processes
+          : path.resolve(process.cwd(), this.mainConfig.config.processes);
         filesToWatch.push(processConfigPath);
       } else {
         // Watch legacy config
         const legacyConfigFile = this.configPath || process.env.CONFIG_FILE || './config/proxy.yaml';
-        const resolvedLegacyPath = path.resolve(legacyConfigFile);
+        const resolvedLegacyPath = path.isAbsolute(legacyConfigFile)
+          ? legacyConfigFile
+          : path.resolve(process.cwd(), legacyConfigFile);
         filesToWatch.push(resolvedLegacyPath);
       }
 
