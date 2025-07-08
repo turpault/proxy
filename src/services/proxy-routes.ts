@@ -1,5 +1,5 @@
 import express from 'express';
-import { ProxyRoute, ServerConfig } from '../types';
+import { ProxyRoute, ProxyConfig } from '../types';
 import { logger } from '../utils/logger';
 import { ClassicProxy } from './classic-proxy';
 import { CorsProxy } from './cors-proxy';
@@ -18,7 +18,7 @@ export class ProxyRoutes {
     this.tempDir = tempDir;
   }
 
-  setupRoutes(app: express.Application, config: ServerConfig): void {
+  setupRoutes(app: express.Application, config: ProxyConfig): void {
     // Set up routes based on configuration
     config.routes.forEach(route => {
       if (route.path) {
@@ -33,7 +33,7 @@ export class ProxyRoutes {
 
   private setupPathRoute(app: express.Application, route: ProxyRoute): void {
     const routePath = route.path!;
-    
+
     switch (route.type) {
       case 'static':
         this.setupStaticRoute(app, route, routePath);
@@ -90,16 +90,16 @@ export class ProxyRoutes {
     // Set up static file serving with statistics recording
     app.use(routePath, (req, res, next) => {
       const startTime = Date.now();
-      
+
       // Record statistics when response finishes
       res.on('finish', () => {
         const responseTime = Date.now() - startTime;
         this.recordRequestStats(req, route, route.staticPath!, responseTime, res.statusCode, 'static');
       });
-      
+
       next();
     });
-    
+
     // Use the StaticProxy to handle the request
     const config: ProxyRequestConfig = {
       route,
@@ -122,7 +122,7 @@ export class ProxyRoutes {
         }
       });
     });
-    
+
     logger.info(`Static route configured: ${routePath} -> ${route.staticPath}${route.spaFallback ? ' (with SPA fallback)' : ''}`);
   }
 
@@ -136,14 +136,14 @@ export class ProxyRoutes {
       logger.info(`[REDIRECT] ${req.method} ${req.originalUrl} -> ${route.redirectTo}`);
       const start = Date.now();
       const redirectUrl = route.redirectTo!;
-      
+
       // Record statistics when response finishes
       res.on('finish', () => {
         const duration = Date.now() - start;
         logger.info(`[REDIRECT] ${req.method} ${req.originalUrl} -> ${redirectUrl} [${res.statusCode}] (${duration}ms)`);
         this.recordRequestStats(req, route, redirectUrl, duration, res.statusCode, 'redirect');
       });
-      
+
       res.redirect(301, redirectUrl);
     });
 
@@ -162,14 +162,14 @@ export class ProxyRoutes {
         logger.info(`[REDIRECT] ${req.method} ${req.originalUrl} -> ${route.redirectTo}`);
         const start = Date.now();
         const redirectUrl = route.redirectTo!;
-        
+
         // Record statistics when response finishes
         res.on('finish', () => {
           const duration = Date.now() - start;
           logger.info(`[REDIRECT] ${req.method} ${req.originalUrl} -> ${redirectUrl} [${res.statusCode}] (${duration}ms)`);
           this.recordRequestStats(req, route, redirectUrl, duration, res.statusCode, 'redirect');
         });
-        
+
         res.redirect(301, redirectUrl);
       } else {
         next();
@@ -202,23 +202,23 @@ export class ProxyRoutes {
         logRequests: true,
         logErrors: true
       };
-      
+
       try {
         await classicProxy.handleProxyRequest(req, res, config);
-        
+
         // Record statistics after successful request
         const responseTime = Date.now() - startTime;
         this.recordRequestStats(req, route, route.target!, responseTime, res.statusCode, 'proxy');
       } catch (error) {
         logger.error(`[CLASSIC PROXY] Error in proxy request for ${routePath}`, error);
         this.handleProxyError(error as Error, req, res, `classic ${routePath}`, route.target!, route, true);
-        
+
         // Record statistics even for failed requests
         const responseTime = Date.now() - startTime;
         this.recordRequestStats(req, route, route.target!, responseTime, res.statusCode || 500, 'proxy');
       }
     };
-    
+
     app.use(routePath, proxy);
     logger.info(`Classic proxy route configured: ${routePath} -> ${route.target}`);
   }
@@ -245,7 +245,7 @@ export class ProxyRoutes {
         logRequests: true,
         logErrors: true
       };
-      
+
       try {
         await classicProxy.handleProxyRequest(req, res, config);
       } catch (error) {
@@ -253,7 +253,7 @@ export class ProxyRoutes {
         this.handleProxyError(error as Error, req, res, `classic ${route.domain}`, route.target!, route, true);
       }
     };
-    
+
     app.use((req, res, next) => {
       const host = req.get('host');
       if (host === route.domain || host === `www.${route.domain}`) {
@@ -271,7 +271,7 @@ export class ProxyRoutes {
 
     const proxy = async (req: express.Request, res: express.Response, next: express.NextFunction): Promise<void> => {
       const startTime = Date.now();
-      
+
       // Validate and decode target URL
       const encodedUrl = req.query.url;
       if (!encodedUrl || typeof encodedUrl !== 'string') {
@@ -303,9 +303,9 @@ export class ProxyRoutes {
         });
         return;
       }
-      
+
       logger.info(`[CORS FORWARDER] ${req.method} ${req.originalUrl} -> ${target}`);
-      
+
       try {
         const config: ProxyRequestConfig = {
           route,
@@ -317,20 +317,20 @@ export class ProxyRoutes {
           logErrors: true
         };
         await corsProxy.handleProxyRequest(req, res, config);
-        
+
         // Record statistics after successful request
         const responseTime = Date.now() - startTime;
         this.recordRequestStats(req, route, target, responseTime, res.statusCode, 'proxy');
       } catch (error) {
         logger.error(`[CORS FORWARDER] Error in proxy request for ${routePath}`, error);
         this.handleProxyError(error as Error, req, res, `cors-forwarder ${routePath}`, target, route, true);
-        
+
         // Record statistics even for failed requests
         const responseTime = Date.now() - startTime;
         this.recordRequestStats(req, route, target, responseTime, res.statusCode || 500, 'proxy');
       }
     };
-    
+
     if (route.cors) {
       app.use(routePath, corsProxy.createCorsMiddleware(route.cors));
     }
@@ -389,7 +389,7 @@ export class ProxyRoutes {
         this.handleProxyError(error as Error, req, res, `cors-forwarder ${route.domain}`, target, route, true);
       }
     };
-    
+
     app.use((req, res, next) => {
       const host = req.get('host');
       if (host === route.domain || host === `www.${route.domain}`) {
@@ -456,7 +456,7 @@ export class ProxyRoutes {
       const method = req.method;
       const routePath = route.path || route.domain || 'unknown';
       const domain = route.domain;
-      
+
       this.statisticsService.recordRequest(
         clientIP,
         geolocation,

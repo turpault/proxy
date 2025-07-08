@@ -6,7 +6,7 @@ import { logger } from '../utils/logger';
 import { WebSocketService } from './websocket';
 
 // Types for config and proxyServer are imported from their respective modules
-import { ServerConfig, MainConfig } from '../types';
+import { ProxyConfig, MainConfig } from '../types';
 import { configService } from './config-service';
 import { processManager } from './process-manager';
 import { statisticsService } from './statistics';
@@ -14,7 +14,7 @@ import { cacheService } from './cache';
 
 export function registerManagementEndpoints(
   managementApp: express.Application,
-  config: ServerConfig,
+  config: ProxyConfig,
   proxyServer: any, // Use ProxyServer type if available
   statisticsService: any,
   mainConfig?: MainConfig
@@ -249,10 +249,10 @@ export function registerManagementEndpoints(
   managementApp.post('/api/processes/:id/start', async (req, res) => {
     try {
       const { id } = req.params;
-      if (!config.processManagement?.processes[id]) {
+      const processConfig = configService.getProcessById(id);
+      if (!processConfig) {
         return res.status(404).json({ success: false, error: 'Process configuration not found' });
       }
-      const processConfig = config.processManagement.processes[id];
       const target = proxyServer.getTargetForProcess(id, processConfig);
       await processManager.startProcess(id, processConfig, target);
       logger.info(`Process ${id} started via management interface`);

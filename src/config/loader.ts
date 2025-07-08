@@ -2,7 +2,7 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import { parse as parseYaml } from 'yaml';
 import Joi from 'joi';
-import { ServerConfig, ProcessManagementConfig, MainConfig } from '../types';
+import { ProxyConfig, ProcessManagementConfig, MainConfig } from '../types';
 import { logger } from '../utils/logger';
 
 // CSP Directive validation schema
@@ -313,7 +313,7 @@ export class ConfigLoader {
     }
   }
 
-  static async loadProxyConfig(proxyConfigPath: string): Promise<ServerConfig> {
+  static async loadProxyConfig(proxyConfigPath: string): Promise<ProxyConfig> {
     try {
       logger.info(`Loading proxy configuration from ${proxyConfigPath}`);
 
@@ -354,7 +354,7 @@ export class ConfigLoader {
         letsEncryptStaging: value.letsEncrypt.staging,
       });
 
-      return value as ServerConfig;
+      return value as ProxyConfig;
     } catch (error) {
       logger.error(`Failed to load proxy configuration from ${proxyConfigPath}`, error);
       throw error;
@@ -394,20 +394,11 @@ export class ConfigLoader {
     }
   }
 
-  static async load(configPath?: string): Promise<ServerConfig> {
+  static async load(configPath?: string): Promise<ProxyConfig> {
     // Try to load main config first, fall back to legacy single-file config
     try {
       const mainConfig = await this.loadMainConfig();
       const proxyConfig = await this.loadProxyConfig(mainConfig.config.proxy);
-
-      // Merge process management config if it exists
-      try {
-        const processConfig = await this.loadProcessConfig(mainConfig.config.processes);
-        proxyConfig.processManagement = processConfig;
-      } catch (error) {
-        logger.warn('Failed to load process management configuration, continuing without it');
-      }
-
       return proxyConfig;
     } catch (error) {
       logger.info('Main configuration not found, falling back to legacy single-file configuration');
@@ -415,7 +406,7 @@ export class ConfigLoader {
     }
   }
 
-  private static async loadLegacyConfig(configPath?: string): Promise<ServerConfig> {
+  private static async loadLegacyConfig(configPath?: string): Promise<ProxyConfig> {
     const configFile = configPath || process.env.CONFIG_FILE || './config/proxy.yaml';
 
     try {
@@ -436,35 +427,7 @@ export class ConfigLoader {
       const configContent = await fs.readFile(resolvedPath, 'utf8');
       const rawConfig = parseYaml(configContent);
 
-      // Load process management configuration if specified
-      if (rawConfig.processConfigFile) {
-        // Resolve the process config file path more robustly
-        let processConfigPath: string;
-        if (path.isAbsolute(rawConfig.processConfigFile)) {
-          processConfigPath = rawConfig.processConfigFile;
-        } else {
-          // Resolve relative to the main config file directory
-          processConfigPath = path.resolve(path.dirname(resolvedPath), rawConfig.processConfigFile);
-        }
 
-        try {
-          const processConfigContent = await fs.readFile(processConfigPath, 'utf8');
-          const processConfig = parseYaml(processConfigContent);
-
-          // Validate process management configuration
-          const { error: processError } = processManagementConfigSchema.validate(processConfig);
-          if (processError) {
-            throw new Error(`Process management configuration validation failed: ${processError.message}`);
-          }
-
-          // Store process configuration in the main config for access by the process manager
-          rawConfig.processManagement = processConfig;
-          logger.info(`Loaded process management configuration from ${processConfigPath}`);
-        } catch (error) {
-          logger.warn(`Failed to load process management configuration from ${processConfigPath}: ${error}`);
-          // Continue without process management if the file doesn't exist or is invalid
-        }
-      }
 
       // Merge with environment variables
       const config = this.mergeWithEnv(rawConfig);
@@ -488,7 +451,7 @@ export class ConfigLoader {
         letsEncryptStaging: value.letsEncrypt.staging,
       });
 
-      return value as ServerConfig;
+      return value as ProxyConfig;
     } catch (error) {
       logger.error(`Failed to load configuration from ${configFile}`, error);
       throw error;

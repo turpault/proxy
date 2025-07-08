@@ -1,7 +1,7 @@
 import express from 'express';
 import http from 'http';
 import https from 'https';
-import { ServerConfig, MainConfig } from '../types';
+import { ProxyConfig, MainConfig } from '../types';
 import { logger } from '../utils/logger';
 import { cacheService, setCacheExpiration } from './cache';
 import { getStatisticsService } from './statistics';
@@ -21,14 +21,14 @@ export class ProxyServer implements WebSocketServiceInterface {
   private httpServer: http.Server | null = null;
   private httpsServer: https.Server | null = null;
   private managementServer: http.Server | null = null;
-  private config: ServerConfig;
+  private config: ProxyConfig;
   private mainConfig?: MainConfig;
   private proxyRoutes: ProxyRoutes;
   private proxyMiddleware: ProxyMiddleware;
   private proxyCertificates: ProxyCertificates;
   private statisticsService: any;
 
-  constructor(config: ServerConfig, mainConfig?: MainConfig) {
+  constructor(config: ProxyConfig, mainConfig?: MainConfig) {
     this.config = config;
     this.mainConfig = mainConfig;
     this.app = express();
@@ -248,7 +248,7 @@ export class ProxyServer implements WebSocketServiceInterface {
    */
   private getProcessesSync(): any[] {
     const processes = processManager.getProcessStatus();
-    const availableProcesses = this.config.processManagement?.processes || {};
+    const availableProcesses = configService.getProcesses() || {};
     // Ensure processes is an array
     const processesArray = Array.isArray(processes) ? processes : [];
     // Create a set of all process IDs (both configured and managed)
@@ -313,7 +313,7 @@ export class ProxyServer implements WebSocketServiceInterface {
   /**
    * Get the server configuration
    */
-  getConfig(): ServerConfig {
+  getConfig(): ProxyConfig {
     return this.config;
   }
 

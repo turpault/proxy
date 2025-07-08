@@ -2,34 +2,34 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
-import { CSPConfig, CSPDirectives, GeolocationFilter, ServerConfig } from '../types';
+import { CSPConfig, CSPDirectives, GeolocationFilter, ProxyConfig } from '../types';
 import { logger } from '../utils/logger';
 import { geolocationService, GeolocationInfo } from './geolocation';
 
 export class ProxyMiddleware {
-  setupMiddleware(app: express.Application, config: ServerConfig): void {
+  setupMiddleware(app: express.Application, config: ProxyConfig): void {
     // Basic middleware
     app.use(express.json({ limit: '10mb' }));
     app.use(express.urlencoded({ extended: true, limit: '10mb' }));
     app.use(cookieParser());
-    
+
     // Trust proxy headers
     app.set('trust proxy', true);
-    
+
     // Security middleware
     this.setupSecurityMiddleware(app, config);
-    
+
     // CORS middleware
     this.setupCorsMiddleware(app, config);
-    
+
     // Request logging middleware
     this.setupRequestLogging(app);
-    
+
     // Geolocation middleware
     this.setupGeolocationMiddleware(app, config);
   }
 
-  private setupSecurityMiddleware(app: express.Application, config: ServerConfig): void {
+  private setupSecurityMiddleware(app: express.Application, config: ProxyConfig): void {
     // Helmet for security headers
     app.use(helmet({
       contentSecurityPolicy: false, // We'll handle CSP per-route
@@ -51,17 +51,17 @@ export class ProxyMiddleware {
     app.use((req, res, next) => {
       // Remove X-Powered-By header
       res.removeHeader('X-Powered-By');
-      
+
       // Add custom security headers
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('X-Frame-Options', 'SAMEORIGIN');
       res.setHeader('X-XSS-Protection', '1; mode=block');
-      
+
       next();
     });
   }
 
-  private setupCorsMiddleware(app: express.Application, config: ServerConfig): void {
+  private setupCorsMiddleware(app: express.Application, config: ProxyConfig): void {
     // Global CORS configuration - use default values since ServerConfig doesn't have global CORS
     const globalCorsOptions = {
       origin: true,
@@ -82,15 +82,15 @@ export class ProxyMiddleware {
     });
   }
 
-  private setupGeolocationMiddleware(app: express.Application, config: ServerConfig): void {
+  private setupGeolocationMiddleware(app: express.Application, config: ProxyConfig): void {
     app.use(async (req, res, next) => {
       try {
         const clientIP = this.getClientIP(req);
         const geolocation = await geolocationService.getGeolocation(clientIP);
-        
+
         // Attach geolocation to request for later use
         (req as any).geolocation = geolocation;
-        
+
         // Check geolocation filters
         const filter = this.getGeolocationFilterForRequest(req);
         if (filter && this.shouldBlockRequest(geolocation, filter)) {
@@ -105,7 +105,7 @@ export class ProxyMiddleware {
             message: 'Access denied based on your location'
           });
         }
-        
+
         next();
       } catch (error) {
         logger.error('Error in geolocation middleware', error);
@@ -119,20 +119,20 @@ export class ProxyMiddleware {
     const xForwardedFor = req.headers['x-forwarded-for'] as string;
     const xRealIP = req.headers['x-real-ip'] as string;
     const xClientIP = req.headers['x-client-ip'] as string;
-    
+
     if (xForwardedFor) {
       // X-Forwarded-For can contain multiple IPs, first one is the original client
       return xForwardedFor.split(',')[0].trim();
     }
-    
+
     if (xRealIP) {
       return xRealIP;
     }
-    
+
     if (xClientIP) {
       return xClientIP;
     }
-    
+
     // Fall back to connection remote address or req.ip
     return req.ip || req.socket?.remoteAddress || 'unknown';
   }
@@ -153,12 +153,12 @@ export class ProxyMiddleware {
     if (!geolocation) {
       return clientIP;
     }
-    
+
     const parts = [];
     if (geolocation.city) parts.push(geolocation.city);
     if (geolocation.region) parts.push(geolocation.region);
     if (geolocation.country) parts.push(geolocation.country);
-    
+
     return parts.length > 0 ? `${clientIP} (${parts.join(', ')})` : clientIP;
   }
 
@@ -183,7 +183,7 @@ export class ProxyMiddleware {
     };
 
     const cspParts: string[] = [];
-    
+
     for (const [directive, sources] of Object.entries(directives)) {
       if (sources && Array.isArray(sources) && sources.length > 0) {
         cspParts.push(`${directive} ${sources.join(' ')}`);

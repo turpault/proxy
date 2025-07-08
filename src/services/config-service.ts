@@ -1,5 +1,5 @@
 import { ConfigLoader } from '../config/loader';
-import { ServerConfig, MainConfig, ProcessManagementConfig } from '../types';
+import { ProxyConfig, MainConfig, ProcessManagementConfig } from '../types';
 import { logger } from '../utils/logger';
 import * as fs from 'fs-extra';
 import * as path from 'path';
@@ -7,7 +7,7 @@ import { EventEmitter } from 'events';
 
 export class ConfigService extends EventEmitter {
   private static instance: ConfigService;
-  private serverConfig: ServerConfig | null = null;
+  private serverConfig: ProxyConfig | null = null;
   private mainConfig: MainConfig | null = null;
   private processConfig: ProcessManagementConfig | null = null;
   private configPath?: string;
@@ -43,7 +43,6 @@ export class ConfigService extends EventEmitter {
       // Load process management configuration if it exists
       try {
         this.processConfig = await ConfigLoader.loadProcessConfig(this.mainConfig.config.processes);
-        this.serverConfig.processManagement = this.processConfig;
       } catch (error) {
         logger.warn('Failed to load process management configuration, continuing without it');
       }
@@ -62,7 +61,7 @@ export class ConfigService extends EventEmitter {
   /**
    * Get the server configuration
    */
-  getServerConfig(): ServerConfig {
+  getServerConfig(): ProxyConfig {
     if (!this.serverConfig) {
       throw new Error('Configuration not initialized. Call initialize() first.');
     }

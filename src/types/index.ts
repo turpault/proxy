@@ -96,12 +96,11 @@ export interface GeolocationFilter {
   logBlocked?: boolean; // Whether to log blocked requests
 }
 
-export interface ServerConfig {
+export interface ProxyConfig {
   port: number;
   httpsPort: number;
   routes: ProxyRoute[];
   processConfigFile?: string;
-  processManagement?: ProcessManagementConfig;
   letsEncrypt: {
     email: string;
     staging: boolean;

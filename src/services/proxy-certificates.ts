@@ -2,16 +2,16 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import https from 'https';
 import express from 'express';
-import { CertificateInfo, ServerConfig } from '../types';
+import { CertificateInfo, ProxyConfig } from '../types';
 import { logger } from '../utils/logger';
 import { LetsEncryptService } from './letsencrypt';
 
 export class ProxyCertificates {
   private certificates: Map<string, CertificateInfo> = new Map();
   private letsEncryptService: LetsEncryptService;
-  private config: ServerConfig;
+  private config: ProxyConfig;
 
-  constructor(config: ServerConfig) {
+  constructor(config: ProxyConfig) {
     this.config = config;
     this.letsEncryptService = new LetsEncryptService({
       email: config.letsEncrypt.email,
@@ -24,25 +24,25 @@ export class ProxyCertificates {
   async setupCertificates(): Promise<void> {
     const domains = this.config.routes.map(route => route.domain);
     const uniqueDomains = [...new Set(domains)];
-    
+
     logger.info(`Setting up SSL certificates for ${uniqueDomains.length} domains: ${uniqueDomains.join(', ')}`);
-    
+
     // Create certificates directory if it doesn't exist
     await fs.ensureDir(this.config.letsEncrypt.certDir);
-    
+
     // Initialize Let's Encrypt service
     await this.letsEncryptService.initialize();
-    
+
     // Set up certificates for each domain
     for (const domain of uniqueDomains) {
       if (this.config.routes.find(route => route.domain === domain)?.ssl !== false) { // Default to SSL unless explicitly disabled
         await this.setupCertificateForDomain(domain);
       }
     }
-    
+
     // Set up certificate renewal
     this.setupCertificateRenewal();
-    
+
     const validCertificates = Array.from(this.certificates.values()).filter(cert => cert.isValid);
     logger.info(`SSL certificates setup complete. Loaded ${validCertificates.length} valid certificates: ${validCertificates.map(cert => cert.domain).join(', ')}`);
   }
@@ -50,10 +50,10 @@ export class ProxyCertificates {
   private async setupCertificateForDomain(domain: string): Promise<void> {
     try {
       logger.debug(`Checking certificate for domain: ${domain}`);
-      
+
       // Check if certificate already exists and is valid
       const existingCertInfo = await this.letsEncryptService.getCertificateInfo(domain);
-      
+
       if (existingCertInfo && existingCertInfo.isValid) {
         this.certificates.set(domain, existingCertInfo);
         logger.info(`Using existing certificate for ${domain}`, {
@@ -63,7 +63,7 @@ export class ProxyCertificates {
         });
         return;
       }
-      
+
       // Check if certificate needs renewal
       if (existingCertInfo && await this.letsEncryptService.shouldRenewCertificate(existingCertInfo)) {
         logger.info(`Renewing certificate for ${domain}`);
@@ -78,11 +78,11 @@ export class ProxyCertificates {
           return;
         }
       }
-      
+
       // Generate new certificate
       logger.info(`Generating new certificate for ${domain}...`);
       const certInfo = await this.letsEncryptService.obtainCertificate(domain);
-      
+
       if (certInfo && certInfo.isValid) {
         this.certificates.set(domain, certInfo);
         logger.info(`Certificate generated successfully for ${domain}`, {
@@ -102,10 +102,10 @@ export class ProxyCertificates {
     // Set up daily certificate renewal check
     setInterval(async () => {
       logger.debug('Running daily certificate renewal check...');
-      
+
       for (const [domain, certInfo] of this.certificates.entries()) {
         const shouldRenew = await this.letsEncryptService.shouldRenewCertificate(certInfo);
-        
+
         if (shouldRenew) {
           logger.info(`Certificate for ${domain} needs renewal, renewing...`);
           try {
@@ -118,7 +118,7 @@ export class ProxyCertificates {
         }
       }
     }, 24 * 60 * 60 * 1000); // Check every 24 hours
-    
+
     logger.info('Certificate renewal check scheduled (every 24 hours)');
   }
 
@@ -142,7 +142,7 @@ export class ProxyCertificates {
     const httpsOptions: https.ServerOptions = {
       // Use the first valid certificate as default
     };
-    
+
     // Use the first valid certificate as default
     const firstCert = validCertificates[0];
     if (firstCert) {
@@ -150,19 +150,19 @@ export class ProxyCertificates {
       httpsOptions.key = fs.readFileSync(firstCert.keyPath, 'utf8');
       logger.debug(`Using default certificate for domain: ${firstCert.domain}`);
     }
-    
+
     const server = https.createServer(httpsOptions, app);
-    
+
     // Set up SNI (Server Name Indication) for multiple certificates
     server.addListener('SNICallback', (servername, cb) => {
       logger.debug(`SNI request: ${servername}`);
       const certInfo = this.getCertificate(servername);
-      
+
       if (certInfo && certInfo.isValid) {
         try {
           const cert = fs.readFileSync(certInfo.certPath, 'utf8');
           const key = fs.readFileSync(certInfo.keyPath, 'utf8');
-          
+
           logger.debug(`Loading certificate for SNI request: ${servername}`);
           cb(null, {
             cert,
@@ -177,7 +177,7 @@ export class ProxyCertificates {
         cb(new Error(`No valid certificate found for ${servername}`));
       }
     });
-    
+
     return server;
   }
 } 

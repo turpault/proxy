@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs-extra';
 import { watch } from 'fs';
 import { logger } from '../utils/logger';
-import { ProcessConfig, ProcessManagementConfig, ServerConfig } from '../types';
+import { ProcessConfig, ProcessManagementConfig, ProxyConfig } from '../types';
 import { configService } from './config-service';
 import axios from 'axios';
 import { ProcessScheduler } from './process-scheduler';
@@ -61,7 +61,7 @@ export class ProcessManager {
   private processes: Map<string, ManagedProcess> = new Map();
   private healthCheckIntervals: Map<string, NodeJS.Timeout> = new Map();
   private isShuttingDown = false;
-  private config: ServerConfig | null = null;
+  private config: ProxyConfig | null = null;
   private fileWatcher: fs.FSWatcher | null = null;
   private reinitializeTimeout: NodeJS.Timeout | null = null;
 
@@ -99,7 +99,7 @@ export class ProcessManager {
   /**
    * Initialize with server configuration
    */
-  public initialize(config: ServerConfig): void {
+  public initialize(config: ProxyConfig): void {
     this.config = config;
 
     // Initialize schedules if process management config is available
@@ -231,11 +231,6 @@ export class ProcessManager {
 
     // Use the ProcessManager's updateConfiguration method
     await this.updateConfiguration(newConfig, targetResolver);
-
-    // Update the local config reference
-    if (this.config) {
-      this.config.processManagement = newConfig;
-    }
 
     logger.info('Process configuration update complete');
   }
@@ -1653,11 +1648,6 @@ export class ProcessManager {
    */
   private async handleConfigUpdate(newConfigs: any): Promise<void> {
     try {
-      // Update internal configuration reference
-      if (this.config) {
-        this.config.processManagement = newConfigs.processConfig;
-      }
-
       // Update process management configuration
       if (newConfigs.processConfig) {
         await this.updateConfiguration(newConfigs.processConfig);
