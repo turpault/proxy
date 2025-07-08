@@ -1,0 +1,21 @@
+{
+  "name": "proxy-management-console",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun --hot src/main.tsx",
+    "build": "bun build src/main.tsx --outdir dist --target browser --minify --sourcemap",
+    "build:dev": "bun build src/main.tsx --outdir dist --target browser --sourcemap",
+    "type-check": "bunx tsc --noEmit",
+    "serve": "bun --hot dist/main.js"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "typescript": "^5.0.0"
+  }
+}

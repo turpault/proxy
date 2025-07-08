@@ -1,7 +1,5 @@
 import * as fs from 'fs-extra';
 import * as path from 'path';
-import https from 'https';
-import express from 'express';
 import { CertificateInfo, ProxyConfig } from '../types';
 import { logger } from '../utils/logger';
 import { LetsEncryptService } from './letsencrypt';
@@ -130,54 +128,20 @@ export class ProxyCertificates {
     return new Map(this.certificates);
   }
 
-  async startHttpsServer(app: express.Application): Promise<https.Server> {
-    // Verify we have valid certificates before starting
-    const validCertificates = Array.from(this.certificates.values()).filter(cert => cert.isValid);
-    if (validCertificates.length === 0) {
-      throw new Error('No valid certificates available for HTTPS server');
+  /**
+   * Returns Bun-compatible TLS options for a given domain, or null if not available.
+   * Usage: Bun.serve({ tls: proxyCertificates.getBunTLSOptions(domain) })
+   */
+  getBunTLSOptions(domain: string): { key: string; cert: string } | null {
+    const certInfo = this.getCertificate(domain);
+    if (!certInfo || !certInfo.isValid) return null;
+    try {
+      const cert = fs.readFileSync(certInfo.certPath, 'utf8');
+      const key = fs.readFileSync(certInfo.keyPath, 'utf8');
+      return { key, cert };
+    } catch (error) {
+      logger.error(`Failed to read certificate files for ${domain}`, error);
+      return null;
     }
-
-    logger.info(`Starting HTTPS server with ${validCertificates.length} certificates for domains: ${Array.from(this.certificates.keys()).join(', ')}`);
-
-    const httpsOptions: https.ServerOptions = {
-      // Use the first valid certificate as default
-    };
-
-    // Use the first valid certificate as default
-    const firstCert = validCertificates[0];
-    if (firstCert) {
-      httpsOptions.cert = fs.readFileSync(firstCert.certPath, 'utf8');
-      httpsOptions.key = fs.readFileSync(firstCert.keyPath, 'utf8');
-      logger.debug(`Using default certificate for domain: ${firstCert.domain}`);
-    }
-
-    const server = https.createServer(httpsOptions, app);
-
-    // Set up SNI (Server Name Indication) for multiple certificates
-    server.addListener('SNICallback', (servername, cb) => {
-      logger.debug(`SNI request: ${servername}`);
-      const certInfo = this.getCertificate(servername);
-
-      if (certInfo && certInfo.isValid) {
-        try {
-          const cert = fs.readFileSync(certInfo.certPath, 'utf8');
-          const key = fs.readFileSync(certInfo.keyPath, 'utf8');
-
-          logger.debug(`Loading certificate for SNI request: ${servername}`);
-          cb(null, {
-            cert,
-            key
-          });
-        } catch (error) {
-          logger.error(`Error loading certificate for ${servername}`, error);
-          cb(error);
-        }
-      } else {
-        logger.warn(`No valid certificate found for SNI request: ${servername}`);
-        cb(new Error(`No valid certificate found for ${servername}`));
-      }
-    });
-
-    return server;
   }
 } 

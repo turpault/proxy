@@ -1,36 +1,37 @@
 import { GeolocationService } from '../geolocation';
+import { test, describe, expect, beforeEach, jest } from 'bun:test';
 
-// Mock geoip-lite module
-jest.mock('geoip-lite', () => ({
-  lookup: jest.fn(),
+// Local mock for geoip-lite
+const mockLookup = jest.fn();
+const geoip = {
+  lookup: mockLookup,
   startWatchingDataUpdate: jest.fn(),
-}));
-
-import * as geoip from 'geoip-lite';
+};
 
 describe('GeolocationService', () => {
   let geolocationService: GeolocationService;
-  const mockLookup = geoip.lookup as jest.MockedFunction<typeof geoip.lookup>;
 
   beforeEach(() => {
     jest.clearAllMocks();
     // Create a new instance for each test to avoid cache interference
     geolocationService = new GeolocationService();
+    // @ts-ignore - override the imported geoip-lite with our mock
+    (geolocationService as any).geoip = geoip;
   });
 
   describe('getGeolocation', () => {
-    it('should return geolocation data for valid public IP', () => {
-              const mockGeoData = {
-          range: [134744064, 134744319] as [number, number],
-          country: 'US',
-          region: 'CA',
-          eu: '0' as '0' | '1',
-          timezone: 'America/Los_Angeles',
-          city: 'Los Angeles',
-          ll: [34.0522, -118.2437] as [number, number],
-          metro: 803,
-          area: 1000,
-        };
+    test('should return geolocation data for valid public IP', () => {
+      const mockGeoData = {
+        range: [134744064, 134744319] as [number, number],
+        country: 'US',
+        region: 'CA',
+        eu: '0' as '0' | '1',
+        timezone: 'America/Los_Angeles',
+        city: 'Los Angeles',
+        ll: [34.0522, -118.2437] as [number, number],
+        metro: 803,
+        area: 1000,
+      };
 
       mockLookup.mockReturnValue(mockGeoData);
 
@@ -47,7 +48,7 @@ describe('GeolocationService', () => {
       });
     });
 
-    it('should return local info for private IP addresses', () => {
+    test('should return local info for private IP addresses', () => {
       const privateIPs = ['192.168.1.1', '10.0.0.1', '172.16.0.1', '127.0.0.1'];
 
       privateIPs.forEach(ip => {
@@ -65,7 +66,7 @@ describe('GeolocationService', () => {
       expect(mockLookup).not.toHaveBeenCalled();
     });
 
-    it('should return local info for IPv6 private addresses', () => {
+    test('should return local info for IPv6 private addresses', () => {
       const privateIPv6s = ['::1', 'fc00::1', 'fd00::1', 'fe80::1'];
 
       privateIPv6s.forEach(ip => {
@@ -82,7 +83,7 @@ describe('GeolocationService', () => {
       expect(mockLookup).not.toHaveBeenCalled();
     });
 
-    it('should return local info for localhost and unknown IPs', () => {
+    test('should return local info for localhost and unknown IPs', () => {
       const localIPs = ['unknown', '127.0.0.1', '::1'];
 
       localIPs.forEach(ip => {
@@ -97,7 +98,7 @@ describe('GeolocationService', () => {
       });
     });
 
-    it('should return null when geoip lookup returns null', () => {
+    test('should return null when geoip lookup returns null', () => {
       mockLookup.mockReturnValue(null);
 
       const result = geolocationService.getGeolocation('8.8.8.8');
@@ -106,7 +107,7 @@ describe('GeolocationService', () => {
       expect(mockLookup).toHaveBeenCalledWith('8.8.8.8');
     });
 
-    it('should handle geoip lookup errors gracefully', () => {
+    test('should handle geoip lookup errors gracefully', () => {
       mockLookup.mockImplementation(() => {
         throw new Error('GeoIP lookup failed');
       });
@@ -117,7 +118,7 @@ describe('GeolocationService', () => {
       expect(mockLookup).toHaveBeenCalledWith('8.8.8.8');
     });
 
-    it('should handle partial geoip data', () => {
+    test('should handle partial geoip data', () => {
       const partialGeoData = {
         range: [134744064, 134744319] as [number, number],
         country: 'US',
@@ -147,7 +148,7 @@ describe('GeolocationService', () => {
   });
 
   describe('caching', () => {
-    it('should cache geolocation results', () => {
+    test('should cache geolocation results', () => {
       const mockGeoData = {
         range: [134744064, 134744319] as [number, number],
         country: 'US',
@@ -172,7 +173,7 @@ describe('GeolocationService', () => {
       expect(mockLookup).toHaveBeenCalledTimes(1);
     });
 
-    it('should cache null results', () => {
+    test('should cache null results', () => {
       mockLookup.mockReturnValue(null);
 
       // First call
@@ -186,7 +187,7 @@ describe('GeolocationService', () => {
       expect(mockLookup).toHaveBeenCalledTimes(1);
     });
 
-    it('should return cache statistics', () => {
+    test('should return cache statistics', () => {
       const stats = geolocationService.getCacheStats();
 
       expect(stats).toEqual({
@@ -197,7 +198,7 @@ describe('GeolocationService', () => {
   });
 
   describe('getInstance', () => {
-    it('should return the same instance (singleton)', () => {
+    test('should return the same instance (singleton)', () => {
       const instance1 = GeolocationService.getInstance();
       const instance2 = GeolocationService.getInstance();
 

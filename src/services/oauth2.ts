@@ -1,8 +1,8 @@
-import express from 'express';
 import axios from 'axios';
 import * as crypto from 'crypto';
 import { OAuth2Config, OAuth2TokenResponse, OAuth2Session } from '../types';
 import { logger } from '../utils/logger';
+import { BunRequestContext } from './bun-middleware';
 
 export class OAuth2Service {
   private sessions: Map<string, OAuth2Session> = new Map();
@@ -19,10 +19,10 @@ export class OAuth2Service {
     // Create a unique identifier based on provider and baseUrl
     const routeIdentifier = baseUrl ? baseUrl.replace(/[^a-zA-Z0-9]/g, '_') : 'default';
     const providerIdentifier = config.provider.replace(/[^a-zA-Z0-9]/g, '_');
-    
+
     // Generate a hash of the client ID to make it unique but not expose the full client ID
     const clientIdHash = crypto.createHash('sha256').update(config.clientId).digest('hex').substring(0, 8);
-    
+
     return `oauth2_${providerIdentifier}_${routeIdentifier}_${clientIdHash}`;
   }
 
@@ -38,7 +38,7 @@ export class OAuth2Service {
       .createHash('sha256')
       .update(codeVerifier)
       .digest('base64url');
-    
+
     return { codeVerifier, codeChallenge };
   }
 
@@ -51,10 +51,10 @@ export class OAuth2Service {
         hasSubscriptionKey: !!config.subscriptionKey,
         subscriptionKeyHeader: config.subscriptionKeyHeader,
       });
-      
+
       throw new Error(`Subscription key provided but no header name specified for provider ${config.provider}.`);
     }
-    
+
     // Log subscription key configuration for debugging
     if (config.subscriptionKey) {
       logger.info(`OAuth2 subscription key configured for provider ${config.provider}`, {
@@ -69,9 +69,9 @@ export class OAuth2Service {
   buildAuthorizationUrl(config: OAuth2Config): { url: string; state: string } {
     // Validate configuration first
     this.validateConfig(config);
-    
+
     const state = this.generateState();
-    
+
     // Store state for validation
     this.states.set(state, {
       config,
@@ -115,7 +115,7 @@ export class OAuth2Service {
     }
 
     const url = `${config.authorizationEndpoint}?${params.toString()}`;
-    
+
     logger.info(`OAuth2 authorization URL generated for ${config.provider}`, {
       provider: config.provider,
       clientId: config.clientId,
@@ -142,7 +142,7 @@ export class OAuth2Service {
       }
 
       const stateConfig = stateData.config;
-      
+
       // Validate configuration
       this.validateConfig(stateConfig);
 
@@ -198,51 +198,36 @@ export class OAuth2Service {
       // Create session
       const session: OAuth2Session = {
         accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
         tokenType: tokens.token_type,
         scope: tokens.scope,
-        expiresAt: tokens.expires_in 
-          ? new Date(Date.now() + tokens.expires_in * 1000)
-          : undefined,
+        refreshToken: tokens.refresh_token,
+        expiresAt: tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000) : undefined,
       };
 
       // Store session
       this.sessions.set(sessionId, session);
 
-      logger.info(`OAuth2 authentication successful`, {
+      logger.info(`OAuth2 session created successfully`, {
         provider: stateConfig.provider,
         sessionId,
-        tokenType: tokens.token_type,
-        expiresIn: tokens.expires_in,
+        expiresAt: session.expiresAt?.toISOString(),
       });
 
-      // Use custom redirect endpoint from config if provided, otherwise default to '/'
-      const redirectEndpoint = config.callbackRedirectEndpoint || '/';
-
-      return { 
-        success: true, 
-        redirectUrl: redirectEndpoint
-      };
-
-    } catch (error: any) {
-      logger.error('OAuth2 token exchange failed', {
-        error: error.message,
-        response: error.response?.data,
+      return { success: true, redirectUrl: stateConfig.callbackRedirectEndpoint || '/' };
+    } catch (error) {
+      logger.error('OAuth2 callback failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        provider: config.provider,
       });
 
-      return { 
-        success: false, 
-        error: `Token exchange failed: ${error.message}` 
-      };
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
 
   // Check if session is authenticated
   isAuthenticated(sessionId: string): boolean {
     const session = this.sessions.get(sessionId);
-    if (!session) {
-      return false;
-    }
+    if (!session) return false;
 
     // Check if token is expired
     if (session.expiresAt && session.expiresAt < new Date()) {
@@ -260,26 +245,23 @@ export class OAuth2Service {
 
   // Refresh access token
   async refreshToken(
-    sessionId: string, 
+    sessionId: string,
     config: OAuth2Config
   ): Promise<boolean> {
-    // Validate configuration
-    this.validateConfig(config);
-    
     const session = this.sessions.get(sessionId);
     if (!session?.refreshToken) {
       return false;
     }
 
     try {
-      const tokenParams = new URLSearchParams({
+      const tokenParams: Record<string, string> = {
         grant_type: 'refresh_token',
         client_id: config.clientId,
         client_secret: config.clientSecret,
         refresh_token: session.refreshToken,
-      });
+      };
 
-      const refreshHeaders: Record<string, string> = {
+      const headers: Record<string, string> = {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Accept': 'application/json',
       };
@@ -287,41 +269,42 @@ export class OAuth2Service {
       // Add subscription key header if configured
       if (config.subscriptionKey) {
         const headerName = config.subscriptionKeyHeader!;
-        refreshHeaders[headerName] = config.subscriptionKey;
+        headers[headerName] = config.subscriptionKey;
       }
 
       const tokenResponse = await axios.post<OAuth2TokenResponse>(
         config.tokenEndpoint,
-        tokenParams,
+        new URLSearchParams(tokenParams),
         {
-          headers: refreshHeaders,
+          headers,
           timeout: 30000,
         }
       );
 
       const tokens = tokenResponse.data;
 
-      // Update session with new tokens
-      session.accessToken = tokens.access_token;
-      if (tokens.refresh_token) {
-        session.refreshToken = tokens.refresh_token;
-      }
-      session.expiresAt = tokens.expires_in 
-        ? new Date(Date.now() + tokens.expires_in * 1000)
-        : undefined;
+      // Update session
+      const updatedSession: OAuth2Session = {
+        accessToken: tokens.access_token,
+        tokenType: tokens.token_type,
+        scope: tokens.scope,
+        refreshToken: tokens.refresh_token || session.refreshToken,
+        expiresAt: tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000) : undefined,
+      };
 
-      this.sessions.set(sessionId, session);
+      this.sessions.set(sessionId, updatedSession);
 
-      logger.info('OAuth2 token refreshed successfully', {
+      logger.info(`OAuth2 token refreshed successfully`, {
         provider: config.provider,
         sessionId,
+        expiresAt: updatedSession.expiresAt?.toISOString(),
       });
 
       return true;
-
-    } catch (error: any) {
+    } catch (error) {
       logger.error('OAuth2 token refresh failed', {
-        error: error.message,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        provider: config.provider,
         sessionId,
       });
 
@@ -350,34 +333,52 @@ export class OAuth2Service {
     }
   }
 
-  // Get OAuth2 middleware for Express
-  createMiddleware(config: OAuth2Config, publicPaths: string[] = []): express.RequestHandler {
+  // Parse cookies from request headers
+  private parseCookies(cookieHeader: string | undefined): Record<string, string> {
+    const cookies: Record<string, string> = {};
+    if (!cookieHeader) return cookies;
+
+    cookieHeader.split(';').forEach(cookie => {
+      const [name, value] = cookie.trim().split('=');
+      if (name && value) {
+        cookies[name] = decodeURIComponent(value);
+      }
+    });
+
+    return cookies;
+  }
+
+  // Create Bun-native middleware function
+  createBunMiddleware(config: OAuth2Config, publicPaths: string[] = []): (requestContext: BunRequestContext) => Promise<Response | null> {
     // Validate configuration when middleware is created
     this.validateConfig(config);
-    
+
     // Get endpoint paths from config with defaults
     const sessionEndpoint = config.sessionEndpoint || '/oauth/session';
     const logoutEndpoint = config.logoutEndpoint || '/oauth/logout';
     const loginPath = config.loginPath || '/oauth/login';
-    
-    return (req, res, next) => {
+
+    return async (requestContext: BunRequestContext) => {
       // Generate unique cookie name for this route
-      const cookieName = this.generateCookieName(config, req.baseUrl);
-      
+      const cookieName = this.generateCookieName(config, requestContext.pathname);
+
+      // Parse cookies from headers
+      const cookies = this.parseCookies(requestContext.headers['cookie']);
+
       // Add debug logging
-      logger.info(`[OAUTH2] ${req.method} ${req.originalUrl} - path: ${req.path} - baseUrl: ${req.baseUrl} - cookie: ${cookieName}`);
-      
+      logger.info(`[OAUTH2] ${requestContext.method} ${requestContext.originalUrl} - path: ${requestContext.pathname} - cookie: ${cookieName}`);
+
       // Handle session endpoint
-      if (req.path === sessionEndpoint) {
+      if (requestContext.pathname === sessionEndpoint) {
         // Get session ID from cookie
-        const sessionId = req.cookies?.[cookieName];
-        
+        const sessionId = cookies[cookieName];
+
         if (sessionId && this.isAuthenticated(sessionId)) {
           const session = this.getSession(sessionId);
           const now = new Date();
           const isExpired = session?.expiresAt && session.expiresAt < now;
-          
-          return res.json({
+
+          return new Response(JSON.stringify({
             authenticated: true,
             session: {
               accessToken: session?.accessToken,
@@ -392,142 +393,173 @@ export class OAuth2Service {
             subscriptionKey: config.subscriptionKey,
             subscriptionKeyHeader: config.subscriptionKeyHeader,
             timestamp: now.toISOString()
+          }), {
+            headers: { 'Content-Type': 'application/json' }
           });
         } else {
-          return res.json({
+          return new Response(JSON.stringify({
             authenticated: false,
             provider: config.provider,
             subscriptionKey: config.subscriptionKey,
             subscriptionKeyHeader: config.subscriptionKeyHeader,
             timestamp: new Date().toISOString()
+          }), {
+            headers: { 'Content-Type': 'application/json' }
           });
         }
       }
-      
+
       // Handle logout endpoint
-      if (req.path === logoutEndpoint) {
-        const sessionId = req.cookies?.[cookieName];
+      if (requestContext.pathname === logoutEndpoint) {
+        const sessionId = cookies[cookieName];
         if (sessionId) {
           this.logout(sessionId);
-          res.clearCookie(cookieName);
         }
-        return res.json({
+
+        const response = new Response(JSON.stringify({
           success: true,
           message: 'Logged out successfully'
+        }), {
+          headers: { 'Content-Type': 'application/json' }
         });
+
+        // Clear cookie
+        response.headers.set('Set-Cookie', `${cookieName}=; HttpOnly; Path=/; Max-Age=0`);
+
+        return response;
       }
 
       // Handle login endpoint - initiates OAuth2 flow
-      if (req.path === loginPath) {
+      if (requestContext.pathname === loginPath) {
         // Get session ID from cookie or create new one
-        let sessionId = req.cookies?.[cookieName];
+        let sessionId = cookies[cookieName];
         if (!sessionId) {
           sessionId = crypto.randomUUID();
-          res.cookie(cookieName, sessionId, {
-            httpOnly: true,
-            secure: req.secure,
-            sameSite: 'lax',
-            maxAge: 24 * 60 * 60 * 1000, // 24 hours
-          });
         }
 
         // Check if already authenticated
         if (this.isAuthenticated(sessionId)) {
           // If already authenticated, redirect to the callback redirect endpoint or root
           const redirectEndpoint = config.callbackRedirectEndpoint || '/';
-          return res.redirect(redirectEndpoint);
+          const response = new Response(null, { status: 302 });
+          response.headers.set('Location', redirectEndpoint);
+          response.headers.set('Set-Cookie', `${cookieName}=${sessionId}; HttpOnly; Path=/; Max-Age=${24 * 60 * 60}`);
+          return response;
         }
 
         // Redirect to OAuth2 authorization
         const { url } = this.buildAuthorizationUrl(config);
-        return res.redirect(url);
+        const response = new Response(null, { status: 302 });
+        response.headers.set('Location', url);
+        response.headers.set('Set-Cookie', `${cookieName}=${sessionId}; HttpOnly; Path=/; Max-Age=${24 * 60 * 60}`);
+        return response;
       }
-      
+
       // Skip authentication for other public paths
-      const isPublicPath = publicPaths.some(path => 
-        req.path.startsWith(path) || req.path === path
+      const isPublicPath = publicPaths.some(path =>
+        requestContext.pathname.startsWith(path) || requestContext.pathname === path
       );
 
       if (isPublicPath) {
-        return next();
+        return null; // Continue to next handler
       }
 
       // Get session ID from cookie or create new one
-      let sessionId = req.cookies?.[cookieName];
+      let sessionId = cookies[cookieName];
       if (!sessionId) {
         sessionId = crypto.randomUUID();
-        res.cookie(cookieName, sessionId, {
-          httpOnly: true,
-          secure: req.secure,
-          sameSite: 'lax',
-          maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        });
       }
 
       // Check if authenticated
       if (this.isAuthenticated(sessionId)) {
-        // Add session data to request
-        (req as any).oauth2Session = this.getSession(sessionId);
-        return next();
+        // Add session data to request context
+        (requestContext as any).oauth2Session = this.getSession(sessionId);
+        return null; // Continue to next handler
       }
 
       // Handle OAuth2 callback (both success and error cases)
       const callbackPath = new URL(config.callbackUrl).pathname;
-      const fullRequestPath = req.baseUrl + req.path;
-      if (fullRequestPath === callbackPath) {
+      if (requestContext.pathname === callbackPath) {
         // Handle OAuth2 error responses
-        if (req.query.error) {
-          logger.error(`OAuth2 authorization error: ${req.query.error}`, {
-            error: req.query.error,
-            errorDescription: req.query.error_description,
+        if (requestContext.query.error) {
+          logger.error(`OAuth2 authorization error: ${requestContext.query.error}`, {
+            error: requestContext.query.error,
+            errorDescription: requestContext.query.error_description,
             provider: config.provider,
           });
-          
-          // Clear session and redirect with error
-          res.clearCookie(cookieName);
-          return res.status(400).send(`
+
+          const response = new Response(`
             <h1>OAuth2 Authorization Failed</h1>
-            <p><strong>Error:</strong> ${req.query.error}</p>
-            <p><strong>Description:</strong> ${req.query.error_description || 'No description provided'}</p>
+            <p><strong>Error:</strong> ${requestContext.query.error}</p>
+            <p><strong>Description:</strong> ${requestContext.query.error_description || 'No description provided'}</p>
             <p><a href="${loginPath}">Try again</a></p>
-          `);
+          `, {
+            status: 400,
+            headers: { 'Content-Type': 'text/html' }
+          });
+
+          // Clear cookie
+          response.headers.set('Set-Cookie', `${cookieName}=; HttpOnly; Path=/; Max-Age=0`);
+
+          return response;
         }
 
         // Handle successful authorization with code
-        if (req.query.code && req.query.state) {
-          return this.handleCallback(
-            req.query.code as string,
-            req.query.state as string,
+        if (requestContext.query.code && requestContext.query.state) {
+          const result = await this.handleCallback(
+            requestContext.query.code as string,
+            requestContext.query.state as string,
             sessionId,
             config
-          ).then(result => {
-            if (result.success) {
-              // Use the redirect endpoint from the result and make it relative to baseUrl
-              const redirectEndpoint = result.redirectUrl || '/';
-              const redirectUrl = req.baseUrl + redirectEndpoint;
-              res.redirect(redirectUrl);
-            } else {
-              logger.error('OAuth2 callback failed', { error: result.error });
-              res.status(400).send(`
-                <h1>OAuth2 Callback Failed</h1>
-                <p><strong>Error:</strong> ${result.error}</p>
-                <p><a href="${loginPath}">Try again</a></p>
-              `);
-            }
-          }).catch(next);
+          );
+
+          if (result.success) {
+            // Use the redirect endpoint from the result
+            const redirectEndpoint = result.redirectUrl || '/';
+            const response = new Response(null, { status: 302 });
+            response.headers.set('Location', redirectEndpoint);
+            response.headers.set('Set-Cookie', `${cookieName}=${sessionId}; HttpOnly; Path=/; Max-Age=${24 * 60 * 60}`);
+            return response;
+          } else {
+            logger.error('OAuth2 callback failed', { error: result.error });
+            const response = new Response(`
+              <h1>OAuth2 Callback Failed</h1>
+              <p><strong>Error:</strong> ${result.error}</p>
+              <p><a href="${loginPath}">Try again</a></p>
+            `, {
+              status: 400,
+              headers: { 'Content-Type': 'text/html' }
+            });
+
+            // Clear cookie
+            response.headers.set('Set-Cookie', `${cookieName}=; HttpOnly; Path=/; Max-Age=0`);
+
+            return response;
+          }
         }
-        
+
         // Invalid callback request
-        return res.status(400).send(`
+        return new Response(`
           <h1>Invalid OAuth2 Callback</h1>
           <p>No authorization code or error information provided.</p>
           <p><a href="${loginPath}">Try again</a></p>
-        `);
+        `, {
+          status: 400,
+          headers: { 'Content-Type': 'text/html' }
+        });
       }
 
       // Redirect to login path instead of directly to OAuth provider
-      const fullLoginPath = req.baseUrl + loginPath;
-      res.redirect(fullLoginPath);
+      const response = new Response(null, { status: 302 });
+      response.headers.set('Location', loginPath);
+      response.headers.set('Set-Cookie', `${cookieName}=${sessionId}; HttpOnly; Path=/; Max-Age=${24 * 60 * 60}`);
+      return response;
     };
+  }
+
+  // Legacy method for backward compatibility (returns null for Bun)
+  createMiddleware(config: OAuth2Config, publicPaths: string[] = []): null {
+    logger.warn('OAuth2 createMiddleware() is deprecated for Bun. Use createBunMiddleware() instead.');
+    return null;
   }
 } 

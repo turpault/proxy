@@ -3,8 +3,18 @@ import { logger } from '../utils/logger';
 import { BunClassicProxy } from './bun-classic-proxy';
 import { BunCorsProxy } from './bun-cors-proxy';
 import { BunStaticProxy } from './bun-static-proxy';
-import { ProxyRequestConfig } from './base-proxy';
-import { OAuth2Service } from './oauth2';
+
+export interface ProxyRequestConfig {
+  route: ProxyRoute;
+  target: string;
+  routeIdentifier: string;
+  secure: boolean;
+  timeouts: { request: number; proxy: number };
+  logRequests: boolean;
+  logErrors: boolean;
+  customErrorResponse?: { code?: string; message?: string };
+}
+
 import { geolocationService } from './geolocation';
 import { BunRequestContext } from './bun-middleware';
 import path from 'path';
