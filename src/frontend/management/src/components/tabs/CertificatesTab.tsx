@@ -17,7 +17,9 @@ export const CertificatesTab: React.FC = () => {
       const response = await fetch('/api/certificates');
       if (response.ok) {
         const data = await response.json();
-        setCertificates(data);
+        // Convert object to array format for compatibility
+        const certificatesArray = Object.values(data);
+        setCertificates(certificatesArray);
       } else {
         throw new Error('Failed to load certificates');
       }
@@ -62,8 +64,8 @@ export const CertificatesTab: React.FC = () => {
               <div key={index} className="certificate-card">
                 <div className="cert-header">
                   <h3>{cert.domain || 'Unknown Domain'}</h3>
-                  <span className={`cert-status ${cert.valid ? 'valid' : 'invalid'}`}>
-                    {cert.valid ? 'Valid' : 'Invalid'}
+                  <span className={`cert-status ${cert.isValid ? 'valid' : 'invalid'}`}>
+                    {cert.isValid ? 'Valid' : 'Invalid'}
                   </span>
                 </div>
                 <div className="cert-info">
@@ -77,7 +79,7 @@ export const CertificatesTab: React.FC = () => {
                   </div>
                   <div className="info-row">
                     <span className="label">Valid Until:</span>
-                    <span className="value">{formatLocalTime(cert.validUntil)}</span>
+                    <span className="value">{formatLocalTime(cert.expiresAt)}</span>
                   </div>
                   <div className="info-row">
                     <span className="label">Days Remaining:</span>
