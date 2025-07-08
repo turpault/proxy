@@ -55,6 +55,8 @@ export class ManagementConsole {
       routes: {
         "/": { GET: managementHtml },
 
+
+
         "/api/status": async (req: Request) => {
           if (req.method === 'GET') {
             const status = this.getStatus();
@@ -584,7 +586,18 @@ export class ManagementConsole {
           });
         },
 
-        "/health": () => this.handleHealthRequest()
+        "/health": () => this.handleHealthRequest(),
+
+        "/ws": async (req: Request) => {
+          const url = new URL(req.url);
+          if (url.pathname === '/ws') {
+            const upgraded = this.managementServer?.upgrade(req);
+            if (upgraded) {
+              return new Response(null, { status: 101 });
+            }
+          }
+          return new Response('Not Found', { status: 404 });
+        }
       },
       websocket: {
         open: (ws: ServerWebSocket<unknown>) => {
