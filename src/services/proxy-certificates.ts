@@ -5,11 +5,13 @@ import { logger } from '../utils/logger';
 import { LetsEncryptService } from './letsencrypt';
 
 export class ProxyCertificates {
+  private static instance: ProxyCertificates | null = null;
   private certificates: Map<string, CertificateInfo> = new Map();
   private letsEncryptService: LetsEncryptService;
   private config: ProxyConfig;
+  private isInitialized: boolean = false;
 
-  constructor(config: ProxyConfig) {
+  private constructor(config: ProxyConfig) {
     this.config = config;
     this.letsEncryptService = new LetsEncryptService({
       email: config.letsEncrypt.email,
@@ -19,9 +21,43 @@ export class ProxyCertificates {
     });
   }
 
+  /**
+   * Get the singleton instance of ProxyCertificates
+   * @param config - The proxy configuration (required for first initialization)
+   * @returns The singleton instance
+   */
+  static getInstance(config?: ProxyConfig): ProxyCertificates {
+    if (!ProxyCertificates.instance) {
+      if (!config) {
+        throw new Error('ProxyCertificates.getInstance() requires config parameter for first initialization');
+      }
+      ProxyCertificates.instance = new ProxyCertificates(config);
+    }
+    return ProxyCertificates.instance;
+  }
+
+  /**
+   * Reset the singleton instance (useful for testing or reinitialization)
+   */
+  static resetInstance(): void {
+    ProxyCertificates.instance = null;
+  }
+
+  /**
+   * Check if the singleton instance exists
+   */
+  static hasInstance(): boolean {
+    return ProxyCertificates.instance !== null;
+  }
+
   async setupCertificates(): Promise<void> {
+    if (this.isInitialized) {
+      logger.debug('Certificates already initialized, skipping setup');
+      return;
+    }
+
     const domains = this.config.routes.map(route => route.domain);
-    const uniqueDomains = [...new Set(domains)];
+    const uniqueDomains = Array.from(new Set(domains));
 
     logger.info(`Setting up SSL certificates for ${uniqueDomains.length} domains: ${uniqueDomains.join(', ')}`);
 
@@ -43,6 +79,8 @@ export class ProxyCertificates {
 
     const validCertificates = Array.from(this.certificates.values()).filter(cert => cert.isValid);
     logger.info(`SSL certificates setup complete. Loaded ${validCertificates.length} valid certificates: ${validCertificates.map(cert => cert.domain).join(', ')}`);
+
+    this.isInitialized = true;
   }
 
   private async setupCertificateForDomain(domain: string): Promise<void> {
@@ -101,7 +139,7 @@ export class ProxyCertificates {
     setInterval(async () => {
       logger.debug('Running daily certificate renewal check...');
 
-      for (const [domain, certInfo] of this.certificates.entries()) {
+      for (const [domain, certInfo] of Array.from(this.certificates.entries())) {
         const shouldRenew = await this.letsEncryptService.shouldRenewCertificate(certInfo);
 
         if (shouldRenew) {

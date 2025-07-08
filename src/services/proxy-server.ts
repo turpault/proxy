@@ -41,7 +41,7 @@ export class ProxyServer {
     const tempDir = configService.getSetting<string>('tempDir');
     this.proxyRoutes = new BunRoutes(tempDir, this.statisticsService);
     this.proxyMiddleware = new BunMiddleware(this.config);
-    this.proxyCertificates = new ProxyCertificates(config);
+    this.proxyCertificates = ProxyCertificates.getInstance(config);
 
     // Set cache expiration from main config if available
     const cacheMaxAge = configService.getSetting('cache.maxAge');

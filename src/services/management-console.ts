@@ -8,6 +8,7 @@ import { configService } from './config-service';
 import { processManager } from './process-manager';
 import { getStatisticsService } from './statistics';
 import { existsSync, readFileSync } from 'fs';
+import { ProxyCertificates } from './proxy-certificates';
 
 export class ManagementConsole {
   private managementServer: Server | null = null;
@@ -764,10 +765,14 @@ export class ManagementConsole {
 
   private getCertificates(): Map<string, any> {
     try {
-      const { ProxyCertificates } = require('./proxy-certificates');
-      const proxyCertificates = new ProxyCertificates(this.config);
-      return proxyCertificates.getAllCertificates();
+      if (ProxyCertificates.hasInstance()) {
+        return ProxyCertificates.getInstance().getAllCertificates();
+      } else {
+        // Fallback if singleton hasn't been initialized yet
+        return new Map();
+      }
     } catch (error) {
+      logger.error('Failed to get certificates', error);
       return new Map();
     }
   }
