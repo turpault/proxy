@@ -2,11 +2,8 @@ import 'dotenv/config';
 import { ProxyServer } from './services/proxy-server';
 import { configService } from './services/config-service';
 import { logger } from './utils/logger';
-import * as fs from 'fs-extra';
-import * as path from 'path';
 
 let currentServer: ProxyServer | null = null;
-let isWatchingConfig = false;
 let isRestarting = false;
 
 async function startServer(): Promise<ProxyServer> {
@@ -89,85 +86,20 @@ async function restartServer(): Promise<void> {
   }
 }
 
-function setupConfigWatcher(): void {
-  // Check if config watching is disabled
-  const watchDisabled = process.env.DISABLE_CONFIG_WATCH === 'true' ||
-    process.argv.includes('--no-watch');
 
-  if (watchDisabled) {
-    logger.info('Configuration file watching disabled');
-    return;
-  }
-
-  // Watch main config file if it exists, otherwise watch legacy config
-  const mainConfigFile = process.env.MAIN_CONFIG_FILE || './config/main.yaml';
-  const legacyConfigFile = process.env.CONFIG_FILE || './config/proxy.yaml';
-
-  let configFile: string;
-  if (fs.existsSync(path.resolve(mainConfigFile))) {
-    configFile = mainConfigFile;
-  } else {
-    configFile = legacyConfigFile;
-  }
-
-  const absoluteConfigPath = path.resolve(configFile);
-
-  // Check if config file exists
-  if (!fs.existsSync(absoluteConfigPath)) {
-    logger.warn(`Configuration file not found for watching: ${absoluteConfigPath}`);
-    return;
-  }
-
-  logger.info(`Setting up file watcher for configuration: ${absoluteConfigPath}`);
-
-  // Use fs.watchFile for more reliable file watching
-  // Note: fs.watch can be unreliable on some filesystems
-  fs.watchFile(absoluteConfigPath, {
-    persistent: true,
-    interval: 1000, // Check every second
-  }, (curr, prev) => {
-    // Check if file was actually modified (not just accessed)
-    if (curr.mtime > prev.mtime) {
-      logger.info(`Configuration file changed: ${absoluteConfigPath}`);
-      // Add small delay to ensure file write is complete
-      setTimeout(() => {
-        restartServer().catch(error => {
-          logger.error('Failed to restart server after config change', error);
-          process.exit(1);
-        });
-      }, 500);
-    }
-  });
-
-  isWatchingConfig = true;
-  logger.info('Configuration file watcher enabled');
-}
-
-function stopConfigWatcher(): void {
-  if (isWatchingConfig) {
-    const configFile = process.env.CONFIG_FILE || './config/proxy.yaml';
-    const absoluteConfigPath = path.resolve(configFile);
-    fs.unwatchFile(absoluteConfigPath);
-    isWatchingConfig = false;
-    logger.info('Configuration file watcher stopped');
-  }
-}
 
 async function main(): Promise<void> {
   try {
     // Start the server
     currentServer = await startServer();
 
-    // Setup configuration file watcher
-    setupConfigWatcher();
-
     // Handle graceful shutdown
     const shutdown = async (signal: string): Promise<void> => {
       logger.info(`Received ${signal}, shutting down gracefully...`);
 
       try {
-        // Stop config watcher
-        stopConfigWatcher();
+        // Stop configuration monitoring
+        configService.stopConfigMonitoring();
 
         // Stop server
         await stopServer();

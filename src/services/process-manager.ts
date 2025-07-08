@@ -85,6 +85,9 @@ export class ProcessManager {
       this.updateSchedulerProcessStatus(id, isRunning);
     });
 
+    // Set up configuration change handling
+    this.setupConfigChangeHandling();
+
     // Handle graceful shutdown
     // Note: This process manager is designed to NEVER kill child processes
     // Child processes are spawned with detached: true and will survive
@@ -1624,6 +1627,51 @@ export class ProcessManager {
     }
 
     return false;
+  }
+
+  /**
+   * Set up configuration change handling
+   */
+  private setupConfigChangeHandling(): void {
+    // Listen for configuration reload events
+    configService.on('configReloading', () => {
+      logger.info('Process manager: Configuration reloading...');
+    });
+
+    configService.on('configReloaded', (newConfigs: any) => {
+      logger.info('Process manager: Configuration reloaded, updating processes...');
+      this.handleConfigUpdate(newConfigs);
+    });
+
+    configService.on('configReloadError', (error: any) => {
+      logger.error('Process manager: Configuration reload failed', error);
+    });
+  }
+
+  /**
+   * Handle configuration updates
+   */
+  private async handleConfigUpdate(newConfigs: any): Promise<void> {
+    try {
+      // Update internal configuration reference
+      if (this.config) {
+        this.config.processManagement = newConfigs.processConfig;
+      }
+
+      // Update process management configuration
+      if (newConfigs.processConfig) {
+        await this.updateConfiguration(newConfigs.processConfig);
+      }
+
+      // Update scheduler with new configuration
+      if (newConfigs.processConfig) {
+        this.initializeSchedules(newConfigs.processConfig);
+      }
+
+      logger.info('Process manager configuration updated successfully');
+    } catch (error) {
+      logger.error('Failed to update process manager configuration', error);
+    }
   }
 }
 

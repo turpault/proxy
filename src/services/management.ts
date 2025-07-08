@@ -47,6 +47,36 @@ export function registerManagementEndpoints(
     }
   });
 
+  // Set up configuration change handling for WebSocket broadcasts
+  configService.on('configReloading', () => {
+    logger.info('Management: Configuration reloading...');
+    (managementApp as any).webSocketService.broadcast({
+      type: 'configReloading',
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  configService.on('configReloaded', (newConfigs: any) => {
+    logger.info('Management: Configuration reloaded, broadcasting update...');
+    (managementApp as any).webSocketService.broadcast({
+      type: 'configReloaded',
+      data: {
+        routes: newConfigs.serverConfig?.routes?.length || 0,
+        processes: Object.keys(newConfigs.processConfig?.processes || {}).length
+      },
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  configService.on('configReloadError', (error: any) => {
+    logger.error('Management: Configuration reload failed', error);
+    (managementApp as any).webSocketService.broadcast({
+      type: 'configReloadError',
+      error: error.message || 'Configuration reload failed',
+      timestamp: new Date().toISOString()
+    });
+  });
+
   // Initialize WebSocket after server starts listening
   (managementApp as any).initializeWebSocket = (httpServer: any) => {
     try {

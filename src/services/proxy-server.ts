@@ -55,6 +55,9 @@ export class ProxyServer implements WebSocketServiceInterface {
     this.setupRoutes();
     this.setupErrorHandling();
     this.setupManagementServer();
+
+    // Listen for configuration changes
+    this.setupConfigChangeHandling();
   }
 
   private setupMiddleware(): void {
@@ -354,5 +357,67 @@ export class ProxyServer implements WebSocketServiceInterface {
 
   async handleProcessConfigUpdate(newConfig: any): Promise<void> {
     await processManager.handleProcessConfigUpdate(newConfig);
+  }
+
+  /**
+   * Set up configuration change handling
+   */
+  private setupConfigChangeHandling(): void {
+    // Listen for configuration reload events
+    configService.on('configReloading', () => {
+      logger.info('Configuration reloading, preparing for update...');
+    });
+
+    configService.on('configReloaded', (newConfigs: any) => {
+      logger.info('Configuration reloaded, updating server...');
+      this.handleConfigUpdate(newConfigs);
+    });
+
+    configService.on('configReloadError', (error: any) => {
+      logger.error('Configuration reload failed', error);
+    });
+  }
+
+  /**
+   * Handle configuration updates
+   */
+  private async handleConfigUpdate(newConfigs: any): Promise<void> {
+    try {
+      // Update internal configuration references
+      this.config = newConfigs.serverConfig;
+      this.mainConfig = newConfigs.mainConfig;
+
+      // Update process manager with new configuration
+      if (newConfigs.processConfig) {
+        processManager.updateConfiguration(newConfigs.processConfig);
+      }
+
+      // Update cache expiration if changed
+      const cacheMaxAge = configService.getSetting<number>('cache.maxAge');
+      if (typeof cacheMaxAge === 'number') {
+        setCacheExpiration(cacheMaxAge);
+      }
+
+      // Update statistics service directories if changed
+      const logsDir = configService.getSetting<string>('logsDir');
+      const statsDir = configService.getSetting<string>('statsDir');
+      if (logsDir || statsDir) {
+        const reportDir = logsDir ? path.join(logsDir, 'statistics') : undefined;
+        this.statisticsService = getStatisticsService(reportDir, statsDir);
+      }
+
+      // Update proxy routes with new configuration
+      this.proxyRoutes.setupRoutes(this.app, this.config);
+
+      // Update proxy middleware with new configuration
+      this.proxyMiddleware.setupMiddleware(this.app, this.config);
+
+      // Update proxy certificates with new configuration
+      await this.proxyCertificates.setupCertificates();
+
+      logger.info('Server configuration updated successfully');
+    } catch (error) {
+      logger.error('Failed to update server configuration', error);
+    }
   }
 } 
