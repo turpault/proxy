@@ -1,13 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useWebSocket } from '../WebSocketProvider';
 import { StatisticsSummary, DetailedStatistics, RouteStatistics } from '../../types';
 import { GeoMap } from '../GeoMap';
 
 export const StatisticsTab: React.FC = () => {
   const { status } = useWebSocket();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [statistics, setStatistics] = useState<StatisticsSummary | null>(null);
   const [detailedStatistics, setDetailedStatistics] = useState<DetailedStatistics | null>(null);
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('24h');
+
+  // Get period from URL params, default to '24h'
+  const selectedPeriod = searchParams.get('period') || '24h';
 
   useEffect(() => {
     const loadStatistics = async () => {
@@ -141,7 +145,7 @@ export const StatisticsTab: React.FC = () => {
         <h3>Statistics Period</h3>
         <select
           value={selectedPeriod}
-          onChange={(e) => setSelectedPeriod(e.target.value)}
+          onChange={(e) => setSearchParams({ period: e.target.value })}
           className="period-select"
         >
           <option value="24h">Last 24 Hours</option>

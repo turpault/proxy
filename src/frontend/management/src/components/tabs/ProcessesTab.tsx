@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useWebSocket } from '../WebSocketProvider';
 import { useNotifications } from '../NotificationProvider';
 import { Process } from '../../types';
@@ -8,10 +9,14 @@ import { ProcessDetails } from '../ProcessDetails';
 export const ProcessesTab: React.FC = () => {
   const { processes, status } = useWebSocket();
   const { showNotification } = useNotifications();
-  const [selectedProcess, setSelectedProcess] = useState<Process | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Get selected process from URL params
+  const selectedProcessId = searchParams.get('process');
+  const selectedProcess = processes.find(p => p.id === selectedProcessId) || null;
 
   const handleProcessSelect = (process: Process) => {
-    setSelectedProcess(process);
+    setSearchParams({ process: process.id });
   };
 
   const handleProcessAction = async (processId: string, action: 'start' | 'stop' | 'restart') => {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useNotifications } from '../NotificationProvider';
 import { ConfigData, ConfigResponse, BackupItem } from '../../types';
 import { formatLocalTime, formatBytes } from '../../utils';
@@ -15,7 +16,8 @@ interface ValidationResult {
 }
 
 export const ConfigTab: React.FC = () => {
-  const [activeConfigType, setActiveConfigType] = useState<ConfigType>('main');
+  const { configType } = useParams<{ configType: string }>();
+  const navigate = useNavigate();
   const [configData, setConfigData] = useState<ConfigData | null>(null);
   const [backups, setBackups] = useState<BackupItem[]>([]);
   const [showBackupModal, setShowBackupModal] = useState(false);
@@ -23,6 +25,9 @@ export const ConfigTab: React.FC = () => {
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const { showNotification } = useNotifications();
+
+  // Use configType from URL params, fallback to 'main'
+  const activeConfigType = (configType as ConfigType) || 'main';
 
   useEffect(() => {
     loadConfig(activeConfigType);
@@ -211,19 +216,19 @@ export const ConfigTab: React.FC = () => {
         <div className="config-tabs">
           <button
             className={`config-tab ${activeConfigType === 'main' ? 'active' : ''}`}
-            onClick={() => setActiveConfigType('main')}
+            onClick={() => navigate('/config/main')}
           >
             Main Config
           </button>
           <button
             className={`config-tab ${activeConfigType === 'proxy' ? 'active' : ''}`}
-            onClick={() => setActiveConfigType('proxy')}
+            onClick={() => navigate('/config/proxy')}
           >
             Proxy Config
           </button>
           <button
             className={`config-tab ${activeConfigType === 'processes' ? 'active' : ''}`}
-            onClick={() => setActiveConfigType('processes')}
+            onClick={() => navigate('/config/processes')}
           >
             Processes Config
           </button>
