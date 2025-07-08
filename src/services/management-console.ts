@@ -244,6 +244,53 @@ export class ManagementConsole {
           }
         },
 
+        "/api/config/validate": {
+          POST: async (req: Request) => {
+            try {
+              const { content, type } = await req.json();
+
+              if (!content || typeof content !== 'string') {
+                return new Response(JSON.stringify({
+                  success: false,
+                  error: 'Invalid content provided'
+                }), {
+                  status: 400,
+                  headers: { 'Content-Type': 'application/json' }
+                });
+              }
+
+              // Import the YAML validator
+              const { validateYAML, validateProcessConfigYAML } = await import('../utils/yaml-validator');
+
+              let validationResult;
+
+              // Use specific validation for process configs
+              if (type === 'processes') {
+                validationResult = validateProcessConfigYAML(content);
+              } else {
+                validationResult = validateYAML(content);
+              }
+
+              return new Response(JSON.stringify({
+                success: true,
+                data: validationResult
+              }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({
+                success: false,
+                error: 'Validation failed',
+                details: error instanceof Error ? error.message : 'Unknown error'
+              }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+        },
+
         "/api/statistics": {
           GET: async (req: Request) => {
             const stats = this.statisticsService.getStatsSummary();

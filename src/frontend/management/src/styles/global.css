@@ -820,3 +820,316 @@ body {
     align-items: stretch;
   }
 }
+
+/* Configuration Tab Styles */
+.config-tab {
+  padding: 0;
+}
+
+.config-header {
+  margin-bottom: 2rem;
+}
+
+.config-header h2 {
+  margin-bottom: 1rem;
+  color: #2d3748;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.config-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.config-tabs .config-tab {
+  padding: 0.75rem 1.5rem;
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  color: #4a5568;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.config-tabs .config-tab:hover {
+  background: #edf2f7;
+  border-color: #cbd5e0;
+}
+
+.config-tabs .config-tab.active {
+  background: #4299e1;
+  border-color: #4299e1;
+  color: white;
+}
+
+.config-content {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e2e8f0;
+}
+
+.config-info {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.config-info .info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+}
+
+.config-info .info-row .label {
+  font-weight: 500;
+  color: #4a5568;
+  font-size: 0.9rem;
+}
+
+.config-info .info-row .value {
+  color: #2d3748;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.85rem;
+}
+
+.config-info .info-row .value.unsaved {
+  color: #e53e3e;
+  font-weight: 500;
+}
+
+/* Validation Status */
+.validation-status {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  border-radius: 6px;
+  border: 1px solid;
+}
+
+.validation-status.valid {
+  background: #f0fff4;
+  border-color: #9ae6b4;
+}
+
+.validation-status.invalid {
+  background: #fed7d7;
+  border-color: #feb2b2;
+}
+
+.validation-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.validation-icon {
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.validation-status.valid .validation-icon {
+  color: #38a169;
+}
+
+.validation-status.invalid .validation-icon {
+  color: #e53e3e;
+}
+
+.validation-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.validation-status.valid .validation-title {
+  color: #38a169;
+}
+
+.validation-status.invalid .validation-title {
+  color: #e53e3e;
+}
+
+.validation-details {
+  font-size: 0.85rem;
+}
+
+.validation-error {
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  color: #e53e3e;
+}
+
+.validation-location {
+  color: #718096;
+  margin-bottom: 0.5rem;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+.validation-message {
+  color: #4a5568;
+  margin-bottom: 0.5rem;
+  white-space: pre-wrap;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.8rem;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 0.5rem;
+  border-radius: 4px;
+}
+
+.validation-suggestions {
+  margin-top: 0.5rem;
+}
+
+.validation-suggestions strong {
+  color: #4a5568;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.validation-suggestions ul {
+  margin-top: 0.25rem;
+  padding-left: 1.5rem;
+}
+
+.validation-suggestions li {
+  color: #4a5568;
+  font-size: 0.8rem;
+  margin-bottom: 0.25rem;
+}
+
+/* Config Editor */
+.config-editor {
+  margin-bottom: 1.5rem;
+}
+
+.config-editor textarea {
+  width: 100%;
+  min-height: 400px;
+  padding: 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  resize: vertical;
+  background: #fafafa;
+}
+
+.config-editor textarea:focus {
+  outline: none;
+  border-color: #4299e1;
+  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+}
+
+/* Config Actions */
+.config-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.btn-revert {
+  background: #718096;
+}
+
+.btn-revert:hover {
+  background: #4a5568;
+}
+
+.btn-backups {
+  background: #805ad5;
+}
+
+.btn-backups:hover {
+  background: #6b46c1;
+}
+
+.btn-restore {
+  background: #38a169;
+}
+
+.btn-restore:hover {
+  background: #2f855a;
+}
+
+/* Backup Modal */
+.backup-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.backup-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+  background: #f7fafc;
+}
+
+.backup-item:last-child {
+  margin-bottom: 0;
+}
+
+.backup-info {
+  flex: 1;
+}
+
+.backup-name {
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 0.25rem;
+}
+
+.backup-meta {
+  font-size: 0.8rem;
+  color: #718096;
+}
+
+.backup-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.no-backups {
+  text-align: center;
+  padding: 2rem;
+  color: #718096;
+  font-style: italic;
+}
+
+/* Responsive adjustments for config tab */
+@media (max-width: 768px) {
+  .config-tabs {
+    flex-direction: column;
+  }
+
+  .config-actions {
+    flex-direction: column;
+  }
+
+  .config-actions .btn {
+    margin-right: 0;
+    margin-bottom: 0.5rem;
+  }
+
+  .backup-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .backup-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
