@@ -134,7 +134,7 @@ build/
 *.backup 
 config/processes.yaml
 config/proxy.yaml
-config/processes.yaml
+config/main.yaml
 data/cache/
 config/backup/
 data/statistics/

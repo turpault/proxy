@@ -1,797 +1,72 @@
-import { Server } from 'bun';
-import { ProxyConfig, MainConfig, ProxyRoute } from './types';
+import { ProxyConfig, MainConfig } from './types';
 import { logger } from './utils/logger';
-import { cacheService, setCacheExpiration } from './services/cache';
-import { getStatisticsService } from './services/statistics';
-import { BunRoutes } from './services/bun-routes';
-import { BunMiddleware } from './services/bun-middleware';
-import { ProxyCertificates } from './services/proxy-certificates';
 import { configService } from './services/config-service';
-// Management endpoints are handled directly in this class
-import { processManager } from './services/process-manager';
-import { BunClassicProxy } from './services/bun-classic-proxy';
-import { BunCorsProxy } from './services/bun-cors-proxy';
-import path from 'path';
-import { ServerWebSocket } from 'bun';
+import { ProxyServer } from './services/proxy-server';
+import { ProcessManagementServer } from './services/process-management-server';
+import { ManagementConsole } from './services/management-console';
 
 export class BunProxyServer {
-  private httpServer: Server | null = null;
-  private httpsServer: Server | null = null;
-  private managementServer: Server | null = null;
+  private proxyServer: ProxyServer;
+  private processManagementServer: ProcessManagementServer;
+  private managementConsole: ManagementConsole;
   private config: ProxyConfig;
   private mainConfig?: MainConfig;
-  private proxyRoutes: BunRoutes;
-  private proxyMiddleware: BunMiddleware;
-  private proxyCertificates: ProxyCertificates;
-  private statisticsService: any;
-
-  // Native route handlers for better performance
-  private staticRoutes: Map<string, { staticPath: string; spaFallback: boolean; publicPaths: string[] }> = new Map();
-  private redirectRoutes: Map<string, string> = new Map();
-  private proxyRoutesMap: Map<string, { target: string; route: ProxyRoute }> = new Map();
-  private corsRoutes: Map<string, { route: ProxyRoute; corsProxy: BunCorsProxy }> = new Map();
-
-  private managementWebSockets: Set<ServerWebSocket<unknown>> = new Set();
 
   constructor(config: ProxyConfig, mainConfig?: MainConfig) {
     this.config = config;
     this.mainConfig = mainConfig;
 
-    // Initialize statistics service with configuration
-    const logsDir = configService.getSetting<string>('logsDir');
-    const reportDir = logsDir ? path.join(logsDir, 'statistics') : undefined;
-    const dataDir = configService.getSetting<string>('statsDir');
-    this.statisticsService = getStatisticsService(reportDir, dataDir);
-
-    // Get temp directory from main config
-    const tempDir = configService.getSetting<string>('tempDir');
-    this.proxyRoutes = new BunRoutes(tempDir, this.statisticsService);
-    this.proxyMiddleware = new BunMiddleware(this.config);
-    this.proxyCertificates = new ProxyCertificates(config);
-    processManager.initialize(config);
-
-    // Set cache expiration from main config if available
-    const cacheMaxAge = configService.getSetting('cache.maxAge');
-    setCacheExpiration(typeof cacheMaxAge === 'number' ? cacheMaxAge : 24 * 60 * 60 * 1000);
-
-    // Listen for configuration changes
-    this.setupConfigChangeHandling();
+    // Initialize the three separate services
+    this.proxyServer = new ProxyServer(config, mainConfig);
+    this.processManagementServer = new ProcessManagementServer(config, mainConfig);
+    this.managementConsole = new ManagementConsole(config, mainConfig);
   }
 
   async initialize(): Promise<void> {
     logger.info('Initializing Bun proxy server...');
 
-    // Set up SSL certificates
-    await this.proxyCertificates.setupCertificates();
-
-    // Set up native route handlers for better performance
-    this.setupNativeRoutes();
-
-    // Set up routes (for complex routes that need the full routing system)
-    this.proxyRoutes.setupRoutes(this.config);
-
-    // Start managed processes
-    await processManager.startManagedProcesses();
-
-    // Set up process configuration watching
-    processManager.setupProcessConfigWatching();
-
-    // Set up cache cleanup
-    this.setupCacheCleanup();
+    // Initialize all services
+    await this.proxyServer.initialize();
+    await this.processManagementServer.initialize();
 
     logger.info('Bun proxy server initialization complete');
-  }
-
-  private setupNativeRoutes(): void {
-    this.staticRoutes.clear();
-    this.redirectRoutes.clear();
-    this.proxyRoutesMap.clear();
-    this.corsRoutes.clear();
-
-    const tempDir = configService.getSetting<string>('tempDir');
-
-    this.config.routes.forEach(route => {
-      if (route.path) {
-        const routePath = route.path;
-
-        switch (route.type) {
-          case 'static':
-            if (route.staticPath) {
-              this.staticRoutes.set(routePath, {
-                staticPath: route.staticPath,
-                spaFallback: route.spaFallback || false,
-                publicPaths: route.publicPaths || []
-              });
-              logger.info(`Native static route configured: ${routePath} -> ${route.staticPath}`);
-            }
-            break;
-
-          case 'redirect':
-            if (route.redirectTo) {
-              this.redirectRoutes.set(routePath, route.redirectTo);
-              logger.info(`Native redirect route configured: ${routePath} -> ${route.redirectTo}`);
-            }
-            break;
-
-          case 'proxy':
-            if (route.target) {
-              this.proxyRoutesMap.set(routePath, { target: route.target, route });
-              logger.info(`Native proxy route configured: ${routePath} -> ${route.target}`);
-            }
-            break;
-
-          case 'cors-forwarder':
-            const corsProxy = new BunCorsProxy(tempDir);
-            this.corsRoutes.set(routePath, { route, corsProxy });
-            logger.info(`Native CORS route configured: ${routePath} -> dynamic target`);
-            break;
-        }
-      }
-    });
-  }
-
-  private setupCacheCleanup(): void {
-    // Set up periodic cache cleanup
-    setInterval(() => {
-      cacheService.cleanup();
-    }, 60 * 60 * 1000); // Clean up every hour
-
-    logger.info('Cache cleanup scheduled (every hour)');
   }
 
   async start(disableManagementServer: boolean = false): Promise<void> {
     logger.info('Starting Bun proxy server...');
 
-    // Start HTTP server
-    this.httpServer = Bun.serve({
-      port: this.config.port,
-      fetch: this.handleRequest.bind(this),
-      error: this.handleError.bind(this)
-    });
+    // Start proxy server
+    await this.proxyServer.start();
 
-    logger.info(`HTTP server started on port ${this.config.port}`);
+    // Start process management server
+    await this.processManagementServer.start();
 
-    // Start HTTPS server only if we have valid certificates
-    try {
-      const certificates = this.proxyCertificates.getAllCertificates();
-      const validCertificates = Array.from(certificates.values()).filter((cert: any) => cert.isValid);
-
-      if (validCertificates.length > 0) {
-        // Use the first valid certificate as default for HTTPS server
-        const defaultCert = validCertificates[0];
-        const tlsOptions = this.proxyCertificates.getBunTLSOptions(defaultCert.domain);
-
-        if (tlsOptions) {
-          this.httpsServer = Bun.serve({
-            port: this.config.httpsPort || 4443,
-            fetch: this.handleRequest.bind(this),
-            error: this.handleError.bind(this),
-            tls: tlsOptions
-          });
-
-          logger.info(`HTTPS server started on port ${this.config.httpsPort || 4443} with certificate for ${defaultCert.domain}`);
-        } else {
-          logger.warn('Failed to get TLS options for HTTPS server');
-          this.httpsServer = null;
-        }
-      } else {
-        logger.warn('No valid certificates available, HTTPS server will not start');
-        this.httpsServer = null;
-      }
-    } catch (error) {
-      logger.warn('HTTPS server initialization failed', error);
-      this.httpsServer = null;
-    }
-
-    // Start management server only if not disabled
+    // Start management console only if not disabled
     if (!disableManagementServer) {
-      const managementConfig = configService.getManagementConfig();
-      const managementPort = managementConfig?.port || (this.config.port + 1000);
-      const managementHost = managementConfig?.host || '0.0.0.0';
-
-      // Read the management console HTML file
-      const managementHtmlPath = path.join(process.cwd(), 'src/static/management/index.html');
-      let managementHtml: string;
-      try {
-        managementHtml = await Bun.file(managementHtmlPath).text();
-        logger.info('Management console HTML loaded successfully');
-      } catch (error) {
-        logger.error('Failed to load management console HTML', error);
-        managementHtml = '<html><body><h1>Management Console</h1><p>Failed to load interface</p></body></html>';
-      }
-
-      this.managementServer = Bun.serve({
-        port: managementPort,
-        hostname: managementHost,
-        routes: {
-          "/": () => new Response(managementHtml, {
-            headers: { 'Content-Type': 'text/html' }
-          }),
-
-          "/api/status": async (req: Request) => {
-            if (req.method === 'GET') {
-              const status = this.getStatus();
-              return new Response(JSON.stringify(status), {
-                status: 200,
-                headers: { 'Content-Type': 'application/json' }
-              });
-            }
-            return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-              status: 405,
-              headers: { 'Content-Type': 'application/json' }
-            });
-          },
-
-          "/api/config": async (req: Request) => {
-            if (req.method === 'GET') {
-              const config = this.getConfig();
-              return new Response(JSON.stringify(config), {
-                status: 200,
-                headers: { 'Content-Type': 'application/json' }
-              });
-            }
-            return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-              status: 405,
-              headers: { 'Content-Type': 'application/json' }
-            });
-          },
-
-          "/api/statistics": async (req: Request) => {
-            if (req.method === 'GET') {
-              const stats = this.statisticsService.getStatsSummary();
-              return new Response(JSON.stringify(stats), {
-                status: 200,
-                headers: { 'Content-Type': 'application/json' }
-              });
-            }
-            return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-              status: 405,
-              headers: { 'Content-Type': 'application/json' }
-            });
-          },
-
-          "/health": () => this.handleHealthRequest(),
-
-          "/*": () => new Response(managementHtml, {
-            headers: { 'Content-Type': 'text/html' }
-          }),
-        },
-        websocket: {
-          open: (ws: ServerWebSocket<unknown>) => {
-            logger.info('WebSocket client connected');
-            this.managementWebSockets.add(ws);
-            this.sendInitialWebSocketData(ws);
-          },
-          message: (ws: ServerWebSocket<unknown>, message: string | Buffer) => {
-            try {
-              const parsed = JSON.parse(typeof message === 'string' ? message : message.toString());
-              this.handleWebSocketMessage(ws, parsed);
-            } catch (error) {
-              logger.error('Failed to parse WebSocket message', error);
-              ws.send(JSON.stringify({
-                type: 'error',
-                data: { message: 'Invalid message format' },
-                timestamp: new Date().toISOString()
-              }));
-            }
-          },
-          close: (ws: ServerWebSocket<unknown>) => {
-            logger.info('WebSocket client disconnected');
-            this.managementWebSockets.delete(ws);
-          },
-          drain: () => { },
-        },
-      });
-
-      logger.info(`Management server started on ${managementHost}:${managementPort}`);
+      await this.managementConsole.start();
     }
 
     logger.info('Bun proxy server started successfully');
   }
 
-  private async sendInitialWebSocketData(ws: ServerWebSocket<unknown>): Promise<void> {
-    try {
-      const processes = await this.getProcesses();
-      ws.send(JSON.stringify({
-        type: 'processes',
-        data: processes,
-        timestamp: new Date().toISOString()
-      }));
-      const status = await this.getStatusData();
-      ws.send(JSON.stringify({
-        type: 'status',
-        data: status,
-        timestamp: new Date().toISOString()
-      }));
-    } catch (error) {
-      logger.error('Failed to send initial data', error);
-      ws.send(JSON.stringify({
-        type: 'error',
-        data: { message: 'Failed to load initial data' },
-        timestamp: new Date().toISOString()
-      }));
-    }
-  }
-
-  private async handleWebSocketMessage(ws: ServerWebSocket<unknown>, message: any): Promise<void> {
-    switch (message.type) {
-      case 'request_logs':
-        await this.handleWebSocketLogsRequest(ws, message.processId, message.lines);
-        break;
-      case 'ping':
-        ws.send(JSON.stringify({ type: 'pong', data: {}, timestamp: new Date().toISOString() }));
-        break;
-      default:
-        logger.warn('Unknown WebSocket message type', message.type);
-    }
-  }
-
-  private async handleWebSocketLogsRequest(ws: ServerWebSocket<unknown>, processId: string, lines: number | 'all' = 100): Promise<void> {
-    try {
-      let maxLines: number;
-      if (lines === 'all') {
-        maxLines = 100000;
-      } else {
-        maxLines = Math.min(lines || 100, 10000);
-      }
-      const logs = await this.getProcessLogs(processId, maxLines);
-      ws.send(JSON.stringify({
-        type: 'logs',
-        data: { processId, logs },
-        timestamp: new Date().toISOString()
-      }));
-    } catch (error) {
-      logger.error('Failed to get logs for process', { processId, error });
-      ws.send(JSON.stringify({
-        type: 'error',
-        data: { message: 'Failed to load logs', processId },
-        timestamp: new Date().toISOString()
-      }));
-    }
-  }
-
   async stop(): Promise<void> {
     logger.info('Stopping Bun proxy server...');
 
-    // Stop HTTP server
-    if (this.httpServer) {
-      this.httpServer.stop();
-      this.httpServer = null;
-      logger.info('HTTP server stopped');
-    }
-
-    // Stop HTTPS server
-    if (this.httpsServer) {
-      this.httpsServer.stop();
-      this.httpsServer = null;
-      logger.info('HTTPS server stopped');
-    }
-
-    // Stop management server
-    if (this.managementServer) {
-      this.managementServer.stop();
-      this.managementServer = null;
-      logger.info('Management server stopped');
-    }
-
-    // Shutdown process manager
-    await processManager.shutdown();
-
-    // Shutdown statistics service
-    await this.statisticsService.shutdown();
-
-    // Shutdown cache service (no shutdown method, just cleanup)
-    await cacheService.cleanup();
+    // Stop all services
+    await this.proxyServer.stop();
+    await this.processManagementServer.stop();
+    await this.managementConsole.stop();
 
     logger.info('Bun proxy server stopped successfully');
   }
 
-  private async handleRequest(req: Request): Promise<Response> {
-    const url = new URL(req.url);
-    const method = req.method;
-    const pathname = url.pathname;
-    const headers = Object.fromEntries(req.headers.entries());
-
-    // Create a request-like object for middleware compatibility
-    const requestContext = {
-      method,
-      url: req.url,
-      pathname,
-      headers,
-      body: req.body,
-      query: Object.fromEntries(url.searchParams.entries()),
-      ip: this.getClientIP(req),
-      originalUrl: req.url
-    };
-
-    // Apply middleware
-    const middlewareResult = await this.proxyMiddleware.processRequest(requestContext);
-    if (middlewareResult) {
-      return middlewareResult;
-    }
-
-    // Handle native static routes first (most efficient)
-    const staticRoute = this.findStaticRoute(pathname);
-    if (staticRoute) {
-      return this.handleStaticRoute(requestContext, staticRoute);
-    }
-
-    // Handle native redirect routes
-    const redirectTarget = this.redirectRoutes.get(pathname);
-    if (redirectTarget) {
-      return this.handleRedirectRoute(requestContext, redirectTarget);
-    }
-
-    // Handle native proxy routes
-    const proxyRoute = this.proxyRoutesMap.get(pathname);
-    if (proxyRoute) {
-      return this.handleProxyRoute(requestContext, proxyRoute);
-    }
-
-    // Handle native CORS routes
-    const corsRoute = this.corsRoutes.get(pathname);
-    if (corsRoute) {
-      return this.handleCorsRoute(requestContext, corsRoute);
-    }
-
-    // Handle complex routes that need the full routing system
-    const routeResponse = await this.proxyRoutes.handleRequest(requestContext, this.config);
-    if (routeResponse) {
-      return routeResponse;
-    }
-
-    // Handle unmatched requests (404)
-    const startTime = Date.now();
-    const clientIP = this.getClientIP(req);
-    const geolocation = this.getGeolocation(clientIP);
-    const userAgent = headers['user-agent'] || 'Unknown';
-
-    this.statisticsService.recordRequest(
-      clientIP,
-      geolocation,
-      userAgent,
-      method,
-      pathname,
-      '404',
-      Date.now() - startTime
-    );
-
-    return new Response(JSON.stringify({
-      error: 'Not Found',
-      message: 'No route configured for ' + method + ' ' + pathname,
-      timestamp: new Date().toISOString()
-    }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
-  private findStaticRoute(pathname: string): { staticPath: string; spaFallback: boolean; publicPaths: string[] } | null {
-    // Find the longest matching static route
-    let bestMatch: { staticPath: string; spaFallback: boolean; publicPaths: string[] } | null = null;
-    let bestLength = 0;
-
-    for (const [routePath, config] of this.staticRoutes) {
-      if (pathname.startsWith(routePath) && routePath.length > bestLength) {
-        bestMatch = config;
-        bestLength = routePath.length;
-      }
-    }
-
-    return bestMatch;
-  }
-
-  private async handleStaticRoute(requestContext: any, config: { staticPath: string; spaFallback: boolean; publicPaths: string[] }): Promise<Response> {
-    const startTime = Date.now();
-    const { staticPath, spaFallback, publicPaths } = config;
-
-    try {
-      logger.info(`[NATIVE STATIC] ${requestContext.method} ${requestContext.originalUrl} -> ${staticPath}`);
-
-      // Check if this is a public path that doesn't require authentication
-      const isPublicPath = publicPaths.some(publicPath =>
-        requestContext.pathname.startsWith(publicPath)
-      );
-
-      // Try to serve the static file
-      const relativePath = requestContext.pathname;
-      const filePath = path.join(staticPath, relativePath);
-      const file = Bun.file(filePath);
-
-      if (await file.exists()) {
-        const responseTime = Date.now() - startTime;
-        logger.info(`[NATIVE STATIC] ${requestContext.method} ${requestContext.originalUrl} [200] (${responseTime}ms)`);
-
-        // Record statistics
-        this.recordRequestStats(requestContext, { name: 'static' }, staticPath, responseTime, 200, 'static');
-
-        return new Response(file);
-      }
-
-      // If file doesn't exist and SPA fallback is enabled
-      if (spaFallback) {
-        return this.handleSPAFallback(requestContext, staticPath);
-      }
-
-      // File not found
-      const responseTime = Date.now() - startTime;
-      logger.info(`[NATIVE STATIC] ${requestContext.method} ${requestContext.originalUrl} [404] (${responseTime}ms)`);
-
-      this.recordRequestStats(requestContext, { name: 'static' }, staticPath, responseTime, 404, 'static');
-
-      return new Response(JSON.stringify({
-        error: 'Not Found',
-        message: 'File not found'
-      }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      });
-
-    } catch (error) {
-      logger.error(`[NATIVE STATIC] Error serving static files for ${staticPath}`, error);
-
-      return new Response(JSON.stringify({
-        error: 'Static Proxy Error',
-        message: 'An error occurred while serving static files'
-      }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-
-  private async handleSPAFallback(requestContext: any, staticPath: string): Promise<Response> {
-    // Skip if this is an API route or static asset
-    if (requestContext.pathname.startsWith('/api/') ||
-      requestContext.pathname.startsWith('/static/') ||
-      requestContext.pathname.includes('.')) {
-      return new Response(JSON.stringify({
-        error: 'Not Found',
-        message: 'File not found'
-      }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Serve index.html for SPA routes
-    const indexPath = path.join(staticPath, 'index.html');
-    const indexFile = Bun.file(indexPath);
-
-    if (await indexFile.exists()) {
-      return new Response(indexFile);
-    }
-
-    return new Response(JSON.stringify({
-      error: 'Not Found',
-      message: 'SPA fallback file not found'
-    }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
-  private handleRedirectRoute(requestContext: any, redirectTarget: string): Response {
-    logger.info(`[NATIVE REDIRECT] ${requestContext.method} ${requestContext.originalUrl} -> ${redirectTarget}`);
-    const start = Date.now();
-
-    // Record statistics
-    this.recordRequestStats(requestContext, { name: 'redirect' }, redirectTarget, Date.now() - start, 301, 'redirect');
-
-    return new Response(null, {
-      status: 301,
-      headers: { 'Location': redirectTarget }
-    });
-  }
-
-  private async handleProxyRoute(requestContext: any, config: { target: string; route: ProxyRoute }): Promise<Response> {
-    const { target, route } = config;
-    const startTime = Date.now();
-    const classicProxy = new BunClassicProxy();
-
-    try {
-      const proxyConfig = {
-        route,
-        target,
-        routeIdentifier: `native-proxy ${requestContext.pathname}`,
-        secure: false,
-        timeouts: { request: 30000, proxy: 30000 },
-        logRequests: true,
-        logErrors: true
-      };
-
-      const response = await classicProxy.handleProxyRequest(requestContext, proxyConfig);
-
-      // Record statistics
-      const responseTime = Date.now() - startTime;
-      this.recordRequestStats(requestContext, route, target, responseTime, response.status, 'proxy');
-
-      return response;
-    } catch (error) {
-      logger.error(`[NATIVE PROXY] Error in proxy request for ${requestContext.pathname}`, error);
-
-      return new Response(JSON.stringify({
-        error: 'Proxy Error',
-        message: 'Failed to proxy request',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      }), {
-        status: 502,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-
-  private async handleCorsRoute(requestContext: any, config: { route: ProxyRoute; corsProxy: BunCorsProxy }): Promise<Response> {
-    const { route, corsProxy } = config;
-    const target = this.extractTargetFromRequest(requestContext);
-
-    if (!target) {
-      return new Response(JSON.stringify({
-        error: 'Bad Request',
-        message: 'Missing target parameter'
-      }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    logger.info(`[NATIVE CORS] ${requestContext.method} ${requestContext.originalUrl} -> ${target}`);
-
-    const proxyConfig = {
-      route,
-      target,
-      routeIdentifier: `native-cors ${requestContext.pathname}`,
-      secure: false,
-      timeouts: { request: 30000, proxy: 30000 },
-      logRequests: true,
-      logErrors: true
-    };
-
-    try {
-      return await corsProxy.handleProxyRequest(requestContext, proxyConfig);
-    } catch (error) {
-      logger.error(`[NATIVE CORS] Error in proxy request for ${requestContext.pathname}`, error);
-
-      return new Response(JSON.stringify({
-        error: 'CORS Proxy Error',
-        message: 'Failed to proxy request',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      }), {
-        status: 502,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-
-  private extractTargetFromRequest(requestContext: any): string | null {
-    // Extract target from base64 URL parameter for CORS forwarder
-    const url = new URL(requestContext.url);
-    const targetParam = url.searchParams.get('target');
-
-    if (targetParam) {
-      try {
-        return atob(targetParam);
-      } catch (error) {
-        logger.error('Failed to decode target parameter', error);
-        return null;
-      }
-    }
-
-    return null;
-  }
-
-  private recordRequestStats(requestContext: any, route: any, target: string, responseTime: number, statusCode: number, requestType: string = 'proxy'): void {
-    if (this.statisticsService) {
-      const clientIP = this.getClientIP(requestContext);
-      const geolocation = this.getGeolocation(clientIP);
-      const userAgent = requestContext.headers['user-agent'] || 'Unknown';
-
-      this.statisticsService.recordRequest(
-        clientIP,
-        geolocation,
-        userAgent,
-        requestContext.method,
-        requestContext.pathname,
-        statusCode.toString(),
-        responseTime
-      );
-    }
-  }
-
-  private handleHealthRequest(): Response {
-    try {
-      const certificates = this.proxyCertificates?.getAllCertificates() || new Map();
-      const validCertificates = Array.from(certificates.values()).filter((cert: any) => cert.isValid);
-
-      return new Response(JSON.stringify({
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        certificates: {
-          total: certificates.size,
-          valid: validCertificates.length,
-          domains: Array.from(certificates.keys()),
-          validDomains: validCertificates.map((cert: any) => cert.domain),
-        },
-        servers: {
-          http: !!this.httpServer,
-          https: !!this.httpsServer,
-          management: !!this.managementServer,
-        },
-        config: {
-          httpPort: configService.getServerConfig().port,
-          httpsPort: configService.getServerConfig().httpsPort,
-          routes: configService.getServerConfig().routes.length,
-        },
-      }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error) {
-      logger.error('Health check failed', error);
-      return new Response(JSON.stringify({
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Unknown error',
-        timestamp: new Date().toISOString(),
-      }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-
-  private handleError(error: Error): Response {
-    logger.error('Server error', error);
-    return new Response('Internal Server Error', { status: 500 });
-  }
-
-  private getClientIP(req: Request): string {
-    const headers = req.headers;
-    const xForwardedFor = headers.get('x-forwarded-for');
-    const xRealIP = headers.get('x-real-ip');
-    const xClientIP = headers.get('x-client-ip');
-
-    if (xForwardedFor) {
-      return xForwardedFor.split(',')[0].trim();
-    }
-
-    if (xRealIP) {
-      return xRealIP;
-    }
-
-    if (xClientIP) {
-      return xClientIP;
-    }
-
-    return 'unknown';
-  }
-
-  private getGeolocation(ip: string): any {
-    try {
-      const { geolocationService } = require('./services/geolocation');
-      return geolocationService.getGeolocation(ip);
-    } catch (error) {
-      return null;
-    }
-  }
-
   getStatus(): any {
     return {
-      httpPort: this.config.port,
-      httpsPort: this.config.httpsPort,
-      routes: this.config.routes.length,
-      certificates: this.proxyCertificates.getAllCertificates(),
-      processes: this.getProcessesSync(),
-      statistics: this.statisticsService.getStatsSummary(),
-      cache: cacheService.getStats(),
-      uptime: process.uptime(),
-      memory: process.memoryUsage(),
+      proxy: this.proxyServer.getStatus(),
+      processManagement: this.processManagementServer.getStatus(),
+      management: this.managementConsole.getStatus(),
       timestamp: new Date().toISOString()
     };
-  }
-
-  private getProcessesSync(): any[] {
-    const processes = processManager.getProcessStatus();
-    return Array.isArray(processes) ? processes : [];
   }
 
   getConfig(): ProxyConfig {
@@ -799,11 +74,11 @@ export class BunProxyServer {
   }
 
   getStatisticsService(): any {
-    return this.statisticsService;
+    return this.proxyServer.getStatisticsService();
   }
 
   async getProcesses(): Promise<any[]> {
-    return processManager.getProcessStatus();
+    return this.processManagementServer.getProcesses();
   }
 
   async getStatusData(): Promise<any> {
@@ -811,63 +86,15 @@ export class BunProxyServer {
   }
 
   async getProcessLogs(processId: string, lines: number | string): Promise<string[]> {
-    return processManager.getProcessLogs(processId, lines);
+    return this.processManagementServer.getProcessLogs(processId, lines);
   }
 
   async handleProcessConfigUpdate(newConfig: any): Promise<void> {
-    // TODO: Implement or make this method public in ProcessManager
-    logger.info('Process config update not yet implemented for Bun server');
-  }
-
-  private setupConfigChangeHandling(): void {
-    configService.on('configReloading', () => {
-      logger.info('Configuration reloading...');
-    });
-
-    configService.on('configReloaded', async (newConfigs: any) => {
-      logger.info('Configuration reloaded, updating server...');
-      await this.handleConfigUpdate(newConfigs);
-    });
-
-    configService.on('configReloadError', (error: any) => {
-      logger.error('Configuration reload failed', error);
-    });
-  }
-
-  private async handleConfigUpdate(newConfigs: any): Promise<void> {
-    try {
-      // Update server configuration
-      if (newConfigs.serverConfig) {
-        this.config = newConfigs.serverConfig;
-      }
-
-      // Update main configuration
-      if (newConfigs.mainConfig) {
-        this.mainConfig = newConfigs.mainConfig;
-      }
-
-      // Update process configuration
-      if (newConfigs.processConfig) {
-        // TODO: Implement or make this method public in ProcessManager
-        logger.info('Process config update not yet implemented for Bun server');
-      }
-
-      logger.info('Server configuration updated successfully');
-    } catch (error) {
-      logger.error('Failed to update server configuration', error);
-    }
+    await this.processManagementServer.handleProcessConfigUpdate(newConfig);
   }
 
   // Add broadcast helpers if needed for process/status/logs updates
   broadcastToManagementWebSockets(message: any): void {
-    const msg = JSON.stringify(message);
-    for (const ws of this.managementWebSockets) {
-      try {
-        ws.send(msg);
-      } catch (error) {
-        logger.error('Failed to send message to WebSocket client', error);
-        this.managementWebSockets.delete(ws);
-      }
-    }
+    this.managementConsole.broadcastToManagementWebSockets(message);
   }
 } 
