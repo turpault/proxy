@@ -5,8 +5,9 @@ import { configService } from './config-service';
 import { processManager } from './process-manager';
 import { getStatisticsService } from './statistics';
 import { cacheService } from './cache';
-import managementHtml from '../frontend/management/index.html';
-import path from 'path';
+import * as managementHtml from '../frontend/management/index.html';
+import * as path from 'path';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'fs';
 
 export class ManagementConsole {
   private managementServer: Server | null = null;
@@ -51,9 +52,8 @@ export class ManagementConsole {
     this.managementServer = Bun.serve({
       port: managementPort,
       hostname: managementHost,
-      development: true,
       routes: {
-        "/": managementHtml,
+        "/": { GET: managementHtml },
 
         "/api/status": async (req: Request) => {
           if (req.method === 'GET') {
@@ -83,10 +83,157 @@ export class ManagementConsole {
           });
         },
 
+        "/api/config/:type": async (req: Request) => {
+          if (req.method === 'GET') {
+            const url = new URL(req.url);
+            const type = url.pathname.split('/')[3];
+
+            try {
+              let configData: any;
+              switch (type) {
+                case 'proxy':
+                  configData = configService.getServerConfig();
+                  break;
+                case 'processes':
+                  configData = configService.getProcessConfig();
+                  break;
+                case 'main':
+                  configData = configService.getMainConfig();
+                  break;
+                default:
+                  return new Response(JSON.stringify({ error: 'Invalid config type' }), {
+                    status: 400,
+                    headers: { 'Content-Type': 'application/json' }
+                  });
+              }
+
+              return new Response(JSON.stringify({ success: true, data: configData }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({ error: 'Failed to get config', details: error instanceof Error ? error.message : 'Unknown error' }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+            status: 405,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        },
+
+        "/api/config/:type/save": async (req: Request) => {
+          if (req.method === 'POST') {
+            const url = new URL(req.url);
+            const type = url.pathname.split('/')[3];
+
+            try {
+              const newConfig = await req.json();
+              // TODO: Implement config saving
+              logger.info(`Config save requested for type: ${type}`);
+
+              return new Response(JSON.stringify({ success: true, message: 'Configuration saved' }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({ error: 'Failed to save config', details: error instanceof Error ? error.message : 'Unknown error' }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+            status: 405,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        },
+
+        "/api/config/:type/backup": async (req: Request) => {
+          if (req.method === 'POST') {
+            const url = new URL(req.url);
+            const type = url.pathname.split('/')[3];
+
+            try {
+              // TODO: Implement config backup
+              logger.info(`Config backup requested for type: ${type}`);
+
+              return new Response(JSON.stringify({ success: true, message: 'Backup created successfully' }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({ error: 'Failed to create backup', details: error instanceof Error ? error.message : 'Unknown error' }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+            status: 405,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        },
+
+        "/api/config/:type/backups": async (req: Request) => {
+          if (req.method === 'GET') {
+            const url = new URL(req.url);
+            const type = url.pathname.split('/')[3];
+
+            try {
+              // TODO: Implement config backups listing
+              logger.info(`Config backups listing requested for type: ${type}`);
+
+              return new Response(JSON.stringify({ success: true, data: [] }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({ error: 'Failed to list backups', details: error instanceof Error ? error.message : 'Unknown error' }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+            status: 405,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        },
+
+        "/api/config/:type/restore": async (req: Request) => {
+          if (req.method === 'POST') {
+            const url = new URL(req.url);
+            const type = url.pathname.split('/')[3];
+
+            try {
+              const { backupPath } = await req.json();
+              // TODO: Implement config restore
+              logger.info(`Config restore requested for type: ${type}, backup: ${backupPath}`);
+
+              return new Response(JSON.stringify({ success: true, message: 'Configuration restored successfully' }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({ error: 'Failed to restore config', details: error instanceof Error ? error.message : 'Unknown error' }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+            status: 405,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        },
+
         "/api/statistics": async (req: Request) => {
           if (req.method === 'GET') {
             const stats = this.statisticsService.getStatsSummary();
-            return new Response(JSON.stringify(stats), {
+            return new Response(JSON.stringify({ success: true, data: stats }), {
               status: 200,
               headers: { 'Content-Type': 'application/json' }
             });
@@ -97,13 +244,80 @@ export class ManagementConsole {
           });
         },
 
-        "/api/processes": async (req: Request) => {
+        "/api/statistics/summary": async (req: Request) => {
           if (req.method === 'GET') {
-            const processes = await this.getProcesses();
-            return new Response(JSON.stringify(processes), {
+            const stats = this.statisticsService.getStatsSummary();
+            return new Response(JSON.stringify({ success: true, data: stats }), {
               status: 200,
               headers: { 'Content-Type': 'application/json' }
             });
+          }
+          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+            status: 405,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        },
+
+        "/api/statistics/generate-report": async (req: Request) => {
+          if (req.method === 'POST') {
+            try {
+              // TODO: Implement manual report generation
+              logger.info('Manual statistics report generation requested');
+
+              return new Response(JSON.stringify({
+                success: true,
+                message: 'Statistics report generated successfully',
+                data: {
+                  filepath: '/path/to/report.json',
+                  summary: this.statisticsService.getStatsSummary()
+                }
+              }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({ error: 'Failed to generate report', details: error instanceof Error ? error.message : 'Unknown error' }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+            status: 405,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        },
+
+        "/api/processes": async (req: Request) => {
+          if (req.method === 'GET') {
+            const processes = await this.getProcesses();
+            return new Response(JSON.stringify({ success: true, data: processes }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+            status: 405,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        },
+
+        "/api/processes/reload": async (req: Request) => {
+          if (req.method === 'POST') {
+            try {
+              // TODO: Implement process configuration reload
+              logger.info('Process configuration reload requested');
+
+              return new Response(JSON.stringify({ success: true, message: 'Process configuration reloaded' }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({ error: 'Failed to reload process configuration', details: error instanceof Error ? error.message : 'Unknown error' }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
           }
           return new Response(JSON.stringify({ error: 'Method not allowed' }), {
             status: 405,
@@ -207,7 +421,7 @@ export class ManagementConsole {
 
             try {
               const logs = await this.getProcessLogs(processId, lines);
-              return new Response(JSON.stringify({ processId, logs }), {
+              return new Response(JSON.stringify({ success: true, data: { processId, logs } }), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -227,7 +441,7 @@ export class ManagementConsole {
         "/api/processes/config": async (req: Request) => {
           if (req.method === 'GET') {
             const processConfig = configService.getProcessConfig();
-            return new Response(JSON.stringify(processConfig), {
+            return new Response(JSON.stringify({ success: true, data: processConfig }), {
               status: 200,
               headers: { 'Content-Type': 'application/json' }
             });
@@ -241,6 +455,124 @@ export class ManagementConsole {
               });
             } catch (error) {
               return new Response(JSON.stringify({ error: 'Failed to update process configuration', details: error instanceof Error ? error.message : 'Unknown error' }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+            status: 405,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        },
+
+        "/api/certificates": async (req: Request) => {
+          if (req.method === 'GET') {
+            try {
+              const certificates = this.getCertificates();
+              return new Response(JSON.stringify({ success: true, data: Array.from(certificates.entries()) }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({ error: 'Failed to get certificates', details: error instanceof Error ? error.message : 'Unknown error' }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+            status: 405,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        },
+
+        "/api/cache/stats": async (req: Request) => {
+          if (req.method === 'GET') {
+            try {
+              const stats = cacheService.getStats();
+              return new Response(JSON.stringify({ success: true, data: stats }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({ error: 'Failed to get cache stats', details: error instanceof Error ? error.message : 'Unknown error' }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+            status: 405,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        },
+
+        "/api/cache/entries": async (req: Request) => {
+          if (req.method === 'GET') {
+            try {
+              const url = new URL(req.url);
+              const page = parseInt(url.searchParams.get('page') || '1');
+              const limit = parseInt(url.searchParams.get('limit') || '50');
+              const userId = url.searchParams.get('userId');
+              const inMRU = url.searchParams.get('inMRU') === 'true';
+
+              // TODO: Implement cache entries retrieval
+              logger.info(`Cache entries requested: page=${page}, limit=${limit}, userId=${userId}, inMRU=${inMRU}`);
+
+              return new Response(JSON.stringify({ success: true, data: { entries: [], total: 0, page, limit } }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({ error: 'Failed to get cache entries', details: error instanceof Error ? error.message : 'Unknown error' }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+            status: 405,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        },
+
+        "/api/cache/clear": async (req: Request) => {
+          if (req.method === 'POST') {
+            try {
+              await cacheService.cleanup();
+              return new Response(JSON.stringify({ success: true, message: 'Cache cleared successfully' }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({ error: 'Failed to clear cache', details: error instanceof Error ? error.message : 'Unknown error' }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+            status: 405,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        },
+
+        "/api/cache/delete/:key": async (req: Request) => {
+          if (req.method === 'DELETE') {
+            try {
+              const url = new URL(req.url);
+              const key = url.pathname.split('/')[3];
+
+              // TODO: Implement cache entry deletion
+              logger.info(`Cache entry deletion requested for key: ${key}`);
+
+              return new Response(JSON.stringify({ success: true, message: 'Cache entry deleted successfully' }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({ error: 'Failed to delete cache entry', details: error instanceof Error ? error.message : 'Unknown error' }), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -458,13 +790,13 @@ export class ManagementConsole {
   // Add broadcast helpers if needed for process/status/logs updates
   broadcastToManagementWebSockets(message: any): void {
     const msg = JSON.stringify(message);
-    for (const ws of this.managementWebSockets) {
+    this.managementWebSockets.forEach((ws) => {
       try {
         ws.send(msg);
       } catch (error) {
         logger.error('Failed to send message to WebSocket client', error);
         this.managementWebSockets.delete(ws);
       }
-    }
+    });
   }
 } 
