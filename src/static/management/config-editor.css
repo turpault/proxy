@@ -135,6 +135,21 @@
   border-color: #fc8181;
 }
 
+/* Error line highlighting */
+.config-editor .error-line {
+  background-color: #fed7d7;
+  border-left: 3px solid #e53e3e;
+  padding-left: 0.5rem;
+  margin-left: -0.5rem;
+}
+
+.config-editor .error-line::before {
+  content: "⚠";
+  color: #e53e3e;
+  margin-right: 0.5rem;
+  font-weight: bold;
+}
+
 /* Validation status indicator */
 .validation-status {
   position: absolute;

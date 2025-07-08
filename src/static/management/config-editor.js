@@ -204,6 +204,99 @@ function setupRealTimeValidation(type, editor) {
   });
 }
 
+// Line highlighting functions
+function highlightErrorLine(editor, lineNumber) {
+  // Remove any existing error highlighting
+  clearErrorHighlighting(editor);
+
+  if (!lineNumber || lineNumber < 1) return;
+
+  const lines = editor.value.split('\n');
+  if (lineNumber > lines.length) return;
+
+  // Create a simple overlay for line highlighting
+  const overlay = document.createElement('div');
+  overlay.className = 'error-line-overlay';
+  overlay.style.cssText = `
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 10;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    padding: 1rem;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow: hidden;
+    background: transparent;
+  `;
+
+  // Calculate line height and position
+  const lineHeight = 1.5 * 0.9; // line-height * font-size in rem
+  const lineHeightPx = lineHeight * 16; // Convert to pixels
+  const paddingTop = 16; // 1rem in pixels
+
+  // Calculate the position of the error line
+  const errorLineTop = paddingTop + (lineNumber - 1) * lineHeightPx;
+
+  // Create the error line indicator
+  const errorIndicator = document.createElement('div');
+  errorIndicator.className = 'error-line-indicator';
+  errorIndicator.style.cssText = `
+    position: absolute;
+    top: ${errorLineTop}px;
+    left: 0;
+    right: 0;
+    height: ${lineHeightPx}px;
+    background-color: #fed7d7;
+    border-left: 3px solid #e53e3e;
+    pointer-events: none;
+    z-index: 11;
+  `;
+
+  // Add warning icon
+  const warningIcon = document.createElement('span');
+  warningIcon.textContent = '⚠';
+  warningIcon.style.cssText = `
+    position: absolute;
+    left: -25px;
+    top: 0;
+    color: #e53e3e;
+    font-weight: bold;
+    font-size: 0.8rem;
+    line-height: ${lineHeightPx}px;
+    width: 20px;
+    text-align: center;
+  `;
+
+  errorIndicator.appendChild(warningIcon);
+  overlay.appendChild(errorIndicator);
+
+  // Add the overlay to the editor container
+  const container = editor.parentNode;
+  container.style.position = 'relative';
+  container.appendChild(overlay);
+
+  // Store reference for cleanup
+  editor._errorOverlay = overlay;
+
+  // Scroll to the error line
+  const errorLineElement = editor;
+  const scrollTop = errorLineTop - container.offsetHeight / 2;
+  editor.scrollTop = Math.max(0, scrollTop);
+}
+
+function clearErrorHighlighting(editor) {
+  if (editor._errorOverlay) {
+    editor._errorOverlay.remove();
+    delete editor._errorOverlay;
+  }
+}
+
 function debounce(func, wait) {
   return function executedFunction(...args) {
     const later = () => {
@@ -227,6 +320,10 @@ async function validateYAMLContent(type, content) {
     validation.textContent = 'Enter YAML content to validate';
     validation.className = 'validation-message warning';
     updateValidationStatus(type, 'none');
+    // Clear any error highlighting when content is empty
+    if (editor) {
+      clearErrorHighlighting(editor);
+    }
     return;
   }
 
@@ -235,6 +332,10 @@ async function validateYAMLContent(type, content) {
     validation.textContent = 'Validating...';
     validation.className = 'validation-message warning';
     updateValidationStatus(type, 'validating');
+    // Clear any error highlighting when starting validation
+    if (editor) {
+      clearErrorHighlighting(editor);
+    }
 
     const response = await fetch(`/api/config/${type}/validate`, {
       method: 'POST',
@@ -248,12 +349,20 @@ async function validateYAMLContent(type, content) {
       validation.textContent = '✅ YAML is valid';
       validation.className = 'validation-message success';
       updateValidationStatus(type, 'valid');
+      // Clear any error highlighting when validation passes
+      if (editor) {
+        clearErrorHighlighting(editor);
+      }
     } else {
       // Format error message for display
       let errorMessage = data.error || 'Validation failed';
 
       if (data.line) {
         errorMessage = `Line ${data.line}: ${errorMessage}`;
+        // Highlight the error line
+        if (editor) {
+          highlightErrorLine(editor, data.line);
+        }
       }
 
       if (data.details) {
