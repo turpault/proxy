@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs-extra';
 import { watch } from 'fs';
 import { logger } from '../utils/logger';
-import { ProcessConfig, ProcessManagementConfig } from '../types';
+import { ProcessConfig, ProcessManagementConfig, ServerConfig } from '../types';
 import axios from 'axios';
 import { ProcessScheduler } from './process-scheduler';
 
@@ -60,6 +60,9 @@ export class ProcessManager {
   private processes: Map<string, ManagedProcess> = new Map();
   private healthCheckIntervals: Map<string, NodeJS.Timeout> = new Map();
   private isShuttingDown = false;
+  private config: ServerConfig | null = null;
+  private fileWatcher: fs.FSWatcher | null = null;
+  private reinitializeTimeout: NodeJS.Timeout | null = null;
 
   private onProcessUpdate: (() => void) | null = null;
   private scheduler: ProcessScheduler;
@@ -87,6 +90,207 @@ export class ProcessManager {
     // when the process manager is terminated
     process.on('SIGTERM', () => this.shutdown());
     process.on('SIGINT', () => this.shutdown());
+  }
+
+  /**
+   * Initialize with server configuration
+   */
+  public initialize(config: ServerConfig): void {
+    this.config = config;
+  }
+
+  /**
+   * Start all managed processes from configuration
+   */
+  async startManagedProcesses(): Promise<void> {
+    if (!this.config?.processManagement?.processes) {
+      logger.info('No process management configuration found');
+      return;
+    }
+
+    logger.info('Starting managed processes...');
+
+    for (const [processId, processConfig] of Object.entries(this.config.processManagement.processes)) {
+      if (processConfig.enabled !== false) {
+        try {
+          const target = this.getTargetForProcess(processId, processConfig);
+          await this.startProcess(processId, processConfig, target);
+          logger.info(`Started managed process: ${processId}`);
+        } catch (error) {
+          logger.error(`Failed to start managed process: ${processId}`, error);
+        }
+      } else {
+        logger.info(`Skipping disabled process: ${processId}`);
+      }
+    }
+
+    logger.info('Managed processes startup complete');
+  }
+
+  /**
+   * Set up file watching for process configuration changes
+   */
+  setupProcessConfigWatching(): void {
+    if (!this.config?.processConfigFile) {
+      logger.info('No process config file specified, skipping file watching');
+      return;
+    }
+
+    const configFilePath = path.resolve(process.cwd(), this.config.processConfigFile);
+
+    try {
+      // Stop existing watcher if any
+      if (this.fileWatcher) {
+        this.fileWatcher.close();
+      }
+
+      this.fileWatcher = watch(configFilePath, { persistent: true }, (eventType, filename) => {
+        if (eventType === 'change' && filename) {
+          logger.info(`Process configuration file changed: ${filename}`);
+          this.scheduleReinitialize();
+        }
+      });
+
+      this.fileWatcher.on('error', (error) => {
+        logger.error('Error watching process configuration file', error);
+      });
+
+      logger.info(`Process manager watching for changes in ${configFilePath}`);
+    } catch (error) {
+      logger.error('Failed to start file watcher for process configuration', error);
+    }
+  }
+
+  /**
+   * Schedule reinitialization with debouncing
+   */
+  private scheduleReinitialize(): void {
+    // Clear existing timeout
+    if (this.reinitializeTimeout) {
+      clearTimeout(this.reinitializeTimeout);
+    }
+
+    // Debounce reinitialization to avoid multiple rapid updates
+    this.reinitializeTimeout = setTimeout(() => {
+      this.reinitializeFromFile();
+    }, 2000); // Wait 2 seconds after last change
+  }
+
+  /**
+   * Reinitialize from configuration file
+   */
+  private async reinitializeFromFile(): Promise<void> {
+    if (!this.config?.processConfigFile) {
+      logger.warn('Cannot reinitialize: missing process config file path');
+      return;
+    }
+
+    try {
+      logger.info('Reinitializing process management from updated configuration file');
+
+      // Read and parse the updated configuration
+      const configFilePath = path.resolve(process.cwd(), this.config.processConfigFile);
+      const newConfig = await this.loadProcessConfig(configFilePath);
+
+      if (!newConfig) {
+        throw new Error('Failed to load process configuration file');
+      }
+
+      // Handle the configuration update
+      await this.handleProcessConfigUpdate(newConfig);
+
+    } catch (error) {
+      logger.error('Failed to reinitialize process management', error);
+    }
+  }
+
+  /**
+   * Handle process configuration update
+   */
+  async handleProcessConfigUpdate(newConfig: ProcessManagementConfig): Promise<void> {
+    logger.info('Processing process configuration update', {
+      processCount: Object.keys(newConfig.processes).length,
+      processes: Object.keys(newConfig.processes)
+    });
+
+    // Create a target resolver function
+    const targetResolver = (processId: string, processConfig: ProcessConfig): string => {
+      return this.getTargetForProcess(processId, processConfig);
+    };
+
+    // Use the ProcessManager's updateConfiguration method
+    await this.updateConfiguration(newConfig, targetResolver);
+
+    // Update the local config reference
+    if (this.config) {
+      this.config.processManagement = newConfig;
+    }
+
+    logger.info('Process configuration update complete');
+  }
+
+  /**
+   * Get target for a process based on route configuration
+   */
+  private getTargetForProcess(processId: string, processConfig: ProcessConfig): string {
+    if (!this.config) {
+      // Fallback to localhost with a default port
+      const defaultPort = 3000 + parseInt(processId.replace(/\D/g, '0'));
+      return `http://localhost:${defaultPort}`;
+    }
+
+    // Find the route that corresponds to this process
+    const route = this.config.routes.find(r => this.getProcessId(r) === processId);
+
+    if (route && route.target) {
+      return route.target;
+    }
+
+    // Fallback to localhost with a default port
+    const defaultPort = 3000 + parseInt(processId.replace(/\D/g, '0'));
+    return `http://localhost:${defaultPort}`;
+  }
+
+  /**
+   * Extract process ID from route configuration
+   */
+  private getProcessId(route: any): string {
+    // Extract process ID from route configuration
+    // This is a simplified implementation - adjust based on your actual route structure
+    return route.processId || route.domain || 'default';
+  }
+
+  /**
+   * Get process logs
+   */
+  async getProcessLogs(processId: string, lines: number | string): Promise<string[]> {
+    const processes = this.getProcessStatus();
+    const process = processes.find(p => p.id === processId);
+
+    if (!process || !process.logFile) {
+      return [];
+    }
+
+    try {
+      const logContent = await fs.readFile(process.logFile, 'utf8');
+      const logLines = logContent.split('\n').filter(line => line.trim());
+
+      const lineCount = typeof lines === 'string' ? parseInt(lines) : lines;
+      return logLines.slice(-lineCount);
+    } catch (error) {
+      logger.error(`Failed to read logs for process ${processId}`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Get process port
+   */
+  getProcessPort(processId: string): number | null {
+    // This would be implemented based on your process port mapping logic
+    // For now, return a default port
+    const defaultPort = 3000 + parseInt(processId.replace(/\D/g, '0'));
+    return defaultPort;
   }
 
   /**
@@ -130,8 +334,6 @@ export class ProcessManager {
       return null;
     }
   }
-
-
 
   /**
    * Generate PID file path for a process
@@ -1223,7 +1425,17 @@ export class ProcessManager {
     this.isShuttingDown = true;
     logger.info('Shutting down process manager (processes will continue running)...');
 
+    // Stop file watching
+    if (this.fileWatcher) {
+      this.fileWatcher.close();
+      this.fileWatcher = null;
+    }
 
+    // Clear any pending timeouts
+    if (this.reinitializeTimeout) {
+      clearTimeout(this.reinitializeTimeout);
+      this.reinitializeTimeout = null;
+    }
 
     // Stop scheduler
     this.scheduler.shutdown();
