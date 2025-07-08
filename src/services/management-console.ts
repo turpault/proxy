@@ -565,8 +565,18 @@ export class ManagementConsole {
         "/api/cache/stats": {
           GET: async (req: Request) => {
             try {
-              const stats = cacheService.getStats();
-              return new Response(JSON.stringify({ success: true, data: stats }), {
+              const stats = await cacheService.getStats();
+
+              // Transform stats to match frontend expectations
+              const cacheData = {
+                totalEntries: stats.totalEntries || 0,
+                totalSize: stats.totalSize || 0,
+                hitRate: stats.mruHitRate || 0,
+                missRate: stats.mruHitRate ? (1 - stats.mruHitRate) : 0,
+                users: [] // TODO: Implement user tracking if needed
+              };
+
+              return new Response(JSON.stringify({ success: true, data: cacheData }), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -588,10 +598,46 @@ export class ManagementConsole {
               const userId = url.searchParams.get('userId');
               const inMRU = url.searchParams.get('inMRU') === 'true';
 
-              // TODO: Implement cache entries retrieval
-              logger.info(`Cache entries requested: page=${page}, limit=${limit}, userId=${userId}, inMRU=${inMRU}`);
+              // Get all cache entries
+              const allEntries = await cacheService.getAllEntries();
 
-              return new Response(JSON.stringify({ success: true, data: { entries: [], total: 0, page, limit } }), {
+              // Apply filters
+              let filteredEntries = allEntries;
+              if (userId) {
+                filteredEntries = filteredEntries.filter(entry => entry.userId === userId);
+              }
+              if (inMRU !== null) {
+                filteredEntries = filteredEntries.filter(entry => entry.inMRU === inMRU);
+              }
+
+              // Apply pagination
+              const startIndex = (page - 1) * limit;
+              const endIndex = startIndex + limit;
+              const paginatedEntries = filteredEntries.slice(startIndex, endIndex);
+
+              // Transform entries to match frontend expectations
+              const entries = paginatedEntries.map(entry => ({
+                key: entry.key,
+                url: entry.target,
+                method: entry.method,
+                status: entry.status,
+                contentType: entry.contentType,
+                size: entry.bodySize,
+                userId: entry.userId || '',
+                createdAt: new Date(entry.timestamp).toISOString(),
+                expiresAt: new Date(entry.timestamp + (24 * 60 * 60 * 1000)).toISOString(), // 24 hours from creation
+                body: '' // Don't include body content in list view
+              }));
+
+              return new Response(JSON.stringify({
+                success: true,
+                data: {
+                  entries,
+                  total: filteredEntries.length,
+                  page,
+                  limit
+                }
+              }), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -627,8 +673,17 @@ export class ManagementConsole {
               const url = new URL(req.url);
               const key = url.pathname.split('/')[3];
 
-              // TODO: Implement cache entry deletion
-              logger.info(`Cache entry deletion requested for key: ${key}`);
+              // Get the entry to find its details for deletion
+              const allEntries = await cacheService.getAllEntries();
+              const entry = allEntries.find(e => e.key === key);
+
+              if (entry) {
+                // Delete the entry using the cache service
+                await cacheService.delete(entry.target, entry.method, entry.userId, entry.userIP);
+                logger.info(`Cache entry deleted: ${key}`);
+              } else {
+                logger.warn(`Cache entry not found for deletion: ${key}`);
+              }
 
               return new Response(JSON.stringify({ success: true, message: 'Cache entry deleted successfully' }), {
                 status: 200,

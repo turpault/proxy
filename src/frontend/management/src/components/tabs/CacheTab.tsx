@@ -19,8 +19,12 @@ export const CacheTab: React.FC = () => {
       setLoading(true);
       const response = await fetch('/api/cache/stats');
       if (response.ok) {
-        const data = await response.json();
-        setCacheData(data);
+        const result = await response.json();
+        if (result.success && result.data) {
+          setCacheData(result.data);
+        } else {
+          throw new Error('Invalid response format');
+        }
       } else {
         throw new Error('Failed to load cache stats');
       }
@@ -36,9 +40,13 @@ export const CacheTab: React.FC = () => {
     try {
       const response = await fetch(`/api/cache/entries?page=${page}&limit=50`);
       if (response.ok) {
-        const data = await response.json();
-        setCacheEntries(data.entries || []);
-        setCurrentPage(page);
+        const result = await response.json();
+        if (result.success && result.data) {
+          setCacheEntries(result.data.entries || []);
+          setCurrentPage(page);
+        } else {
+          throw new Error('Invalid response format');
+        }
       }
     } catch (error) {
       console.error('Failed to load cache entries:', error);
