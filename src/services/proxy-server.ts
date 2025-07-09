@@ -9,6 +9,7 @@ import { ProxyCertificates } from './proxy-certificates';
 import { configService } from './config-service';
 import { BunClassicProxy } from './bun-classic-proxy';
 import { BunCorsProxy } from './bun-cors-proxy';
+import { geolocationService } from './geolocation';
 import path from 'path';
 
 export class ProxyServer {
@@ -206,7 +207,7 @@ export class ProxyServer {
     logger.info('Proxy server stopped successfully');
   }
 
-  private async handleRequest(req: BunRequest): Promise<Response> {
+  private async handleRequest(req: BunRequest, server: Server): Promise<Response> {
     const url = new URL(req.url);
     const method = req.method;
     const pathname = url.pathname;
@@ -220,7 +221,7 @@ export class ProxyServer {
       headers,
       body: req.body,
       query: Object.fromEntries(url.searchParams.entries()),
-      ip: this.getClientIP(req),
+      ip: this.getClientIP(req, server),
       originalUrl: req.url
     };
 
@@ -233,7 +234,7 @@ export class ProxyServer {
     // Handle native static routes first (most efficient)
     const staticRoute = this.findStaticRoute(pathname);
     if (staticRoute) {
-      return this.handleStaticRoute(requestContext, staticRoute);
+      return this.handleStaticRoute(requestContext, server, staticRoute);
     }
 
     // Handle native redirect routes
@@ -302,7 +303,7 @@ export class ProxyServer {
     return bestMatch;
   }
 
-  private async handleStaticRoute(requestContext: any, config: { staticPath: string; spaFallback: boolean; publicPaths: string[] }): Promise<Response> {
+  private async handleStaticRoute(requestContext: any, server: Server, config: { staticPath: string; spaFallback: boolean; publicPaths: string[] }): Promise<Response> {
     const startTime = Date.now();
     const { staticPath, spaFallback, publicPaths } = config;
 
@@ -336,7 +337,7 @@ export class ProxyServer {
         logger.info(`[NATIVE STATIC] ${requestContext.method} ${requestContext.originalUrl} [200] (${responseTime}ms)`);
 
         // Record statistics
-        this.recordRequestStats(requestContext, { name: 'static' }, staticPath, responseTime, 200, 'static');
+        this.recordRequestStats(requestContext, server, { name: 'static' }, staticPath, responseTime, 200, 'static');
 
         return new Response(file);
       }
@@ -350,7 +351,7 @@ export class ProxyServer {
       const responseTime = Date.now() - startTime;
       logger.info(`[NATIVE STATIC] ${requestContext.method} ${requestContext.originalUrl} [404] (${responseTime}ms)`);
 
-      this.recordRequestStats(requestContext, { name: 'static' }, staticPath, responseTime, 404, 'static');
+      this.recordRequestStats(requestContext, server, { name: 'static' }, staticPath, responseTime, 404, 'static');
 
       return new Response(JSON.stringify({
         error: 'Not Found',
@@ -513,9 +514,9 @@ export class ProxyServer {
     return null;
   }
 
-  private recordRequestStats(requestContext: any, route: any, target: string, responseTime: number, statusCode: number, requestType: string = 'proxy'): void {
+  private recordRequestStats(requestContext: any, server: Server, route: any, target: string, responseTime: number, statusCode: number, requestType: string = 'proxy'): void {
     if (this.statisticsService) {
-      const clientIP = this.getClientIP(requestContext);
+      const clientIP = this.getClientIP(requestContext, server);
       const geolocation = this.getGeolocation(clientIP);
       const userAgent = requestContext.headers['user-agent'] || 'Unknown';
 
@@ -536,7 +537,7 @@ export class ProxyServer {
     return new Response('Internal Server Error', { status: 500 });
   }
 
-  private getClientIP(req: Request): string {
+  private getClientIP(req: BunRequest, server: Server): string {
     const headers = req.headers;
     const xForwardedFor = headers.get('x-forwarded-for');
     const xRealIP = headers.get('x-real-ip');
@@ -555,12 +556,16 @@ export class ProxyServer {
       return xClientIP;
     }
 
+    const remoteAddress = server.requestIP(req);
+    if (remoteAddress) {
+      return remoteAddress.address;
+    }
+
     return 'unknown';
   }
 
   private getGeolocation(ip: string): any {
     try {
-      const { geolocationService } = require('./geolocation');
       return geolocationService.getGeolocation(ip);
     } catch (error) {
       return null;
