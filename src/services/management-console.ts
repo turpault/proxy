@@ -22,11 +22,8 @@ export class ManagementConsole {
     this.config = config;
     this.processManager = processManager;
 
-    // Initialize statistics service with configuration
-    const logsDir = configService.getSetting<string>('logsDir');
-    const reportDir = logsDir ? path.join(logsDir, 'statistics') : undefined;
-    const dataDir = configService.getSetting<string>('statsDir');
-    this.statisticsService = getStatisticsService(reportDir, dataDir);
+    // Get the statistics service singleton
+    this.statisticsService = getStatisticsService();
   }
 
   async initialize(): Promise<void> {

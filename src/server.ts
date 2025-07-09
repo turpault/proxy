@@ -4,6 +4,8 @@ import { configService } from './services/config-service';
 import { ProxyServer } from './services/proxy-server';
 import { ManagementConsole } from './services/management-console';
 import { ProcessManager } from './services/process-manager';
+import { StatisticsService } from './services/statistics';
+import * as path from 'path';
 
 export class BunProxyServer {
   private proxyServer: ProxyServer;
@@ -15,6 +17,12 @@ export class BunProxyServer {
   constructor(config: ProxyConfig, mainConfig?: MainConfig) {
     this.config = config;
     this.mainConfig = mainConfig;
+
+    // Initialize StatisticsService singleton
+    const logsDir = configService.getSetting<string>('logsDir');
+    const reportDir = logsDir ? path.join(logsDir, 'statistics') : undefined;
+    const dataDir = configService.getSetting<string>('statsDir');
+    StatisticsService.initialize(reportDir, dataDir);
 
     // Create process manager instance
     this.processManager = new ProcessManager();

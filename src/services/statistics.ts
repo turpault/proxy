@@ -142,7 +142,14 @@ export class StatisticsService {
     this.startPeriodicSaving();
   }
 
-  public static getInstance(reportDir?: string, dataDir?: string): StatisticsService {
+  public static getInstance(): StatisticsService {
+    if (!StatisticsService.instance) {
+      throw new Error('StatisticsService not initialized. Call StatisticsService.initialize() first.');
+    }
+    return StatisticsService.instance;
+  }
+
+  public static initialize(reportDir?: string, dataDir?: string): StatisticsService {
     if (!StatisticsService.instance) {
       StatisticsService.instance = new StatisticsService(reportDir, dataDir);
     }
@@ -200,7 +207,7 @@ export class StatisticsService {
    */
   private async saveStats(): Promise<void> {
     try {
-      const statsData: SerializableRequestStats[] = Array.from(this.stats.values()).map(stat => 
+      const statsData: SerializableRequestStats[] = Array.from(this.stats.values()).map(stat =>
         this.serializeStats(stat)
       );
 
@@ -223,18 +230,18 @@ export class StatisticsService {
   private async loadPersistedStats(): Promise<void> {
     try {
       const dataFile = path.join(this.dataDir, 'current-stats.json');
-      
+
       if (await fs.pathExists(dataFile)) {
         const data = await fs.readJson(dataFile);
-        
+
         if (data.stats && Array.isArray(data.stats)) {
           this.stats.clear();
-          
+
           data.stats.forEach((serializedStat: SerializableRequestStats) => {
             const stat = this.deserializeStats(serializedStat);
             this.stats.set(stat.ip, stat);
           });
-          
+
           logger.info(`Statistics loaded: ${data.stats.length} entries from ${data.timestamp}`);
         }
       }
@@ -263,7 +270,7 @@ export class StatisticsService {
     this.saveInterval = setInterval(() => {
       this.saveStats();
     }, 5 * 60 * 1000);
-    
+
     logger.info('Periodic statistics saving started (every 5 minutes)');
   }
 
@@ -274,7 +281,7 @@ export class StatisticsService {
     try {
       const now = new Date();
       const cutoffDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000); // 90 days ago
-      
+
       let cleanedCount = 0;
       for (const [ip, stat] of this.stats.entries()) {
         if (stat.lastSeen < cutoffDate) {
@@ -282,7 +289,7 @@ export class StatisticsService {
           cleanedCount++;
         }
       }
-      
+
       if (cleanedCount > 0) {
         logger.info(`Cleaned up ${cleanedCount} old statistics entries`);
         await this.saveStats();
@@ -319,7 +326,7 @@ export class StatisticsService {
       existing.routes.add(route);
       existing.methods.add(method);
       existing.requestTypes.add(requestType);
-      
+
       if (responseTime !== undefined) {
         existing.responseTimes.push(responseTime);
         // Keep only last 1000 response times to prevent memory issues
@@ -327,7 +334,7 @@ export class StatisticsService {
           existing.responseTimes = existing.responseTimes.slice(-1000);
         }
       }
-      
+
       if (domain && target) {
         existing.routeDetails.push({
           domain,
@@ -452,7 +459,7 @@ export class StatisticsService {
         requestTypeStats.set(type, (requestTypeStats.get(type) || 0) + stat.count);
       });
     });
-    
+
     const requestTypes = Array.from(requestTypeStats.entries())
       .map(([type, count]) => ({
         type,
@@ -517,7 +524,7 @@ export class StatisticsService {
    */
   private generateHourlyBreakdown(statsArray: RequestStats[]): Array<{ hour: number; count: number }> {
     const hourlyStats = new Map<number, number>();
-    
+
     // Initialize all hours with 0
     for (let hour = 0; hour < 24; hour++) {
       hourlyStats.set(hour, 0);
@@ -540,7 +547,7 @@ export class StatisticsService {
    */
   private generateDailyBreakdown(statsArray: RequestStats[]): Array<{ day: string; count: number }> {
     const dailyStats = new Map<string, number>();
-    
+
     statsArray.forEach(stat => {
       const day = stat.lastSeen.toISOString().split('T')[0]; // YYYY-MM-DD format
       const current = dailyStats.get(day) || 0;
@@ -557,12 +564,12 @@ export class StatisticsService {
    */
   private formatLocation(geolocation: GeolocationInfo | null): string {
     if (!geolocation) return 'Unknown';
-    
+
     const parts = [];
     if (geolocation.city) parts.push(geolocation.city);
     if (geolocation.region) parts.push(geolocation.region);
     if (geolocation.country) parts.push(geolocation.country);
-    
+
     return parts.length > 0 ? parts.join(', ') : 'Unknown';
   }
 
@@ -603,13 +610,13 @@ export class StatisticsService {
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
     tomorrow.setHours(0, 0, 0, 0);
-    
+
     const timeUntilMidnight = tomorrow.getTime() - now.getTime();
-    
+
     // Schedule first report at midnight
     setTimeout(() => {
       this.generateAndSaveReport();
-      
+
       // Then schedule daily reports
       this.reportInterval = setInterval(() => {
         this.generateAndSaveReport();
@@ -626,7 +633,7 @@ export class StatisticsService {
     try {
       const report = this.generateReport();
       await this.saveReport(report);
-      
+
       // Log summary
       logger.info('Daily statistics report generated', {
         totalRequests: report.summary.totalRequests,
@@ -635,7 +642,7 @@ export class StatisticsService {
         topCountry: report.summary.topCountries[0]?.country || 'None',
         topCity: report.summary.topCities[0]?.city || 'None',
       });
-      
+
       // Clean up old stats instead of clearing all
       await this.cleanupOldStats();
     } catch (error) {
@@ -699,23 +706,23 @@ export class StatisticsService {
    */
   public async shutdown(): Promise<void> {
     this.isShuttingDown = true;
-    
+
     if (this.reportInterval) {
       clearInterval(this.reportInterval);
       this.reportInterval = null;
     }
-    
+
     if (this.saveInterval) {
       clearInterval(this.saveInterval);
       this.saveInterval = null;
     }
-    
+
     // Save current statistics before shutting down
     await this.saveStats();
-    
+
     // Generate final report
     await this.generateAndSaveReport();
-    
+
     logger.info('Statistics service shutdown complete');
   }
 
@@ -752,12 +759,12 @@ export class StatisticsService {
     }
 
     // Filter stats for the time period
-    const periodStats = Array.from(this.stats.values()).filter(stat => 
+    const periodStats = Array.from(this.stats.values()).filter(stat =>
       stat.lastSeen >= startDate
     );
 
     // Collect all route details from the period
-    const allRouteDetails = periodStats.flatMap(stat => 
+    const allRouteDetails = periodStats.flatMap(stat =>
       stat.routeDetails.filter(detail => detail.timestamp >= startDate)
     );
 
@@ -824,29 +831,29 @@ export class StatisticsService {
       }
       const key = `${detail.domain}:${detail.target}`;
       const existing = routeGroups.get(key);
-      
+
       if (existing) {
         existing.requests++;
         existing.responseTimes.push(detail.responseTime);
         existing.methods.add(detail.method);
         existing.requestTypes.add(detail.requestType);
-        
+
         // Find the IP that made this request
-        const stat = periodStats.find(s => 
-          s.routeDetails.some(rd => 
-            rd.domain === detail.domain && 
-            rd.target === detail.target && 
+        const stat = periodStats.find(s =>
+          s.routeDetails.some(rd =>
+            rd.domain === detail.domain &&
+            rd.target === detail.target &&
             rd.timestamp.getTime() === detail.timestamp.getTime()
           )
         );
-        
+
         if (stat) {
           existing.ips.add(stat.ip);
-          
+
           if (stat.geolocation) {
             const country = stat.geolocation.country || 'Unknown';
             const city = stat.geolocation.city;
-            
+
             const countryData = existing.countries.get(country);
             if (countryData) {
               countryData.count++;
@@ -864,30 +871,30 @@ export class StatisticsService {
         const ips = new Set<string>();
         const methods = new Set<string>([detail.method]);
         const requestTypes = new Set<string>([detail.requestType]);
-        
+
         // Find the IP that made this request
-        const stat = periodStats.find(s => 
-          s.routeDetails.some(rd => 
-            rd.domain === detail.domain && 
-            rd.target === detail.target && 
+        const stat = periodStats.find(s =>
+          s.routeDetails.some(rd =>
+            rd.domain === detail.domain &&
+            rd.target === detail.target &&
             rd.timestamp.getTime() === detail.timestamp.getTime()
           )
         );
-        
+
         if (stat) {
           ips.add(stat.ip);
-          
+
           if (stat.geolocation) {
             const country = stat.geolocation.country || 'Unknown';
             const city = stat.geolocation.city;
-            
+
             countries.set(country, {
               count: 1,
               cities: city ? new Set([city]) : new Set()
             });
           }
         }
-        
+
         routeGroups.set(key, {
           domain: detail.domain,
           target: detail.target,
@@ -904,8 +911,8 @@ export class StatisticsService {
 
     // Convert to RouteStats format
     const routes: RouteStats[] = Array.from(routeGroups.values()).map(route => {
-      const avgResponseTime = route.responseTimes.length > 0 
-        ? route.responseTimes.reduce((sum, time) => sum + time, 0) / route.responseTimes.length 
+      const avgResponseTime = route.responseTimes.length > 0
+        ? route.responseTimes.reduce((sum, time) => sum + time, 0) / route.responseTimes.length
         : 0;
 
       const topCountries = Array.from(route.countries.entries())
@@ -973,9 +980,9 @@ export class StatisticsService {
         .map(stat => stat.geolocation?.country)
         .filter(Boolean)
     ).size;
-    
-    const avgResponseTime = routes.length > 0 
-      ? routes.reduce((sum, route) => sum + route.avgResponseTime, 0) / routes.length 
+
+    const avgResponseTime = routes.length > 0
+      ? routes.reduce((sum, route) => sum + route.avgResponseTime, 0) / routes.length
       : 0;
 
     return {
@@ -998,9 +1005,9 @@ export class StatisticsService {
   }
 }
 
-// Export a function to get the statistics service instance with configuration
-export function getStatisticsService(reportDir?: string, dataDir?: string): StatisticsService {
-  return StatisticsService.getInstance(reportDir, dataDir);
+// Export a function to get the statistics service instance
+export function getStatisticsService(): StatisticsService {
+  return StatisticsService.getInstance();
 }
 
 // For backward compatibility, export the default instance
