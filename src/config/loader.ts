@@ -68,6 +68,13 @@ const processConfigSchema = Joi.object({
   args: Joi.array().items(Joi.string()).optional(),
   cwd: Joi.string().optional(),
   env: Joi.object().pattern(Joi.string(), Joi.string()).optional(),
+  requiredEnv: Joi.array().items(Joi.string()).optional(),
+  envValidation: Joi.object({
+    required: Joi.array().items(Joi.string()).optional(),
+    optional: Joi.array().items(Joi.string()).optional(),
+    validateOnStart: Joi.boolean().optional(),
+    failOnMissing: Joi.boolean().optional(),
+  }).optional(),
   restartOnExit: Joi.boolean().default(true),
   restartDelay: Joi.number().default(1000),
   maxRestarts: Joi.number().default(5),
@@ -80,6 +87,14 @@ const processConfigSchema = Joi.object({
     interval: Joi.number().default(30000),
     timeout: Joi.number().default(5000),
     retries: Joi.number().default(3),
+  }).optional(),
+  schedule: Joi.object({
+    enabled: Joi.boolean().default(false),
+    cron: Joi.string().optional(), // Cron expression (e.g., "0 2 * * *" for daily at 2 AM)
+    timezone: Joi.string().optional(), // Timezone (e.g., "America/New_York")
+    maxDuration: Joi.number().optional(), // Maximum runtime in milliseconds
+    autoStop: Joi.boolean().default(false), // Whether to automatically stop after maxDuration
+    skipIfRunning: Joi.boolean().default(true), // Skip if process is already running
   }).optional(),
 });
 
