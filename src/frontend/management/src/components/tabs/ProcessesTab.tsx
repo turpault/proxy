@@ -5,6 +5,7 @@ import { useNotifications } from '../NotificationProvider';
 import { Process } from '../../types';
 import { ProcessCard } from '../ProcessCard';
 import { ProcessDetails } from '../ProcessDetails';
+import { processesApi, handleApiSuccess } from '../../utils/api-client';
 
 export const ProcessesTab: React.FC = () => {
   const { processes, status } = useWebSocket();
@@ -21,11 +22,21 @@ export const ProcessesTab: React.FC = () => {
 
   const handleProcessAction = async (processId: string, action: 'start' | 'stop' | 'restart') => {
     try {
-      const response = await fetch(`/api/processes/${processId}/${action}`, {
-        method: 'POST'
-      });
+      let success = false;
 
-      if (response.ok) {
+      switch (action) {
+        case 'start':
+          success = await handleApiSuccess(processesApi.startProcess(processId));
+          break;
+        case 'stop':
+          success = await handleApiSuccess(processesApi.stopProcess(processId));
+          break;
+        case 'restart':
+          success = await handleApiSuccess(processesApi.restartProcess(processId));
+          break;
+      }
+
+      if (success) {
         showNotification(`Process ${action}ed successfully`, 'success');
       } else {
         throw new Error(`Failed to ${action} process`);

@@ -26,9 +26,9 @@ const ManagementAppContent: React.FC = () => {
   const handleTabChange = (tab: TabType) => {
     if (tab === 'config') {
       // Navigate to config with current config type or default to main
-      navigate(`/config/${configType || 'main'}`);
+      navigate(`config/${configType || 'main'}`);
     } else {
-      navigate(`/${tab}`);
+      navigate(tab);
     }
   };
 
@@ -38,14 +38,14 @@ const ManagementAppContent: React.FC = () => {
       <TabBar activeTab={activeTab} onTabChange={handleTabChange} />
       <div className="tab-content-container">
         <Routes>
-          <Route path="/" element={<Navigate to="/processes" replace />} />
-          <Route path="/processes" element={<ProcessesTab />} />
-          <Route path="/statistics" element={<StatisticsTab />} />
-          <Route path="/certificates" element={<CertificatesTab />} />
-          <Route path="/cache" element={<CacheTab />} />
-          <Route path="/config/:configType" element={<ConfigTab />} />
-          <Route path="/config" element={<Navigate to="/config/main" replace />} />
-          <Route path="*" element={<Navigate to="/processes" replace />} />
+          <Route path="" element={<Navigate to="processes" replace />} />
+          <Route path="processes" element={<ProcessesTab />} />
+          <Route path="statistics" element={<StatisticsTab />} />
+          <Route path="certificates" element={<CertificatesTab />} />
+          <Route path="cache" element={<CacheTab />} />
+          <Route path="config/:configType" element={<ConfigTab />} />
+          <Route path="config" element={<Navigate to="config/main" replace />} />
+          <Route path="*" element={<Navigate to="processes" replace />} />
         </Routes>
       </div>
     </div>

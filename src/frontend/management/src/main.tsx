@@ -7,7 +7,7 @@ import './styles/global.css';
 const isDevelopment = process.env.NODE_ENV === 'development';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <BrowserRouter>
+  <BrowserRouter basename="/frontend">
     <ManagementApp />
   </BrowserRouter>
 )

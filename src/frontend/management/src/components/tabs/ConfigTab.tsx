@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useNotifications } from '../NotificationProvider';
-import { ConfigData, ConfigResponse, BackupItem } from '../../types';
+import { ConfigData, ConfigSaveResponse, BackupItem } from '../../types';
 import { formatLocalTime, formatBytes } from '../../utils';
+import { ConfigSaveRequest } from '../../types/shared';
 
 type ConfigType = 'main' | 'proxy' | 'processes';
 
@@ -59,7 +60,7 @@ export const ConfigTab: React.FC = () => {
       setHasUnsavedChanges(false);
 
       const response = await fetch(`/api/config/${type}`);
-      const data = await response.json() as ConfigResponse;
+      const data = await response.json() as ConfigSaveResponse;
 
       if (data.success && data.data) {
         setConfigData(data.data);
@@ -106,10 +107,10 @@ export const ConfigTab: React.FC = () => {
       const response = await fetch(`/api/config/${activeConfigType}/save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, createBackup })
+        body: JSON.stringify({ content, createBackup } as ConfigSaveRequest)
       });
 
-      const data = await response.json() as ConfigResponse;
+      const data = await response.json() as ConfigSaveResponse;
 
       if (data.success) {
         showNotification('Configuration saved successfully', 'success');
@@ -129,7 +130,7 @@ export const ConfigTab: React.FC = () => {
   const handleBackupConfig = async () => {
     try {
       const response = await fetch(`/api/config/${activeConfigType}/backup`, { method: 'POST' });
-      const data: ConfigResponse = await response.json();
+      const data: ConfigSaveResponse = await response.json();
 
       if (data.success) {
         showNotification('Configuration backup created successfully', 'success');
@@ -171,7 +172,7 @@ export const ConfigTab: React.FC = () => {
         body: JSON.stringify({ backupPath })
       });
 
-      const data: ConfigResponse = await response.json();
+      const data: ConfigSaveResponse = await response.json();
 
       if (data.success) {
         showNotification('Configuration restored successfully', 'success');

@@ -1,14 +1,16 @@
 import { Server, ServerWebSocket } from 'bun';
+import { existsSync, readFileSync } from 'fs';
 import * as path from 'path';
 import managementHtml from '../frontend/management/index.html';
-import { MainConfig, ProxyConfig } from '../types';
+import { ProxyConfig } from '../types';
 import { logger } from '../utils/logger';
 import { cacheService } from './cache';
 import { configService } from './config-service';
 import { ProcessManager } from './process-manager';
-import { getStatisticsService, StatisticsService } from './statistics';
-import { existsSync, readFileSync } from 'fs';
 import { ProxyCertificates } from './proxy-certificates';
+import { getStatisticsService, StatisticsService } from './statistics';
+import { stringify as yamlStringify } from 'yaml';
+import * as fs from 'fs-extra';
 
 export class ManagementConsole {
   private managementServer: Server | null = null;
@@ -59,6 +61,7 @@ export class ManagementConsole {
       hostname: managementHost,
       development: process.env.NODE_ENV !== 'production',
       routes: {
+        "/frontend/*": managementHtml,
 
         "/api/status": {
           GET: async (req: Request) => {
@@ -92,31 +95,15 @@ export class ManagementConsole {
               switch (type) {
                 case 'proxy':
                   configData = configService.getServerConfig();
-                  // Determine proxy config path
-                  const mainConfig = configService.getMainConfig();
-                  if (mainConfig?.config?.proxy) {
-                    configPath = path.isAbsolute(mainConfig.config.proxy)
-                      ? mainConfig.config.proxy
-                      : path.resolve(process.cwd(), mainConfig.config.proxy);
-                  } else {
-                    configPath = process.env.CONFIG_FILE || './config/proxy.yaml';
-                  }
+                  configPath = configService.getMainConfig().config.proxy;
                   break;
                 case 'processes':
                   configData = configService.getProcessConfig();
-                  // Determine process config path
-                  const mainConfigForProcesses = configService.getMainConfig();
-                  if (mainConfigForProcesses?.config?.processes) {
-                    configPath = path.isAbsolute(mainConfigForProcesses.config.processes)
-                      ? mainConfigForProcesses.config.processes
-                      : path.resolve(process.cwd(), mainConfigForProcesses.config.processes);
-                  } else {
-                    configPath = './config/processes.yaml';
-                  }
+                  configPath = configService.getMainConfig().config.processes;
                   break;
                 case 'main':
                   configData = configService.getMainConfig();
-                  configPath = process.env.MAIN_CONFIG_FILE || './config/main.yaml';
+                  configPath = configService.getMainConfigPath();
                   break;
                 default:
                   return new Response(JSON.stringify({ error: 'Invalid config type' }), {
@@ -128,6 +115,7 @@ export class ManagementConsole {
               // Read the actual file content
               let content = '';
               let lastModified = new Date().toISOString();
+
 
               if (existsSync(configPath)) {
                 content = readFileSync(configPath, 'utf-8');
@@ -164,8 +152,32 @@ export class ManagementConsole {
 
             try {
               const newConfig = await req.json();
-              // TODO: Implement config saving
-              logger.info(`Config save requested for type: ${type}`);
+              let configPath: string;
+
+              switch (type) {
+                case 'proxy':
+                  configPath = configService.getMainConfig().config.proxy;
+                  break;
+                case 'processes':
+                  configPath = configService.getMainConfig().config.processes;
+                  break;
+                case 'main':
+                  configPath = configService.getMainConfigPath();
+                  break;
+                default:
+                  return new Response(JSON.stringify({ error: 'Invalid config type' }), {
+                    status: 400,
+                    headers: { 'Content-Type': 'application/json' }
+                  });
+              }
+
+              // Convert to YAML and write to file
+              const yamlContent = yamlStringify(newConfig);
+              await import('fs-extra').then(fs => fs.writeFile(configPath, yamlContent));
+              logger.info(`Config saved for type: ${type} at ${configPath}`);
+
+              // Reload config after saving
+              await configService.reload();
 
               return new Response(JSON.stringify({ success: true, message: 'Configuration saved' }), {
                 status: 200,
@@ -184,12 +196,31 @@ export class ManagementConsole {
           POST: async (req: Request) => {
             const url = new URL(req.url);
             const type = url.pathname.split('/')[3];
-
             try {
-              // TODO: Implement config backup
-              logger.info(`Config backup requested for type: ${type}`);
-
-              return new Response(JSON.stringify({ success: true, message: 'Backup created successfully' }), {
+              let configPath: string;
+              switch (type) {
+                case 'proxy':
+                  configPath = configService.getMainConfig().config.proxy;
+                  break;
+                case 'processes':
+                  configPath = configService.getMainConfig().config.processes;
+                  break;
+                case 'main':
+                  configPath = configService.getMainConfigPath();
+                  break;
+                default:
+                  return new Response(JSON.stringify({ error: 'Invalid config type' }), {
+                    status: 400,
+                    headers: { 'Content-Type': 'application/json' }
+                  });
+              }
+              const backupDir = path.join(path.dirname(configPath), 'backup');
+              await fs.ensureDir(backupDir);
+              const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+              const backupFile = path.join(backupDir, `${type}.backup-${timestamp}.yaml`);
+              await fs.copyFile(configPath, backupFile);
+              logger.info(`Config backup created for type: ${type} at ${backupFile}`);
+              return new Response(JSON.stringify({ success: true, message: 'Backup created successfully', backupPath: backupFile }), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -206,12 +237,51 @@ export class ManagementConsole {
           GET: async (req: Request) => {
             const url = new URL(req.url);
             const type = url.pathname.split('/')[3];
-
             try {
-              // TODO: Implement config backups listing
-              logger.info(`Config backups listing requested for type: ${type}`);
-
-              return new Response(JSON.stringify({ success: true, data: [] }), {
+              let configPath: string;
+              switch (type) {
+                case 'proxy':
+                  configPath = configService.getMainConfig().config.proxy;
+                  break;
+                case 'processes':
+                  configPath = configService.getMainConfig().config.processes;
+                  break;
+                case 'main':
+                  configPath = configService.getMainConfigPath();
+                  break;
+                default:
+                  return new Response(JSON.stringify({ error: 'Invalid config type' }), {
+                    status: 400,
+                    headers: { 'Content-Type': 'application/json' }
+                  });
+              }
+              const backupDir = path.join(path.dirname(configPath), 'backup');
+              await fs.ensureDir(backupDir);
+              const files = await fs.readdir(backupDir);
+              const backups = await Promise.all(
+                files
+                  .filter(f => f.startsWith(`${type}.backup-`) && f.endsWith('.yaml'))
+                  .map(async f => {
+                    const filePath = path.join(backupDir, f);
+                    try {
+                      const stats = await fs.stat(filePath);
+                      return {
+                        path: filePath,
+                        name: f,
+                        size: stats.size,
+                        modified: stats.mtime.toISOString()
+                      };
+                    } catch {
+                      return {
+                        path: filePath,
+                        name: f,
+                        size: null,
+                        modified: null
+                      };
+                    }
+                  })
+              );
+              return new Response(JSON.stringify({ success: true, data: backups }), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -228,12 +298,28 @@ export class ManagementConsole {
           POST: async (req: Request) => {
             const url = new URL(req.url);
             const type = url.pathname.split('/')[3];
-
             try {
               const { backupPath } = await req.json() as { backupPath: string };
-              // TODO: Implement config restore
-              logger.info(`Config restore requested for type: ${type}, backup: ${backupPath}`);
-
+              let configPath: string;
+              switch (type) {
+                case 'proxy':
+                  configPath = configService.getMainConfig().config.proxy;
+                  break;
+                case 'processes':
+                  configPath = configService.getMainConfig().config.processes;
+                  break;
+                case 'main':
+                  configPath = configService.getMainConfigPath();
+                  break;
+                default:
+                  return new Response(JSON.stringify({ error: 'Invalid config type' }), {
+                    status: 400,
+                    headers: { 'Content-Type': 'application/json' }
+                  });
+              }
+              await fs.copyFile(backupPath, configPath);
+              logger.info(`Config restored for type: ${type} from ${backupPath}`);
+              await configService.reload();
               return new Response(JSON.stringify({ success: true, message: 'Configuration restored successfully' }), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
@@ -361,15 +447,19 @@ export class ManagementConsole {
         "/api/statistics/generate-report": {
           POST: async (req: Request) => {
             try {
-              // TODO: Implement manual report generation
-              logger.info('Manual statistics report generation requested');
-
+              const stats = this.statisticsService.getStatsSummary();
+              const reportDir = path.join(process.cwd(), 'logs', 'statistics');
+              await fs.ensureDir(reportDir);
+              const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+              const reportPath = path.join(reportDir, `manual-report-${timestamp}.json`);
+              await fs.writeFile(reportPath, JSON.stringify(stats, null, 2));
+              logger.info(`Manual statistics report generated at ${reportPath}`);
               return new Response(JSON.stringify({
                 success: true,
                 message: 'Statistics report generated successfully',
                 data: {
-                  filepath: '/path/to/report.json',
-                  summary: this.statisticsService.getStatsSummary()
+                  filepath: reportPath,
+                  summary: stats
                 }
               }), {
                 status: 200,
@@ -397,9 +487,9 @@ export class ManagementConsole {
         "/api/processes/reload": {
           POST: async (req: Request) => {
             try {
-              // TODO: Implement process configuration reload
-              logger.info('Process configuration reload requested');
-
+              await configService.reload();
+              await this.processManager.startManagedProcesses();
+              logger.info('Process configuration reloaded and processes restarted');
               return new Response(JSON.stringify({ success: true, message: 'Process configuration reloaded' }), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
@@ -703,7 +793,6 @@ export class ManagementConsole {
         "/": (req: Request) => {
           return Response.redirect(new URL('/frontend', req.url), 302);
         },
-        "/frontend": managementHtml,
       },
       websocket: {
         open: (ws: ServerWebSocket<unknown>) => {
@@ -933,8 +1022,13 @@ export class ManagementConsole {
   }
 
   async handleProcessConfigUpdate(newConfig: any): Promise<void> {
-    // TODO: Implement or make this method public in ProcessManager
-    logger.info('Process config update not yet implemented for management console');
+    // Save the new process config and reload processes
+    const configPath = configService.getMainConfig().config.processes;
+    const yamlContent = yamlStringify(newConfig);
+    await fs.writeFile(configPath, yamlContent);
+    logger.info('Process config updated and saved, reloading processes');
+    await configService.reload();
+    await this.processManager.startManagedProcesses();
   }
 
   private getCertificates(): Map<string, any> {

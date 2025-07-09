@@ -68,6 +68,7 @@ export class ConfigService extends EventEmitter {
     return this.serverConfig;
   }
 
+
   /**
    * Get the main configuration
    */
@@ -89,6 +90,10 @@ export class ConfigService extends EventEmitter {
     logger.info('Reloading configuration...');
     await this.initialize(this.configPath);
     logger.info('Configuration reloaded successfully');
+  }
+
+  getMainConfigPath(): string {
+    return this.configPath || '';
   }
 
   /**

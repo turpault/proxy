@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNotifications } from '../NotificationProvider';
 import { formatLocalTime, formatDateOnly } from '../../utils';
 import { CertificateInfo, CertificatesResponse } from '../../types/shared';
+import { certificatesApi, handleApiResponse } from '../../utils/api-client';
 
 export const CertificatesTab: React.FC = () => {
   const [certificates, setCertificates] = useState<CertificateInfo[]>([]);
@@ -15,15 +16,10 @@ export const CertificatesTab: React.FC = () => {
   const loadCertificates = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/certificates');
-      if (response.ok) {
-        const data: CertificatesResponse = await response.json();
-        // Convert object to array format for compatibility
-        const certificatesArray = Object.values(data);
-        setCertificates(certificatesArray);
-      } else {
-        throw new Error('Failed to load certificates');
-      }
+      const data = await handleApiResponse(certificatesApi.getCertificates());
+      // Convert object to array format for compatibility
+      const certificatesArray = Object.values(data) as CertificateInfo[];
+      setCertificates(certificatesArray);
     } catch (error) {
       console.error('Failed to load certificates:', error);
       showNotification('Failed to load certificates', 'error');

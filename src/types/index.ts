@@ -1,3 +1,6 @@
+// Re-export API types
+export * from './api';
+
 export interface ProcessConfig {
   enabled?: boolean;
   name?: string; // Human-readable name for the process

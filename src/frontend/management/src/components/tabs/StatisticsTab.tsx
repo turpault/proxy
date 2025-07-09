@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useWebSocket } from '../WebSocketProvider';
 import { StatisticsSummary, DetailedStatistics, RouteStatistics } from '../../types';
 import { GeoMap } from '../GeoMap';
+import { statisticsApi, handleApiResponse } from '../../utils/api-client';
 
 export const StatisticsTab: React.FC = () => {
   const { status } = useWebSocket();
@@ -16,11 +17,8 @@ export const StatisticsTab: React.FC = () => {
   useEffect(() => {
     const loadStatistics = async () => {
       try {
-        const response = await fetch('/api/statistics');
-        if (response.ok) {
-          const data = await response.json();
-          setStatistics(data.data);
-        }
+        const data = await handleApiResponse(statisticsApi.getStatistics());
+        setStatistics(data);
       } catch (error) {
         console.error('Failed to load statistics:', error);
       }
@@ -28,11 +26,8 @@ export const StatisticsTab: React.FC = () => {
 
     const loadDetailedStatistics = async () => {
       try {
-        const response = await fetch(`/api/statistics/detailed?period=${selectedPeriod}`);
-        if (response.ok) {
-          const data = await response.json();
-          setDetailedStatistics(data.data);
-        }
+        const data = await handleApiResponse(statisticsApi.getDetailedStatistics(selectedPeriod));
+        setDetailedStatistics(data);
       } catch (error) {
         console.error('Failed to load detailed statistics:', error);
       }

@@ -31,11 +31,13 @@ export class BunProxyServer {
   async initialize(): Promise<void> {
     logger.info('Initializing Bun proxy server...');
 
-
     // Initialize all services
     await this.processManager.initialize();
     await this.proxyServer.initialize();
     await this.managementConsole.initialize();
+
+    // Start managed processes
+    await this.processManager.startManagedProcesses();
 
     logger.info('Bun proxy server initialization complete');
   }
