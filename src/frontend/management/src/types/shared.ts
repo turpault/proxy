@@ -11,4 +11,12 @@ export interface CertificateInfo {
 // API response type for certificates endpoint
 export interface CertificatesResponse {
   [domain: string]: CertificateInfo;
+}
+
+// Shared config save request type
+export interface ConfigSaveRequest {
+  content: string;
+  createBackup?: boolean;
+  configType?: 'proxy' | 'processes' | 'main';
+  path?: string;
 } 

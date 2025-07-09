@@ -1,4 +1,5 @@
 // Core types for the management console
+import { ConfigSaveRequest } from './shared';
 
 export interface Process {
   id: string;
@@ -99,7 +100,7 @@ export interface ConfigData {
   lastModified: string;
 }
 
-export interface ConfigResponse {
+export interface ConfigSaveResponse {
   success: boolean;
   data?: ConfigData;
   error?: string;
@@ -118,10 +119,8 @@ export interface BackupResponse {
   error?: string;
 }
 
-export interface SaveConfigRequest {
-  content: string;
-  createBackup: boolean;
-}
+// Legacy alias for backward compatibility
+export interface SaveConfigRequest extends ConfigSaveRequest { }
 
 export interface RestoreBackupRequest {
   backupPath: string;

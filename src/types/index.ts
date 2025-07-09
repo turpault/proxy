@@ -332,3 +332,10 @@ export interface OAuthSessionResponse {
     sessionId?: string;
   };
 }
+
+export interface ConfigSaveRequest {
+  content: string;
+  createBackup?: boolean;
+  configType?: 'proxy' | 'processes' | 'main';
+  path?: string;
+}
