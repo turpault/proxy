@@ -1013,6 +1013,3 @@ export class StatisticsService {
 export function getStatisticsService(): StatisticsService {
   return StatisticsService.getInstance();
 }
-
-// For backward compatibility, export the default instance
-export const statisticsService = StatisticsService.getInstance(); 

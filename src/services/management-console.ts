@@ -238,7 +238,7 @@ export class ManagementConsole {
             const type = url.pathname.split('/')[3];
 
             try {
-              const { backupPath } = await req.json();
+              const { backupPath } = await req.json() as { backupPath: string };
               // TODO: Implement config restore
               logger.info(`Config restore requested for type: ${type}, backup: ${backupPath}`);
 

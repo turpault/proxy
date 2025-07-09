@@ -22,10 +22,6 @@ async function startServer(): Promise<BunProxyServer> {
 
   logger.info('Bun proxy server and management console started successfully');
 
-  // Log server status
-  const status = server.getStatus();
-  logger.info('Server status', status);
-
   return server;
 }
 

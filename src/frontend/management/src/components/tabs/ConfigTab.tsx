@@ -59,7 +59,7 @@ export const ConfigTab: React.FC = () => {
       setHasUnsavedChanges(false);
 
       const response = await fetch(`/api/config/${type}`);
-      const data: ConfigResponse = await response.json();
+      const data = await response.json() as ConfigResponse;
 
       if (data.success && data.data) {
         setConfigData(data.data);
@@ -109,7 +109,7 @@ export const ConfigTab: React.FC = () => {
         body: JSON.stringify({ content, createBackup })
       });
 
-      const data: ConfigResponse = await response.json();
+      const data = await response.json() as ConfigResponse;
 
       if (data.success) {
         showNotification('Configuration saved successfully', 'success');

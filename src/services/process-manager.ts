@@ -1453,7 +1453,7 @@ export class ProcessManager {
     this.scheduler.shutdown();
 
     // Stop all health checks
-    for (const [id] of this.healthCheckIntervals) {
+    for (const id of Array.from(this.healthCheckIntervals.keys())) {
       this.stopHealthCheck(id);
     }
 
@@ -1572,7 +1572,7 @@ export class ProcessManager {
     }
 
     // Stop removed processes
-    for (const processId of currentProcessIds) {
+    for (const processId of Array.from(currentProcessIds)) {
       if (!newProcessIds.has(processId)) {
         logger.info(`Stopping removed process: ${processId}`);
         try {
