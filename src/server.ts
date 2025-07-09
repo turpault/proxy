@@ -3,10 +3,12 @@ import { logger } from './utils/logger';
 import { configService } from './services/config-service';
 import { ProxyServer } from './services/proxy-server';
 import { ManagementConsole } from './services/management-console';
+import { ProcessManager } from './services/process-manager';
 
 export class BunProxyServer {
   private proxyServer: ProxyServer;
   private managementConsole: ManagementConsole;
+  private processManager: ProcessManager;
   private config: ProxyConfig;
   private mainConfig?: MainConfig;
 
@@ -14,9 +16,12 @@ export class BunProxyServer {
     this.config = config;
     this.mainConfig = mainConfig;
 
+    // Create process manager instance
+    this.processManager = new ProcessManager();
+
     // Initialize the two separate services
     this.proxyServer = new ProxyServer(config, mainConfig);
-    this.managementConsole = new ManagementConsole(config, mainConfig);
+    this.managementConsole = new ManagementConsole(config, this.processManager);
   }
 
   async initialize(): Promise<void> {

@@ -5,22 +5,22 @@ import { MainConfig, ProxyConfig } from '../types';
 import { logger } from '../utils/logger';
 import { cacheService } from './cache';
 import { configService } from './config-service';
-import { processManager } from './process-manager';
-import { getStatisticsService } from './statistics';
+import { ProcessManager } from './process-manager';
+import { getStatisticsService, StatisticsService } from './statistics';
 import { existsSync, readFileSync } from 'fs';
 import { ProxyCertificates } from './proxy-certificates';
 
 export class ManagementConsole {
   private managementServer: Server | null = null;
   private config: ProxyConfig;
-  private mainConfig?: MainConfig;
-  private statisticsService: any;
+  private statisticsService: StatisticsService;
   private managementWebSockets: Set<ServerWebSocket<unknown>> = new Set();
   private logWatchers: Map<string, Set<ServerWebSocket<unknown>>> = new Map(); // processId -> Set of WebSocket clients
+  private processManager: ProcessManager;
 
-  constructor(config: ProxyConfig, mainConfig?: MainConfig) {
+  constructor(config: ProxyConfig, processManager: ProcessManager) {
     this.config = config;
-    this.mainConfig = mainConfig;
+    this.processManager = processManager;
 
     // Initialize statistics service with configuration
     const logsDir = configService.getSetting<string>('logsDir');
@@ -33,25 +33,25 @@ export class ManagementConsole {
     logger.info('Initializing management console...');
 
     // Initialize process manager
-    processManager.initialize(this.config);
+    this.processManager.initialize(this.config);
 
     // Start managed processes
-    await processManager.startManagedProcesses();
+    await this.processManager.startManagedProcesses();
 
     // Set up process configuration watching
-    processManager.setupProcessConfigWatching();
+    this.processManager.setupProcessConfigWatching();
 
     // Set up process update callback
-    processManager.setProcessUpdateCallback(() => {
+    this.processManager.setProcessUpdateCallback(() => {
       this.broadcastToManagementWebSockets({
         type: 'processes_update',
-        data: processManager.getProcessStatus(),
+        data: this.processManager.getProcessStatus(),
         timestamp: new Date().toISOString()
       });
     });
 
     // Set up log update callback
-    processManager.setLogUpdateCallback((processId: string, newLogs: string[]) => {
+    this.processManager.setLogUpdateCallback((processId: string, newLogs: string[]) => {
       this.broadcastLogUpdates(processId, newLogs);
     });
 
@@ -70,7 +70,6 @@ export class ManagementConsole {
       hostname: managementHost,
       development: process.env.NODE_ENV !== 'production',
       routes: {
-        "/": managementHtml,
 
         "/api/status": {
           GET: async (req: Request) => {
@@ -441,7 +440,7 @@ export class ManagementConsole {
               const serverConfig = configService.getServerConfig();
               const route = serverConfig.routes.find(r => r.name === processId);
               const target = route?.target || '';
-              await processManager.startProcess(processId, process, target);
+              await this.processManager.startProcess(processId, process, target);
               return new Response(JSON.stringify({ success: true, message: `Process ${processId} started` }), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
@@ -461,7 +460,7 @@ export class ManagementConsole {
             const processId = url.pathname.split('/')[3];
 
             try {
-              await processManager.stopProcess(processId);
+              await this.processManager.stopProcess(processId);
               return new Response(JSON.stringify({ success: true, message: `Process ${processId} stopped` }), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
@@ -485,7 +484,7 @@ export class ManagementConsole {
               const serverConfig = configService.getServerConfig();
               const route = serverConfig.routes.find(r => r.name === processId);
               const target = route?.target || '';
-              await processManager.restartProcess(processId, target);
+              await this.processManager.restartProcess(processId, target);
               return new Response(JSON.stringify({ success: true, message: `Process ${processId} restarted` }), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
@@ -709,7 +708,11 @@ export class ManagementConsole {
             }
           }
           return new Response('Not Found', { status: 404 });
-        }
+        },
+        "/": (req: Request) => {
+          return Response.redirect(new URL('/frontend', req.url), 302);
+        },
+        "/frontend": managementHtml,
       },
       websocket: {
         open: (ws: ServerWebSocket<unknown>) => {
@@ -746,6 +749,10 @@ export class ManagementConsole {
         },
         drain: () => { },
       },
+      fetch: async (req: Request) => {
+        console.warn(`Unknown management route: ${req.url}`);
+        return new Response('Not Found', { status: 404 });
+      },
     });
 
     logger.info(`Management console started on ${managementHost}:${managementPort}`);
@@ -762,7 +769,7 @@ export class ManagementConsole {
     }
 
     // Shutdown process manager
-    await processManager.shutdown();
+    await this.processManager.shutdown();
 
     logger.info('Management console stopped successfully');
   }
@@ -889,7 +896,7 @@ export class ManagementConsole {
   }
 
   private getProcessesSync(): any[] {
-    const processes = processManager.getProcessStatus();
+    const processes = this.processManager.getProcessStatus();
     return Array.isArray(processes) ? processes : [];
   }
 
@@ -902,7 +909,7 @@ export class ManagementConsole {
   }
 
   async getProcesses(): Promise<any[]> {
-    return processManager.getProcessStatus();
+    return this.processManager.getProcessStatus();
   }
 
   async getStatusData(): Promise<any> {
@@ -910,7 +917,7 @@ export class ManagementConsole {
   }
 
   async getProcessLogs(processId: string, lines: number | string): Promise<any[]> {
-    const rawLogs = await processManager.getProcessLogs(processId, lines);
+    const rawLogs = await this.processManager.getProcessLogs(processId, lines);
 
     // Transform string logs into LogLine objects
     return rawLogs.map((logLine: string) => {
