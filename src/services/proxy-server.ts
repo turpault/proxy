@@ -1,4 +1,4 @@
-import { Server } from 'bun';
+import { BunRequest, Server, sleep } from 'bun';
 import { ProxyConfig, MainConfig, ProxyRoute } from '../types';
 import { logger } from '../utils/logger';
 import { cacheService, setCacheExpiration } from './cache';
@@ -15,7 +15,6 @@ export class ProxyServer {
   private httpServer: Server | null = null;
   private httpsServer: Server | null = null;
   private config: ProxyConfig;
-  private mainConfig?: MainConfig;
   private proxyRoutes: BunRoutes;
   private proxyMiddleware: BunMiddleware;
   private proxyCertificates: ProxyCertificates;
@@ -27,9 +26,8 @@ export class ProxyServer {
   private proxyRoutesMap: Map<string, { target: string; route: ProxyRoute }> = new Map();
   private corsRoutes: Map<string, { route: ProxyRoute; corsProxy: BunCorsProxy }> = new Map();
 
-  constructor(config: ProxyConfig, mainConfig?: MainConfig) {
+  constructor(config: ProxyConfig) {
     this.config = config;
-    this.mainConfig = mainConfig;
 
     // Initialize statistics service with configuration
     const logsDir = configService.getSetting<string>('logsDir');
@@ -154,7 +152,11 @@ export class ProxyServer {
               port: this.config.httpsPort || 4443,
               fetch: this.handleRequest.bind(this),
               error: this.handleError.bind(this),
-              tls: tlsOptions
+              tls: tlsOptions,
+              routes: {
+                "/robots.txt": () => new Response("User-agent: *\nDisallow: /", { status: 200 }),
+                "/": () => new Response("Hello World", { status: 200 })
+              }
             });
 
             logger.info(`HTTPS server started on port ${this.config.httpsPort || 4443} with certificate for ${defaultCert.domain}`);
@@ -204,11 +206,11 @@ export class ProxyServer {
     logger.info('Proxy server stopped successfully');
   }
 
-  private async handleRequest(req: Request): Promise<Response> {
+  private async handleRequest(req: BunRequest): Promise<Response> {
     const url = new URL(req.url);
     const method = req.method;
     const pathname = url.pathname;
-    const headers = Object.fromEntries(req.headers.entries());
+    const headers = Object.fromEntries(req.headers as any);
 
     // Create a request-like object for middleware compatibility
     const requestContext = {
@@ -274,6 +276,7 @@ export class ProxyServer {
       Date.now() - startTime
     );
 
+    await sleep(10000);
     return new Response(JSON.stringify({
       error: 'Not Found',
       message: 'No route configured for ' + method + ' ' + pathname,
@@ -311,8 +314,20 @@ export class ProxyServer {
         requestContext.pathname.startsWith(publicPath)
       );
 
-      // Try to serve the static file
-      const relativePath = requestContext.pathname;
+      // Find the matching route path to remove from the request pathname
+      let routePath = '';
+      for (const [route, routeConfig] of this.staticRoutes) {
+        if (routeConfig === config) {
+          routePath = route;
+          break;
+        }
+      }
+
+      // Remove the base path from the request pathname to get the relative path
+      const relativePath = requestContext.pathname.startsWith(routePath)
+        ? requestContext.pathname.substring(routePath.length)
+        : requestContext.pathname;
+
       const filePath = path.join(staticPath, relativePath);
       const file = Bun.file(filePath);
 
@@ -595,12 +610,6 @@ export class ProxyServer {
       if (newConfigs.serverConfig) {
         this.config = newConfigs.serverConfig;
       }
-
-      // Update main configuration
-      if (newConfigs.mainConfig) {
-        this.mainConfig = newConfigs.mainConfig;
-      }
-
       logger.info('Proxy server configuration updated successfully');
     } catch (error) {
       logger.error('Failed to update proxy server configuration', error);
