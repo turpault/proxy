@@ -61,7 +61,6 @@ export class ProcessManager {
   private processes: Map<string, ManagedProcess> = new Map();
   private healthCheckIntervals: Map<string, NodeJS.Timeout> = new Map();
   private isShuttingDown = false;
-  private config: ProxyConfig | null = null;
   private fileWatcher: fs.FSWatcher | null = null;
   private reinitializeTimeout: NodeJS.Timeout | null = null;
 
@@ -100,9 +99,7 @@ export class ProcessManager {
   /**
    * Initialize with server configuration
    */
-  public initialize(config: ProxyConfig): void {
-    this.config = config;
-
+  public initialize(): void {
     // Initialize schedules if process management config is available
     const processConfig = configService.getProcessConfig();
     if (processConfig) {
@@ -140,40 +137,6 @@ export class ProcessManager {
   }
 
   /**
-   * Set up file watching for process configuration changes
-   */
-  setupProcessConfigWatching(): void {
-    if (!this.config?.processConfigFile) {
-      logger.info('No process config file specified, skipping file watching');
-      return;
-    }
-
-    const configFilePath = path.resolve(process.cwd(), this.config.processConfigFile);
-
-    try {
-      // Stop existing watcher if any
-      if (this.fileWatcher) {
-        this.fileWatcher.close();
-      }
-
-      this.fileWatcher = watch(configFilePath, { persistent: true }, (eventType, filename) => {
-        if (eventType === 'change' && filename) {
-          logger.info(`Process configuration file changed: ${filename}`);
-          this.scheduleReinitialize();
-        }
-      });
-
-      this.fileWatcher.on('error', (error) => {
-        logger.error('Error watching process configuration file', error);
-      });
-
-      logger.info(`Process manager watching for changes in ${configFilePath}`);
-    } catch (error) {
-      logger.error('Failed to start file watcher for process configuration', error);
-    }
-  }
-
-  /**
    * Schedule reinitialization with debouncing
    */
   private scheduleReinitialize(): void {
@@ -192,17 +155,11 @@ export class ProcessManager {
    * Reinitialize from configuration file
    */
   private async reinitializeFromFile(): Promise<void> {
-    if (!this.config?.processConfigFile) {
-      logger.warn('Cannot reinitialize: missing process config file path');
-      return;
-    }
 
     try {
       logger.info('Reinitializing process management from updated configuration file');
 
-      // Read and parse the updated configuration
-      const configFilePath = path.resolve(process.cwd(), this.config.processConfigFile);
-      const newConfig = await this.loadProcessConfig(configFilePath);
+      const newConfig = configService.getProcessConfig();
 
       if (!newConfig) {
         throw new Error('Failed to load process configuration file');
@@ -316,31 +273,6 @@ export class ProcessManager {
     }
   }
 
-  /**
-   * Load process management configuration directly from YAML file
-   */
-  public async loadProcessConfig(configFilePath: string): Promise<ProcessManagementConfig | null> {
-    try {
-      const configContent = await fs.readFile(configFilePath, 'utf8');
-      const { parse } = await import('yaml');
-      const config = parse(configContent) as ProcessManagementConfig;
-
-      // Basic validation
-      if (!config.processes) {
-        throw new Error('Invalid process configuration: missing processes section');
-      }
-
-      logger.info(`Process management configuration loaded from ${configFilePath}`, {
-        processCount: Object.keys(config.processes).length,
-        processes: Object.keys(config.processes)
-      });
-
-      return config;
-    } catch (error) {
-      logger.error(`Failed to load process management configuration from ${configFilePath}`, error);
-      return null;
-    }
-  }
 
   /**
    * Generate PID file path for a process

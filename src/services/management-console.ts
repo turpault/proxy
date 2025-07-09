@@ -29,14 +29,6 @@ export class ManagementConsole {
   async initialize(): Promise<void> {
     logger.info('Initializing management console...');
 
-    // Initialize process manager
-    this.processManager.initialize(this.config);
-
-    // Start managed processes
-    await this.processManager.startManagedProcesses();
-
-    // Set up process configuration watching
-    this.processManager.setupProcessConfigWatching();
 
     // Set up process update callback
     this.processManager.setProcessUpdateCallback(() => {

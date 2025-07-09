@@ -18,11 +18,12 @@ export interface ProxyRequestConfig {
 import { geolocationService } from './geolocation';
 import { BunRequestContext } from './bun-middleware';
 import path from 'path';
+import { Server } from 'bun';
 
 export class BunRoutes {
   private statisticsService: any;
   private tempDir?: string;
-  private routeHandlers: Map<string, (requestContext: BunRequestContext) => Promise<Response | null>> = new Map();
+  private routeHandlers: Map<string, (requestContext: BunRequestContext, server: Server) => Promise<Response | null>> = new Map();
 
   constructor(tempDir?: string, statisticsService?: any) {
     this.statisticsService = statisticsService;
@@ -89,9 +90,9 @@ export class BunRoutes {
       staticPath: route.staticPath,
       spaFallback: route.spaFallback,
       publicPaths: route.publicPaths || []
-    }, this.tempDir);
+    }, this.tempDir, this.statisticsService);
 
-    this.routeHandlers.set(routePath, async (requestContext: BunRequestContext) => {
+    this.routeHandlers.set(routePath, async (requestContext: BunRequestContext, server: Server) => {
       const startTime = Date.now();
 
       try {
@@ -119,7 +120,7 @@ export class BunRoutes {
       }
     });
 
-    logger.info(`Static route configured: ${routePath} -> ${route.staticPath}${route.spaFallback ? ' (with SPA fallback)' : ''}`);
+    logger.info(`Static proxy route configured: ${routePath} -> ${route.staticPath}`);
   }
 
   private setupRedirectRoute(route: ProxyRoute, routePath: string): void {
@@ -189,7 +190,13 @@ export class BunRoutes {
 
       try {
         // Call the classic proxy directly with Bun request context
-        return await classicProxy.handleProxyRequest(requestContext, config);
+        const response = await classicProxy.handleProxyRequest(requestContext, config);
+
+        // Record statistics for successful classic proxy request
+        const responseTime = Date.now() - startTime;
+        this.recordRequestStats(requestContext, route, route.target!, responseTime, response.status, 'proxy');
+
+        return response;
       } catch (error) {
         logger.error(`[CLASSIC PROXY] Error in proxy request for ${routePath}`, error);
         return this.handleProxyError(error as Error, requestContext, `classic ${routePath}`, route.target!, route, true);
@@ -218,7 +225,13 @@ export class BunRoutes {
 
         try {
           // Call the classic proxy directly with Bun request context
-          return await classicProxy.handleProxyRequest(requestContext, config);
+          const response = await classicProxy.handleProxyRequest(requestContext, config);
+
+          // Record statistics for successful classic proxy request
+          const responseTime = Date.now() - startTime;
+          this.recordRequestStats(requestContext, route, route.target!, responseTime, response.status, 'proxy');
+
+          return response;
         } catch (error) {
           logger.error(`[CLASSIC PROXY] Error in proxy request for ${route.domain}`, error);
           return this.handleProxyError(error as Error, requestContext, `classic ${route.domain}`, route.target!, route, true);
@@ -258,8 +271,15 @@ export class BunRoutes {
       };
 
       try {
+        const startTime = Date.now();
         // Call the CORS proxy directly with Bun request context
-        return await corsProxy.handleProxyRequest(requestContext, config);
+        const response = await corsProxy.handleProxyRequest(requestContext, config);
+
+        // Record statistics for successful CORS forwarder request
+        const responseTime = Date.now() - startTime;
+        this.recordRequestStats(requestContext, route, target, responseTime, response.status, 'cors-forwarder');
+
+        return response;
       } catch (error) {
         logger.error(`[CORS FORWARDER] Error in proxy request for ${routePath}`, error);
         return this.handleProxyError(error as Error, requestContext, `cors-forwarder ${routePath}`, target, route, true);
@@ -299,8 +319,15 @@ export class BunRoutes {
         };
 
         try {
+          const startTime = Date.now();
           // Call the CORS proxy directly with Bun request context
-          return await corsProxy.handleProxyRequest(requestContext, config);
+          const response = await corsProxy.handleProxyRequest(requestContext, config);
+
+          // Record statistics for successful CORS forwarder request
+          const responseTime = Date.now() - startTime;
+          this.recordRequestStats(requestContext, route, target, responseTime, response.status, 'cors-forwarder');
+
+          return response;
         } catch (error) {
           logger.error(`[CORS FORWARDER] Error in proxy request for ${route.domain}`, error);
           return this.handleProxyError(error as Error, requestContext, `cors-forwarder ${route.domain}`, target, route, true);
@@ -312,7 +339,7 @@ export class BunRoutes {
     logger.info(`CORS forwarder domain route configured: ${route.domain} -> dynamic target via base64 url param`);
   }
 
-  async handleRequest(requestContext: BunRequestContext, config: ProxyConfig): Promise<Response | null> {
+  async handleRequest(requestContext: BunRequestContext, server: Server, config: ProxyConfig): Promise<Response | null> {
     // Check for exact path matches first
     for (const [routePath, handler] of this.routeHandlers.entries()) {
       if (routePath.startsWith('domain:')) {
@@ -320,13 +347,13 @@ export class BunRoutes {
         const domain = routePath.substring(7);
         const host = requestContext.headers['host'];
         if (host === domain || host === `www.${domain}`) {
-          const result = await handler(requestContext);
+          const result = await handler(requestContext, server);
           if (result) return result;
         }
       } else {
         // Path-based route
         if (requestContext.pathname === routePath || requestContext.pathname.startsWith(routePath + '/')) {
-          const result = await handler(requestContext);
+          const result = await handler(requestContext, server);
           if (result) return result;
         }
       }

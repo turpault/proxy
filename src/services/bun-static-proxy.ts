@@ -24,11 +24,13 @@ export class BunStaticProxy {
   private staticPath: string;
   private spaFallback: boolean;
   private publicPaths: string[];
+  private statisticsService?: any;
 
-  constructor(config: StaticProxyConfig, tempDir?: string) {
+  constructor(config: StaticProxyConfig, tempDir?: string, statisticsService?: any) {
     this.staticPath = config.staticPath;
     this.spaFallback = config.spaFallback || false;
     this.publicPaths = config.publicPaths || [];
+    this.statisticsService = statisticsService;
   }
 
   async handleProxyRequest(
@@ -59,17 +61,30 @@ export class BunStaticProxy {
       if (await file.exists()) {
         const responseTime = Date.now() - startTime;
         logger.info(`[STATIC PROXY] ${requestContext.method} ${requestContext.originalUrl} [200] (${responseTime}ms)`);
+
+        // Record statistics for successful static file request
+        this.recordRequestStats(requestContext, route, this.staticPath, responseTime, 200, 'static');
+
         return new Response(file);
       }
 
       // If file doesn't exist and SPA fallback is enabled
       if (this.spaFallback) {
-        return this.handleSPAFallback(requestContext, routeIdentifier);
+        const spaResponse = await this.handleSPAFallback(requestContext, routeIdentifier);
+        const responseTime = Date.now() - startTime;
+
+        // Record statistics for SPA fallback request
+        this.recordRequestStats(requestContext, route, this.staticPath, responseTime, spaResponse.status, 'static');
+
+        return spaResponse;
       }
 
       // File not found
       const responseTime = Date.now() - startTime;
       logger.info(`[STATIC PROXY] ${requestContext.method} ${requestContext.originalUrl} [404] (${responseTime}ms)`);
+
+      // Record statistics for 404 request
+      this.recordRequestStats(requestContext, route, this.staticPath, responseTime, 404, 'static');
 
       return new Response(JSON.stringify({
         error: 'Not Found',
@@ -80,7 +95,11 @@ export class BunStaticProxy {
       });
 
     } catch (error) {
+      const responseTime = Date.now() - startTime;
       logger.error(`[STATIC PROXY] Error serving static files for ${routeIdentifier}`, error);
+
+      // Record statistics for error request
+      this.recordRequestStats(requestContext, route, this.staticPath, responseTime, 500, 'static');
 
       return new Response(JSON.stringify({
         error: 'Static Proxy Error',
@@ -121,5 +140,46 @@ export class BunStaticProxy {
       status: 404,
       headers: { 'Content-Type': 'application/json' }
     });
+  }
+
+  private recordRequestStats(
+    requestContext: BunRequestContext,
+    route: ProxyRoute,
+    target: string,
+    responseTime: number,
+    statusCode: number,
+    requestType: string = 'static'
+  ): void {
+    if (!this.statisticsService) return;
+
+    const clientIP = this.getClientIP(requestContext);
+    const geolocation = this.getGeolocation(clientIP);
+    const userAgent = requestContext.headers['user-agent'] || 'Unknown';
+
+    this.statisticsService.recordRequest(
+      clientIP,
+      geolocation,
+      requestContext.pathname,
+      requestContext.method,
+      userAgent,
+      responseTime,
+      route.domain || 'unknown',
+      target,
+      requestType
+    );
+  }
+
+  private getClientIP(requestContext: BunRequestContext): string {
+    return requestContext.ip || 'unknown';
+  }
+
+  private getGeolocation(ip: string): any {
+    try {
+      // Import geolocation service dynamically to avoid circular dependencies
+      const { geolocationService } = require('./geolocation');
+      return geolocationService.getGeolocation(ip);
+    } catch (error) {
+      return null;
+    }
   }
 } 

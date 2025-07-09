@@ -246,7 +246,7 @@ export class ProxyServer {
     // Handle native proxy routes
     const proxyRoute = this.proxyRoutesMap.get(pathname);
     if (proxyRoute) {
-      return this.handleProxyRoute(requestContext, proxyRoute);
+      return this.handleProxyRoute(requestContext, server, proxyRoute);
     }
 
     // Handle native CORS routes
@@ -256,26 +256,28 @@ export class ProxyServer {
     }
 
     // Handle complex routes that need the full routing system
-    const routeResponse = await this.proxyRoutes.handleRequest(requestContext, this.config);
+    const routeResponse = await this.proxyRoutes.handleRequest(requestContext, server, this.config);
     if (routeResponse) {
       return routeResponse;
     }
 
     // Handle unmatched requests (404)
     const startTime = Date.now();
-    const clientIP = this.getClientIP(req);
+    const clientIP = this.getClientIP(req, server);
     const geolocation = this.getGeolocation(clientIP);
     const userAgent = headers['user-agent'] || 'Unknown';
 
-    this.statisticsService.recordRequest(
-      clientIP,
-      geolocation,
-      userAgent,
+    // Create request context for statistics
+    const unmatchedRequestContext = {
       method,
       pathname,
-      '404',
-      Date.now() - startTime
-    );
+      headers,
+      ip: clientIP,
+      'user-agent': userAgent
+    };
+
+    // Record statistics for unmatched request
+    this.recordRequestStats(unmatchedRequestContext, server, { name: 'unmatched' }, 'unmatched', Date.now() - startTime, 404, 'unmatched');
 
     await sleep(10000);
     return new Response(JSON.stringify({
@@ -362,7 +364,11 @@ export class ProxyServer {
       });
 
     } catch (error) {
+      const responseTime = Date.now() - startTime;
       logger.error(`[NATIVE STATIC] Error serving static files for ${staticPath}`, error);
+
+      // Record statistics for error
+      this.recordRequestStats(requestContext, server, { name: 'static' }, staticPath, responseTime, 500, 'static');
 
       return new Response(JSON.stringify({
         error: 'Static Proxy Error',
@@ -375,10 +381,16 @@ export class ProxyServer {
   }
 
   private async handleSPAFallback(requestContext: any, staticPath: string): Promise<Response> {
+    const startTime = Date.now();
+
     // Skip if this is an API route or static asset
     if (requestContext.pathname.startsWith('/api/') ||
       requestContext.pathname.startsWith('/static/') ||
       requestContext.pathname.includes('.')) {
+
+      const responseTime = Date.now() - startTime;
+      this.recordRequestStats(requestContext, null, { name: 'static' }, staticPath, responseTime, 404, 'static');
+
       return new Response(JSON.stringify({
         error: 'Not Found',
         message: 'File not found'
@@ -393,8 +405,14 @@ export class ProxyServer {
     const indexFile = Bun.file(indexPath);
 
     if (await indexFile.exists()) {
+      const responseTime = Date.now() - startTime;
+      this.recordRequestStats(requestContext, null, { name: 'static' }, staticPath, responseTime, 200, 'static');
+
       return new Response(indexFile);
     }
+
+    const responseTime = Date.now() - startTime;
+    this.recordRequestStats(requestContext, null, { name: 'static' }, staticPath, responseTime, 404, 'static');
 
     return new Response(JSON.stringify({
       error: 'Not Found',
@@ -410,7 +428,7 @@ export class ProxyServer {
     const start = Date.now();
 
     // Record statistics
-    this.recordRequestStats(requestContext, { name: 'redirect' }, redirectTarget, Date.now() - start, 301, 'redirect');
+    this.recordRequestStats(requestContext, server, { name: 'redirect' }, redirectTarget, Date.now() - start, 301, 'redirect');
 
     return new Response(null, {
       status: 301,
@@ -418,7 +436,7 @@ export class ProxyServer {
     });
   }
 
-  private async handleProxyRoute(requestContext: any, config: { target: string; route: ProxyRoute }): Promise<Response> {
+  private async handleProxyRoute(requestContext: any, server: Server, config: { target: string; route: ProxyRoute }): Promise<Response> {
     const { target, route } = config;
     const startTime = Date.now();
     const classicProxy = new BunClassicProxy();
@@ -438,11 +456,15 @@ export class ProxyServer {
 
       // Record statistics
       const responseTime = Date.now() - startTime;
-      this.recordRequestStats(requestContext, route, target, responseTime, response.status, 'proxy');
+      this.recordRequestStats(requestContext, server, route, target, responseTime, response.status, 'proxy');
 
       return response;
     } catch (error) {
+      const responseTime = Date.now() - startTime;
       logger.error(`[NATIVE PROXY] Error in proxy request for ${requestContext.pathname}`, error);
+
+      // Record statistics for error
+      this.recordRequestStats(requestContext, server, route, target, responseTime, 502, 'proxy');
 
       return new Response(JSON.stringify({
         error: 'Proxy Error',
@@ -481,10 +503,22 @@ export class ProxyServer {
       logErrors: true
     };
 
+    const startTime = Date.now();
+
     try {
-      return await corsProxy.handleProxyRequest(requestContext, proxyConfig);
+      const response = await corsProxy.handleProxyRequest(requestContext, proxyConfig);
+
+      // Record statistics for successful CORS request
+      const responseTime = Date.now() - startTime;
+      this.recordRequestStats(requestContext, null, route, target, responseTime, response.status, 'cors-forwarder');
+
+      return response;
     } catch (error) {
+      const responseTime = Date.now() - startTime;
       logger.error(`[NATIVE CORS] Error in proxy request for ${requestContext.pathname}`, error);
+
+      // Record statistics for error
+      this.recordRequestStats(requestContext, null, route, target, responseTime, 502, 'cors-forwarder');
 
       return new Response(JSON.stringify({
         error: 'CORS Proxy Error',
@@ -523,11 +557,13 @@ export class ProxyServer {
       this.statisticsService.recordRequest(
         clientIP,
         geolocation,
-        userAgent,
-        requestContext.method,
         requestContext.pathname,
-        statusCode.toString(),
-        responseTime
+        requestContext.method,
+        userAgent,
+        responseTime,
+        route?.domain || 'unknown',
+        target,
+        requestType
       );
     }
   }

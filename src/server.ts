@@ -24,14 +24,16 @@ export class BunProxyServer {
     this.processManager = new ProcessManager();
 
     // Initialize the two separate services
-    this.proxyServer = new ProxyServer(config, mainConfig);
+    this.proxyServer = new ProxyServer(config);
     this.managementConsole = new ManagementConsole(config, this.processManager);
   }
 
   async initialize(): Promise<void> {
     logger.info('Initializing Bun proxy server...');
 
+
     // Initialize all services
+    await this.processManager.initialize();
     await this.proxyServer.initialize();
     await this.managementConsole.initialize();
 

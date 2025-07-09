@@ -1,6 +1,8 @@
 import * as acme from 'acme-client';
 import * as fs from 'fs-extra';
 import * as path from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { LetsEncryptOptions, CertificateInfo } from '../types';
 import { logger } from '../utils/logger';
 
@@ -161,8 +163,6 @@ export class LetsEncryptService {
   private async parseCertificate(cert: string): Promise<{ expiresAt: Date; isValid: boolean; issuer?: string }> {
     try {
       // Use openssl to parse the certificate and get the actual expiration date and issuer
-      const { exec } = require('child_process');
-      const { promisify } = require('util');
       const execAsync = promisify(exec);
 
       // Write certificate to temporary file for openssl processing
