@@ -2,9 +2,50 @@
 // Provides type-safe fetch functions for all API endpoints
 
 import {
-  ApiEndpointTypes,
-  ApiRequest,
-  ApiResponse,
+  // Status API types
+  StatusResponse,
+
+  // Configuration API types
+  GetConfigRequest, GetConfigResponse,
+  SaveConfigRequest, SaveConfigResponse,
+  CreateBackupResponse,
+  GetBackupsResponse,
+  RestoreBackupApiRequest, RestoreBackupResponse,
+  ValidateConfigRequest, ValidateConfigResponse,
+
+  // Statistics API types
+  GetStatisticsResponse,
+  GetDetailedStatisticsRequest, GetDetailedStatisticsResponse,
+  GetStatisticsSummaryResponse,
+  GenerateReportResponse,
+
+  // Processes API types
+  GetProcessesResponse,
+  ReloadProcessesResponse,
+  StartProcessResponse,
+  StopProcessResponse,
+  RestartProcessResponse,
+  GetProcessLogsRequest, GetProcessLogsResponse,
+  GetProcessConfigResponse,
+  UpdateProcessConfigRequest, UpdateProcessConfigResponse,
+
+  // Certificates API types
+  GetCertificatesResponse,
+
+  // Cache API types
+  GetCacheStatsResponse,
+  GetCacheEntriesRequest, GetCacheEntriesResponse,
+  ClearCacheResponse,
+  DeleteCacheEntryResponse,
+
+  // OAuth API types
+  GetOAuthSessionResponse,
+  LogoutResponse,
+
+  // Health API types
+  HealthResponse,
+
+  // Error types
   ApiErrorResponse,
   ApiSuccessResponse
 } from '../types';
@@ -12,15 +53,15 @@ import {
 // Base API configuration
 const API_BASE = ''; // Relative to current domain
 
-// Generic typed fetch function
-async function typedFetch<T extends keyof ApiEndpointTypes>(
-  endpoint: T,
+// Generic fetch function for internal use
+async function fetchApi<T>(
+  endpoint: string,
   options: {
     method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
-    body?: ApiRequest<T>;
+    body?: any;
     query?: Record<string, string>;
   } = {}
-): Promise<ApiResponse<T>> {
+): Promise<T> {
   const { method = 'GET', body, query } = options;
 
   // Build URL with query parameters
@@ -60,7 +101,7 @@ async function typedFetch<T extends keyof ApiEndpointTypes>(
     }
 
     const data = await response.json();
-    return data as ApiResponse<T>;
+    return data as T;
   } catch (error) {
     console.error(`API call failed for ${endpoint}:`, error);
     throw error;
@@ -72,7 +113,8 @@ async function typedFetch<T extends keyof ApiEndpointTypes>(
 // ============================================================================
 
 export const statusApi = {
-  getStatus: () => typedFetch('GET /api/status'),
+  getStatus: (): Promise<StatusResponse> =>
+    fetchApi<StatusResponse>('/api/status'),
 };
 
 // ============================================================================
@@ -80,34 +122,34 @@ export const statusApi = {
 // ============================================================================
 
 export const configApi = {
-  getConfig: (type: 'proxy' | 'processes' | 'main') =>
-    typedFetch('GET /api/config/:type', { query: { type } }),
+  getConfig: (type: 'proxy' | 'processes' | 'main'): Promise<GetConfigResponse> =>
+    fetchApi<GetConfigResponse>('/api/config/:type', { query: { type } }),
 
-  saveConfig: (type: 'proxy' | 'processes' | 'main', data: ApiRequest<'POST /api/config/:type/save'>) =>
-    typedFetch('POST /api/config/:type/save', {
+  saveConfig: (type: 'proxy' | 'processes' | 'main', data: SaveConfigRequest): Promise<SaveConfigResponse> =>
+    fetchApi<SaveConfigResponse>('/api/config/:type/save', {
       method: 'POST',
       body: data,
       query: { type }
     }),
 
-  createBackup: (type: 'proxy' | 'processes' | 'main') =>
-    typedFetch('POST /api/config/:type/backup', {
+  createBackup: (type: 'proxy' | 'processes' | 'main'): Promise<CreateBackupResponse> =>
+    fetchApi<CreateBackupResponse>('/api/config/:type/backup', {
       method: 'POST',
       query: { type }
     }),
 
-  getBackups: (type: 'proxy' | 'processes' | 'main') =>
-    typedFetch('GET /api/config/:type/backups', { query: { type } }),
+  getBackups: (type: 'proxy' | 'processes' | 'main'): Promise<GetBackupsResponse> =>
+    fetchApi<GetBackupsResponse>('/api/config/:type/backups', { query: { type } }),
 
-  restoreBackup: (type: 'proxy' | 'processes' | 'main', data: ApiRequest<'POST /api/config/:type/restore'>) =>
-    typedFetch('POST /api/config/:type/restore', {
+  restoreBackup: (type: 'proxy' | 'processes' | 'main', data: RestoreBackupApiRequest): Promise<RestoreBackupResponse> =>
+    fetchApi<RestoreBackupResponse>('/api/config/:type/restore', {
       method: 'POST',
       body: data,
       query: { type }
     }),
 
-  validateConfig: (data: ApiRequest<'POST /api/config/validate'>) =>
-    typedFetch('POST /api/config/validate', { method: 'POST', body: data }),
+  validateConfig: (data: ValidateConfigRequest): Promise<ValidateConfigResponse> =>
+    fetchApi<ValidateConfigResponse>('/api/config/validate', { method: 'POST', body: data }),
 };
 
 // ============================================================================
@@ -115,14 +157,19 @@ export const configApi = {
 // ============================================================================
 
 export const statisticsApi = {
-  getStatistics: () => typedFetch('GET /api/statistics'),
+  getStatistics: (): Promise<GetStatisticsResponse> =>
+    fetchApi<GetStatisticsResponse>('/api/statistics'),
 
-  getDetailedStatistics: (period?: string) =>
-    typedFetch('GET /api/statistics/detailed', { query: period ? { period } : {} }),
+  getDetailedStatistics: (period?: string): Promise<GetDetailedStatisticsResponse> =>
+    fetchApi<GetDetailedStatisticsResponse>('/api/statistics/detailed', {
+      query: period ? { period } : {}
+    }),
 
-  getStatisticsSummary: () => typedFetch('GET /api/statistics/summary'),
+  getStatisticsSummary: (): Promise<GetStatisticsSummaryResponse> =>
+    fetchApi<GetStatisticsSummaryResponse>('/api/statistics/summary'),
 
-  generateReport: () => typedFetch('POST /api/statistics/generate-report', { method: 'POST' }),
+  generateReport: (): Promise<GenerateReportResponse> =>
+    fetchApi<GenerateReportResponse>('/api/statistics/generate-report', { method: 'POST' }),
 };
 
 // ============================================================================
@@ -130,37 +177,40 @@ export const statisticsApi = {
 // ============================================================================
 
 export const processesApi = {
-  getProcesses: () => typedFetch('GET /api/processes'),
+  getProcesses: (): Promise<GetProcessesResponse> =>
+    fetchApi<GetProcessesResponse>('/api/processes'),
 
-  reloadProcesses: () => typedFetch('POST /api/processes/reload', { method: 'POST' }),
+  reloadProcesses: (): Promise<ReloadProcessesResponse> =>
+    fetchApi<ReloadProcessesResponse>('/api/processes/reload', { method: 'POST' }),
 
-  startProcess: (id: string) =>
-    typedFetch('POST /api/processes/:id/start', {
+  startProcess: (id: string): Promise<StartProcessResponse> =>
+    fetchApi<StartProcessResponse>('/api/processes/:id/start', {
       method: 'POST',
       query: { id }
     }),
 
-  stopProcess: (id: string) =>
-    typedFetch('POST /api/processes/:id/stop', {
+  stopProcess: (id: string): Promise<StopProcessResponse> =>
+    fetchApi<StopProcessResponse>('/api/processes/:id/stop', {
       method: 'POST',
       query: { id }
     }),
 
-  restartProcess: (id: string) =>
-    typedFetch('POST /api/processes/:id/restart', {
+  restartProcess: (id: string): Promise<RestartProcessResponse> =>
+    fetchApi<RestartProcessResponse>('/api/processes/:id/restart', {
       method: 'POST',
       query: { id }
     }),
 
-  getProcessLogs: (id: string, lines?: string) =>
-    typedFetch('GET /api/processes/:id/logs', {
+  getProcessLogs: (id: string, lines?: string): Promise<GetProcessLogsResponse> =>
+    fetchApi<GetProcessLogsResponse>('/api/processes/:id/logs', {
       query: { id, ...(lines ? { lines } : {}) }
     }),
 
-  getProcessConfig: () => typedFetch('GET /api/processes/config'),
+  getProcessConfig: (): Promise<GetProcessConfigResponse> =>
+    fetchApi<GetProcessConfigResponse>('/api/processes/config'),
 
-  updateProcessConfig: (data: ApiRequest<'PUT /api/processes/config'>) =>
-    typedFetch('PUT /api/processes/config', { method: 'PUT', body: data }),
+  updateProcessConfig: (data: UpdateProcessConfigRequest): Promise<UpdateProcessConfigResponse> =>
+    fetchApi<UpdateProcessConfigResponse>('/api/processes/config', { method: 'PUT', body: data }),
 };
 
 // ============================================================================
@@ -168,7 +218,8 @@ export const processesApi = {
 // ============================================================================
 
 export const certificatesApi = {
-  getCertificates: () => typedFetch('GET /api/certificates'),
+  getCertificates: (): Promise<GetCertificatesResponse> =>
+    fetchApi<GetCertificatesResponse>('/api/certificates'),
 };
 
 // ============================================================================
@@ -176,19 +227,22 @@ export const certificatesApi = {
 // ============================================================================
 
 export const cacheApi = {
-  getCacheStats: () => typedFetch('GET /api/cache/stats'),
+  getCacheStats: (): Promise<GetCacheStatsResponse> =>
+    fetchApi<GetCacheStatsResponse>('/api/cache/stats'),
 
   getCacheEntries: (params?: {
     page?: string;
     limit?: string;
     userId?: string;
     inMRU?: string;
-  }) => typedFetch('GET /api/cache/entries', { query: params }),
+  }): Promise<GetCacheEntriesResponse> =>
+    fetchApi<GetCacheEntriesResponse>('/api/cache/entries', { query: params }),
 
-  clearCache: () => typedFetch('POST /api/cache/clear', { method: 'POST' }),
+  clearCache: (): Promise<ClearCacheResponse> =>
+    fetchApi<ClearCacheResponse>('/api/cache/clear', { method: 'POST' }),
 
-  deleteCacheEntry: (key: string) =>
-    typedFetch('DELETE /api/cache/delete/:key', {
+  deleteCacheEntry: (key: string): Promise<DeleteCacheEntryResponse> =>
+    fetchApi<DeleteCacheEntryResponse>('/api/cache/delete/:key', {
       method: 'DELETE',
       query: { key }
     }),
@@ -199,9 +253,11 @@ export const cacheApi = {
 // ============================================================================
 
 export const oauthApi = {
-  getSession: () => typedFetch('GET /oauth/session'),
+  getSession: (): Promise<GetOAuthSessionResponse> =>
+    fetchApi<GetOAuthSessionResponse>('/oauth/session'),
 
-  logout: () => typedFetch('POST /oauth/logout', { method: 'POST' }),
+  logout: (): Promise<LogoutResponse> =>
+    fetchApi<LogoutResponse>('/oauth/logout', { method: 'POST' }),
 };
 
 // ============================================================================
@@ -209,7 +265,8 @@ export const oauthApi = {
 // ============================================================================
 
 export const healthApi = {
-  getHealth: () => typedFetch('GET /health'),
+  getHealth: (): Promise<HealthResponse> =>
+    fetchApi<HealthResponse>('/health'),
 };
 
 // ============================================================================
@@ -217,8 +274,8 @@ export const healthApi = {
 // ============================================================================
 
 // Helper function to handle API responses with error checking
-export async function handleApiResponse<T extends keyof ApiEndpointTypes>(
-  apiCall: Promise<ApiResponse<T>>
+export async function handleApiResponse<T extends Record<string, any>>(
+  apiCall: Promise<T>
 ): Promise<any> {
   try {
     const response = await apiCall;
@@ -236,8 +293,8 @@ export async function handleApiResponse<T extends keyof ApiEndpointTypes>(
 }
 
 // Helper function for simple success/failure operations
-export async function handleApiSuccess<T extends keyof ApiEndpointTypes>(
-  apiCall: Promise<ApiResponse<T>>
+export async function handleApiSuccess<T extends Record<string, any>>(
+  apiCall: Promise<T>
 ): Promise<boolean> {
   try {
     const response = await apiCall;
@@ -254,9 +311,7 @@ export async function handleApiSuccess<T extends keyof ApiEndpointTypes>(
 
 // WebSocket message sender with type safety
 export function createWebSocketSender(ws: WebSocket) {
-  return function sendMessage<T extends keyof ApiEndpointTypes>(
-    message: ApiRequest<T>
-  ) {
+  return function sendMessage<T>(message: T) {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(message));
     } else {
