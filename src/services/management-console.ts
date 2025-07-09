@@ -11,6 +11,35 @@ import { ProxyCertificates } from './proxy-certificates';
 import { getStatisticsService, StatisticsService } from './statistics';
 import { stringify as yamlStringify } from 'yaml';
 import * as fs from 'fs-extra';
+import {
+  StatusResponse,
+  GetConfigResponse,
+  SaveConfigResponse,
+  CreateBackupResponse,
+  GetBackupsResponse,
+  RestoreBackupResponse,
+  ValidateConfigResponse,
+  GetStatisticsResponse,
+  GetDetailedStatisticsResponse,
+  GetStatisticsSummaryResponse,
+  GenerateReportResponse,
+  GetProcessesResponse,
+  ReloadProcessesResponse,
+  StartProcessResponse,
+  StopProcessResponse,
+  RestartProcessResponse,
+  GetProcessLogsResponse,
+  GetProcessConfigResponse,
+  UpdateProcessConfigResponse,
+  GetCertificatesResponse,
+  GetCacheStatsResponse,
+  GetCacheEntriesResponse,
+  ClearCacheResponse,
+  DeleteCacheEntryResponse,
+  HealthResponse,
+  ApiErrorResponse,
+  ApiSuccessResponse
+} from '../types/shared';
 
 export class ManagementConsole {
   private managementServer: Server | null = null;
@@ -66,7 +95,7 @@ export class ManagementConsole {
         "/api/status": {
           GET: async (req: Request) => {
             const status = this.getStatus();
-            return new Response(JSON.stringify(status), {
+            return new Response(JSON.stringify({ ...status } as StatusResponse), {
               status: 200,
               headers: { 'Content-Type': 'application/json' }
             });
@@ -76,7 +105,7 @@ export class ManagementConsole {
         "/api/config": {
           GET: async (req: Request) => {
             const config = this.getConfig();
-            return new Response(JSON.stringify(config), {
+            return new Response(JSON.stringify({ ...config } as any), {
               status: 200,
               headers: { 'Content-Type': 'application/json' }
             });
@@ -97,7 +126,7 @@ export class ManagementConsole {
                   configData = configService.getServerConfig();
                   const mainConfigProxy = configService.getMainConfig();
                   if (!mainConfigProxy) {
-                    return new Response(JSON.stringify({ error: 'Main configuration not available' }), {
+                    return new Response(JSON.stringify({ success: false, error: 'Main configuration not available' } as ApiErrorResponse), {
                       status: 500,
                       headers: { 'Content-Type': 'application/json' }
                     });
@@ -108,7 +137,7 @@ export class ManagementConsole {
                   configData = configService.getProcessConfig();
                   const mainConfigProcesses = configService.getMainConfig();
                   if (!mainConfigProcesses) {
-                    return new Response(JSON.stringify({ error: 'Main configuration not available' }), {
+                    return new Response(JSON.stringify({ success: false, error: 'Main configuration not available' } as ApiErrorResponse), {
                       status: 500,
                       headers: { 'Content-Type': 'application/json' }
                     });
@@ -120,7 +149,7 @@ export class ManagementConsole {
                   configPath = configService.getMainConfigPath();
                   break;
                 default:
-                  return new Response(JSON.stringify({ error: 'Invalid config type' }), {
+                  return new Response(JSON.stringify({ success: false, error: 'Invalid config type' } as ApiErrorResponse), {
                     status: 400,
                     headers: { 'Content-Type': 'application/json' }
                   });
@@ -146,12 +175,12 @@ export class ManagementConsole {
                 lastModified
               };
 
-              return new Response(JSON.stringify({ success: true, data: responseData }), {
+              return new Response(JSON.stringify({ success: true, data: responseData } as GetConfigResponse), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
             } catch (error) {
-              return new Response(JSON.stringify({ error: 'Failed to get config', details: error instanceof Error ? error.message : 'Unknown error' }), {
+              return new Response(JSON.stringify({ success: false, error: 'Failed to get config', details: error instanceof Error ? error.message : 'Unknown error' } as ApiErrorResponse), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -172,7 +201,7 @@ export class ManagementConsole {
                 case 'proxy':
                   const mainConfigSaveProxy = configService.getMainConfig();
                   if (!mainConfigSaveProxy) {
-                    return new Response(JSON.stringify({ error: 'Main configuration not available' }), {
+                    return new Response(JSON.stringify({ success: false, error: 'Main configuration not available' } as ApiErrorResponse), {
                       status: 500,
                       headers: { 'Content-Type': 'application/json' }
                     });
@@ -182,7 +211,7 @@ export class ManagementConsole {
                 case 'processes':
                   const mainConfigSaveProcesses = configService.getMainConfig();
                   if (!mainConfigSaveProcesses) {
-                    return new Response(JSON.stringify({ error: 'Main configuration not available' }), {
+                    return new Response(JSON.stringify({ success: false, error: 'Main configuration not available' } as ApiErrorResponse), {
                       status: 500,
                       headers: { 'Content-Type': 'application/json' }
                     });
@@ -193,7 +222,7 @@ export class ManagementConsole {
                   configPath = configService.getMainConfigPath();
                   break;
                 default:
-                  return new Response(JSON.stringify({ error: 'Invalid config type' }), {
+                  return new Response(JSON.stringify({ success: false, error: 'Invalid config type' } as ApiErrorResponse), {
                     status: 400,
                     headers: { 'Content-Type': 'application/json' }
                   });
@@ -207,12 +236,12 @@ export class ManagementConsole {
               // Reload config after saving
               await configService.reload();
 
-              return new Response(JSON.stringify({ success: true, message: 'Configuration saved' }), {
+              return new Response(JSON.stringify({ success: true, message: 'Configuration saved' } as SaveConfigResponse), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
             } catch (error) {
-              return new Response(JSON.stringify({ error: 'Failed to save config', details: error instanceof Error ? error.message : 'Unknown error' }), {
+              return new Response(JSON.stringify({ success: false, error: 'Failed to save config', details: error instanceof Error ? error.message : 'Unknown error' } as ApiErrorResponse), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -230,7 +259,7 @@ export class ManagementConsole {
                 case 'proxy':
                   const mainConfigBackupProxy = configService.getMainConfig();
                   if (!mainConfigBackupProxy) {
-                    return new Response(JSON.stringify({ error: 'Main configuration not available' }), {
+                    return new Response(JSON.stringify({ success: false, error: 'Main configuration not available' } as ApiErrorResponse), {
                       status: 500,
                       headers: { 'Content-Type': 'application/json' }
                     });
@@ -240,7 +269,7 @@ export class ManagementConsole {
                 case 'processes':
                   const mainConfigBackupProcesses = configService.getMainConfig();
                   if (!mainConfigBackupProcesses) {
-                    return new Response(JSON.stringify({ error: 'Main configuration not available' }), {
+                    return new Response(JSON.stringify({ success: false, error: 'Main configuration not available' } as ApiErrorResponse), {
                       status: 500,
                       headers: { 'Content-Type': 'application/json' }
                     });
@@ -251,7 +280,7 @@ export class ManagementConsole {
                   configPath = configService.getMainConfigPath();
                   break;
                 default:
-                  return new Response(JSON.stringify({ error: 'Invalid config type' }), {
+                  return new Response(JSON.stringify({ success: false, error: 'Invalid config type' } as ApiErrorResponse), {
                     status: 400,
                     headers: { 'Content-Type': 'application/json' }
                   });
@@ -262,12 +291,12 @@ export class ManagementConsole {
               const backupFile = path.join(backupDir, `${type}.backup-${timestamp}.yaml`);
               await fs.copyFile(configPath, backupFile);
               logger.info(`Config backup created for type: ${type} at ${backupFile}`);
-              return new Response(JSON.stringify({ success: true, message: 'Backup created successfully', backupPath: backupFile }), {
+              return new Response(JSON.stringify({ success: true, message: 'Backup created successfully', backupPath: backupFile } as CreateBackupResponse), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
             } catch (error) {
-              return new Response(JSON.stringify({ error: 'Failed to create backup', details: error instanceof Error ? error.message : 'Unknown error' }), {
+              return new Response(JSON.stringify({ success: false, error: 'Failed to create backup', details: error instanceof Error ? error.message : 'Unknown error' } as ApiErrorResponse), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -285,7 +314,7 @@ export class ManagementConsole {
                 case 'proxy':
                   const mainConfigBackupsProxy = configService.getMainConfig();
                   if (!mainConfigBackupsProxy) {
-                    return new Response(JSON.stringify({ error: 'Main configuration not available' }), {
+                    return new Response(JSON.stringify({ success: false, error: 'Main configuration not available' } as ApiErrorResponse), {
                       status: 500,
                       headers: { 'Content-Type': 'application/json' }
                     });
@@ -295,7 +324,7 @@ export class ManagementConsole {
                 case 'processes':
                   const mainConfigBackupsProcesses = configService.getMainConfig();
                   if (!mainConfigBackupsProcesses) {
-                    return new Response(JSON.stringify({ error: 'Main configuration not available' }), {
+                    return new Response(JSON.stringify({ success: false, error: 'Main configuration not available' } as ApiErrorResponse), {
                       status: 500,
                       headers: { 'Content-Type': 'application/json' }
                     });
@@ -306,7 +335,7 @@ export class ManagementConsole {
                   configPath = configService.getMainConfigPath();
                   break;
                 default:
-                  return new Response(JSON.stringify({ error: 'Invalid config type' }), {
+                  return new Response(JSON.stringify({ success: false, error: 'Invalid config type' } as ApiErrorResponse), {
                     status: 400,
                     headers: { 'Content-Type': 'application/json' }
                   });
@@ -325,24 +354,24 @@ export class ManagementConsole {
                         path: filePath,
                         name: f,
                         size: stats.size,
-                        modified: stats.mtime.toISOString()
+                        lastModified: stats.mtime.toISOString()
                       };
                     } catch {
                       return {
                         path: filePath,
                         name: f,
-                        size: null,
-                        modified: null
+                        size: 0,
+                        lastModified: new Date().toISOString()
                       };
                     }
                   })
               );
-              return new Response(JSON.stringify({ success: true, data: backups }), {
+              return new Response(JSON.stringify({ success: true, data: backups } as GetBackupsResponse), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
             } catch (error) {
-              return new Response(JSON.stringify({ error: 'Failed to list backups', details: error instanceof Error ? error.message : 'Unknown error' }), {
+              return new Response(JSON.stringify({ success: false, error: 'Failed to list backups', details: error instanceof Error ? error.message : 'Unknown error' } as ApiErrorResponse), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -361,7 +390,7 @@ export class ManagementConsole {
                 case 'proxy':
                   const mainConfigRestoreProxy = configService.getMainConfig();
                   if (!mainConfigRestoreProxy) {
-                    return new Response(JSON.stringify({ error: 'Main configuration not available' }), {
+                    return new Response(JSON.stringify({ success: false, error: 'Main configuration not available' } as ApiErrorResponse), {
                       status: 500,
                       headers: { 'Content-Type': 'application/json' }
                     });
@@ -371,7 +400,7 @@ export class ManagementConsole {
                 case 'processes':
                   const mainConfigRestoreProcesses = configService.getMainConfig();
                   if (!mainConfigRestoreProcesses) {
-                    return new Response(JSON.stringify({ error: 'Main configuration not available' }), {
+                    return new Response(JSON.stringify({ success: false, error: 'Main configuration not available' } as ApiErrorResponse), {
                       status: 500,
                       headers: { 'Content-Type': 'application/json' }
                     });
@@ -382,7 +411,7 @@ export class ManagementConsole {
                   configPath = configService.getMainConfigPath();
                   break;
                 default:
-                  return new Response(JSON.stringify({ error: 'Invalid config type' }), {
+                  return new Response(JSON.stringify({ success: false, error: 'Invalid config type' } as ApiErrorResponse), {
                     status: 400,
                     headers: { 'Content-Type': 'application/json' }
                   });
@@ -390,12 +419,12 @@ export class ManagementConsole {
               await fs.copyFile(backupPath, configPath);
               logger.info(`Config restored for type: ${type} from ${backupPath}`);
               await configService.reload();
-              return new Response(JSON.stringify({ success: true, message: 'Configuration restored successfully' }), {
+              return new Response(JSON.stringify({ success: true, message: 'Configuration restored successfully' } as RestoreBackupResponse), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
             } catch (error) {
-              return new Response(JSON.stringify({ error: 'Failed to restore config', details: error instanceof Error ? error.message : 'Unknown error' }), {
+              return new Response(JSON.stringify({ success: false, error: 'Failed to restore config', details: error instanceof Error ? error.message : 'Unknown error' } as ApiErrorResponse), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -414,7 +443,7 @@ export class ManagementConsole {
                 return new Response(JSON.stringify({
                   success: false,
                   error: 'Invalid content provided'
-                }), {
+                } as ApiErrorResponse), {
                   status: 400,
                   headers: { 'Content-Type': 'application/json' }
                 });
@@ -435,7 +464,7 @@ export class ManagementConsole {
               return new Response(JSON.stringify({
                 success: true,
                 data: validationResult
-              }), {
+              } as ValidateConfigResponse), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -444,7 +473,7 @@ export class ManagementConsole {
                 success: false,
                 error: 'Validation failed',
                 details: error instanceof Error ? error.message : 'Unknown error'
-              }), {
+              } as ApiErrorResponse), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -455,7 +484,7 @@ export class ManagementConsole {
         "/api/statistics": {
           GET: async (req: Request) => {
             const stats = this.statisticsService.getStatsSummary();
-            return new Response(JSON.stringify({ success: true, data: stats }), {
+            return new Response(JSON.stringify({ success: true, data: stats } as GetStatisticsResponse), {
               status: 200,
               headers: { 'Content-Type': 'application/json' }
             });
@@ -488,15 +517,16 @@ export class ManagementConsole {
                 }
               };
 
-              return new Response(JSON.stringify({ success: true, data: serializedStats }), {
+              return new Response(JSON.stringify({ success: true, data: serializedStats } as GetDetailedStatisticsResponse), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
             } catch (error) {
               return new Response(JSON.stringify({
+                success: false,
                 error: 'Failed to get detailed statistics',
                 details: error instanceof Error ? error.message : 'Unknown error'
-              }), {
+              } as ApiErrorResponse), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -507,7 +537,7 @@ export class ManagementConsole {
         "/api/statistics/summary": {
           GET: async (req: Request) => {
             const stats = this.statisticsService.getStatsSummary();
-            return new Response(JSON.stringify({ success: true, data: stats }), {
+            return new Response(JSON.stringify({ success: true, data: stats } as GetStatisticsSummaryResponse), {
               status: 200,
               headers: { 'Content-Type': 'application/json' }
             });
@@ -531,12 +561,12 @@ export class ManagementConsole {
                   filepath: reportPath,
                   summary: stats
                 }
-              }), {
+              } as GenerateReportResponse), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
             } catch (error) {
-              return new Response(JSON.stringify({ error: 'Failed to generate report', details: error instanceof Error ? error.message : 'Unknown error' }), {
+              return new Response(JSON.stringify({ success: false, error: 'Failed to generate report', details: error instanceof Error ? error.message : 'Unknown error' } as ApiErrorResponse), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -547,7 +577,7 @@ export class ManagementConsole {
         "/api/processes": {
           GET: async (req: Request) => {
             const processes = await this.getProcesses();
-            return new Response(JSON.stringify({ success: true, data: processes }), {
+            return new Response(JSON.stringify({ success: true, data: processes } as GetProcessesResponse), {
               status: 200,
               headers: { 'Content-Type': 'application/json' }
             });
@@ -560,12 +590,12 @@ export class ManagementConsole {
               await configService.reload();
               await this.processManager.startManagedProcesses();
               logger.info('Process configuration reloaded and processes restarted');
-              return new Response(JSON.stringify({ success: true, message: 'Process configuration reloaded' }), {
+              return new Response(JSON.stringify({ success: true, message: 'Process configuration reloaded' } as ReloadProcessesResponse), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
             } catch (error) {
-              return new Response(JSON.stringify({ error: 'Failed to reload process configuration', details: error instanceof Error ? error.message : 'Unknown error' }), {
+              return new Response(JSON.stringify({ success: false, error: 'Failed to reload process configuration', details: error instanceof Error ? error.message : 'Unknown error' } as ApiErrorResponse), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -582,7 +612,7 @@ export class ManagementConsole {
               const processConfig = configService.getProcessConfig();
               const process = processConfig?.processes?.[processId];
               if (!process) {
-                return new Response(JSON.stringify({ error: 'Process not found' }), {
+                return new Response(JSON.stringify({ success: false, error: 'Process not found' } as ApiErrorResponse), {
                   status: 404,
                   headers: { 'Content-Type': 'application/json' }
                 });
@@ -592,12 +622,12 @@ export class ManagementConsole {
               const route = serverConfig.routes.find(r => r.name === processId);
               const target = route?.target || '';
               await this.processManager.startProcess(processId, process, target);
-              return new Response(JSON.stringify({ success: true, message: `Process ${processId} started` }), {
+              return new Response(JSON.stringify({ success: true, message: `Process ${processId} started` } as StartProcessResponse), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
             } catch (error) {
-              return new Response(JSON.stringify({ error: 'Failed to start process', details: error instanceof Error ? error.message : 'Unknown error' }), {
+              return new Response(JSON.stringify({ success: false, error: 'Failed to start process', details: error instanceof Error ? error.message : 'Unknown error' } as ApiErrorResponse), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -612,12 +642,12 @@ export class ManagementConsole {
 
             try {
               await this.processManager.stopProcess(processId);
-              return new Response(JSON.stringify({ success: true, message: `Process ${processId} stopped` }), {
+              return new Response(JSON.stringify({ success: true, message: `Process ${processId} stopped` } as StopProcessResponse), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
             } catch (error) {
-              return new Response(JSON.stringify({ error: 'Failed to stop process', details: error instanceof Error ? error.message : 'Unknown error' }), {
+              return new Response(JSON.stringify({ success: false, error: 'Failed to stop process', details: error instanceof Error ? error.message : 'Unknown error' } as ApiErrorResponse), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -636,12 +666,12 @@ export class ManagementConsole {
               const route = serverConfig.routes.find(r => r.name === processId);
               const target = route?.target || '';
               await this.processManager.restartProcess(processId, target);
-              return new Response(JSON.stringify({ success: true, message: `Process ${processId} restarted` }), {
+              return new Response(JSON.stringify({ success: true, message: `Process ${processId} restarted` } as RestartProcessResponse), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
             } catch (error) {
-              return new Response(JSON.stringify({ error: 'Failed to restart process', details: error instanceof Error ? error.message : 'Unknown error' }), {
+              return new Response(JSON.stringify({ success: false, error: 'Failed to restart process', details: error instanceof Error ? error.message : 'Unknown error' } as ApiErrorResponse), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -657,12 +687,12 @@ export class ManagementConsole {
 
             try {
               const logs = await this.getProcessLogs(processId, lines);
-              return new Response(JSON.stringify({ success: true, data: { processId, logs } }), {
+              return new Response(JSON.stringify({ success: true, data: { processId, logs } } as GetProcessLogsResponse), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
             } catch (error) {
-              return new Response(JSON.stringify({ error: 'Failed to get logs', details: error instanceof Error ? error.message : 'Unknown error' }), {
+              return new Response(JSON.stringify({ success: false, error: 'Failed to get logs', details: error instanceof Error ? error.message : 'Unknown error' } as ApiErrorResponse), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -673,7 +703,7 @@ export class ManagementConsole {
         "/api/processes/config": {
           GET: async (req: Request) => {
             const processConfig = configService.getProcessConfig();
-            return new Response(JSON.stringify({ success: true, data: processConfig }), {
+            return new Response(JSON.stringify({ success: true, data: processConfig } as GetProcessConfigResponse), {
               status: 200,
               headers: { 'Content-Type': 'application/json' }
             });
@@ -682,12 +712,12 @@ export class ManagementConsole {
             try {
               const newConfig = await req.json();
               await this.handleProcessConfigUpdate(newConfig);
-              return new Response(JSON.stringify({ success: true, message: 'Process configuration updated' }), {
+              return new Response(JSON.stringify({ success: true, message: 'Process configuration updated' } as UpdateProcessConfigResponse), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
             } catch (error) {
-              return new Response(JSON.stringify({ error: 'Failed to update process configuration', details: error instanceof Error ? error.message : 'Unknown error' }), {
+              return new Response(JSON.stringify({ success: false, error: 'Failed to update process configuration', details: error instanceof Error ? error.message : 'Unknown error' } as ApiErrorResponse), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -699,12 +729,12 @@ export class ManagementConsole {
           GET: async (req: Request) => {
             try {
               const certificates = this.getCertificates();
-              return new Response(JSON.stringify(Object.fromEntries(certificates)), {
+              return new Response(JSON.stringify(Object.fromEntries(certificates) as GetCertificatesResponse), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
             } catch (error) {
-              return new Response(JSON.stringify({ error: 'Failed to get certificates', details: error instanceof Error ? error.message : 'Unknown error' }), {
+              return new Response(JSON.stringify({ success: false, error: 'Failed to get certificates', details: error instanceof Error ? error.message : 'Unknown error' } as ApiErrorResponse), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -726,12 +756,12 @@ export class ManagementConsole {
                 users: [] // TODO: Implement user tracking if needed
               };
 
-              return new Response(JSON.stringify({ success: true, data: cacheData }), {
+              return new Response(JSON.stringify({ success: true, data: cacheData } as GetCacheStatsResponse), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
             } catch (error) {
-              return new Response(JSON.stringify({ error: 'Failed to get cache stats', details: error instanceof Error ? error.message : 'Unknown error' }), {
+              return new Response(JSON.stringify({ success: false, error: 'Failed to get cache stats', details: error instanceof Error ? error.message : 'Unknown error' } as ApiErrorResponse), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -787,12 +817,12 @@ export class ManagementConsole {
                   page,
                   limit
                 }
-              }), {
+              } as GetCacheEntriesResponse), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
             } catch (error) {
-              return new Response(JSON.stringify({ error: 'Failed to get cache entries', details: error instanceof Error ? error.message : 'Unknown error' }), {
+              return new Response(JSON.stringify({ success: false, error: 'Failed to get cache entries', details: error instanceof Error ? error.message : 'Unknown error' } as ApiErrorResponse), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -804,12 +834,12 @@ export class ManagementConsole {
           POST: async (req: Request) => {
             try {
               await cacheService.cleanup();
-              return new Response(JSON.stringify({ success: true, message: 'Cache cleared successfully' }), {
+              return new Response(JSON.stringify({ success: true, message: 'Cache cleared successfully' } as ClearCacheResponse), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
             } catch (error) {
-              return new Response(JSON.stringify({ error: 'Failed to clear cache', details: error instanceof Error ? error.message : 'Unknown error' }), {
+              return new Response(JSON.stringify({ success: false, error: 'Failed to clear cache', details: error instanceof Error ? error.message : 'Unknown error' } as ApiErrorResponse), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -835,12 +865,12 @@ export class ManagementConsole {
                 logger.warn(`Cache entry not found for deletion: ${key}`);
               }
 
-              return new Response(JSON.stringify({ success: true, message: 'Cache entry deleted successfully' }), {
+              return new Response(JSON.stringify({ success: true, message: 'Cache entry deleted successfully' } as DeleteCacheEntryResponse), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
             } catch (error) {
-              return new Response(JSON.stringify({ error: 'Failed to delete cache entry', details: error instanceof Error ? error.message : 'Unknown error' }), {
+              return new Response(JSON.stringify({ success: false, error: 'Failed to delete cache entry', details: error instanceof Error ? error.message : 'Unknown error' } as ApiErrorResponse), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -1013,7 +1043,7 @@ export class ManagementConsole {
           httpsPort: configService.getServerConfig().httpsPort,
           routes: configService.getServerConfig().routes.length,
         },
-      }), {
+      } as HealthResponse), {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
       });
@@ -1023,7 +1053,7 @@ export class ManagementConsole {
         status: 'error',
         error: error instanceof Error ? error.message : 'Unknown error',
         timestamp: new Date().toISOString(),
-      }), {
+      } as HealthResponse), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
