@@ -428,7 +428,7 @@ export class ProxyServer {
     const start = Date.now();
 
     // Record statistics
-    this.recordRequestStats(requestContext, server, { name: 'redirect' }, redirectTarget, Date.now() - start, 301, 'redirect');
+    this.recordRequestStats(requestContext, null, { name: 'redirect' }, redirectTarget, Date.now() - start, 301, 'redirect');
 
     return new Response(null, {
       status: 301,
@@ -550,7 +550,7 @@ export class ProxyServer {
 
   private recordRequestStats(requestContext: any, server: Server, route: any, target: string, responseTime: number, statusCode: number, requestType: string = 'proxy'): void {
     if (this.statisticsService) {
-      const clientIP = this.getClientIP(requestContext, server);
+      const clientIP = this.getClientIPFromContext(requestContext);
       const geolocation = this.getGeolocation(clientIP);
       const userAgent = requestContext.headers['user-agent'] || 'Unknown';
 
@@ -598,6 +598,28 @@ export class ProxyServer {
     }
 
     return 'unknown';
+  }
+
+  private getClientIPFromContext(requestContext: any): string {
+    const headers = requestContext.headers;
+    const xForwardedFor = headers['x-forwarded-for'];
+    const xRealIP = headers['x-real-ip'];
+    const xClientIP = headers['x-client-ip'];
+
+    if (xForwardedFor) {
+      const firstIP = xForwardedFor.split(',')[0];
+      return firstIP ? firstIP.trim() : 'unknown';
+    }
+
+    if (xRealIP) {
+      return xRealIP;
+    }
+
+    if (xClientIP) {
+      return xClientIP;
+    }
+
+    return requestContext.ip || 'unknown';
   }
 
   private getGeolocation(ip: string): any {
