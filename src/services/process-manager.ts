@@ -837,11 +837,10 @@ export class ProcessManager {
         }
       }
 
-      // Redirect stdout and stderr to log file
+      // Redirect stdout and stderr to log file with proper formatting
       const logStream = fs.createWriteStream(logFilePath, { flags: 'a' });
 
       if (childProcess.stdout) {
-        childProcess.stdout.pipe(logStream, { end: false });
         childProcess.stdout.on('data', (data) => {
           const output = data.toString().trim();
           if (output) {
@@ -854,7 +853,6 @@ export class ProcessManager {
       }
 
       if (childProcess.stderr) {
-        childProcess.stderr.pipe(logStream, { end: false });
         childProcess.stderr.on('data', (data) => {
           const output = data.toString().trim();
           if (output) {
@@ -971,25 +969,6 @@ export class ProcessManager {
         managedProcess.isRunning = false;
         reject(error);
       });
-
-      // Proxy stdout and stderr
-      if (childProcess.stdout) {
-        childProcess.stdout.on('data', (data) => {
-          const output = data.toString().trim();
-          if (output) {
-            logger.info(`[${processName}] STDOUT: ${output}`);
-          }
-        });
-      }
-
-      if (childProcess.stderr) {
-        childProcess.stderr.on('data', (data) => {
-          const output = data.toString().trim();
-          if (output) {
-            logger.warn(`[${processName}] STDERR: ${output}`);
-          }
-        });
-      }
     });
   }
 
