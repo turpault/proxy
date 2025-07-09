@@ -1,6 +1,7 @@
 import { CSPConfig, CSPDirectives, GeolocationFilter, ProxyConfig } from '../types';
 import { logger } from '../utils/logger';
 import { geolocationService, GeolocationInfo } from './geolocation';
+import { BunRequest, Server } from 'bun';
 
 export interface BunRequestContext {
   method: string;
@@ -11,6 +12,8 @@ export interface BunRequestContext {
   query: Record<string, string>;
   ip: string;
   originalUrl: string;
+  req: BunRequest;
+  server: Server;
 }
 
 export class BunMiddleware {
