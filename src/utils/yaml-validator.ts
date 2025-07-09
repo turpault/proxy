@@ -273,8 +273,70 @@ export function validateProcessConfigYAML(content: string): YAMLValidationResult
         processErrors.push(`Process "${processId}": "env" must be an object`);
       }
 
+      if (proc.requiredEnv && !Array.isArray(proc.requiredEnv)) {
+        processErrors.push(`Process "${processId}": "requiredEnv" must be an array`);
+      }
+
+      if (proc.envValidation && typeof proc.envValidation !== 'object') {
+        processErrors.push(`Process "${processId}": "envValidation" must be an object`);
+      }
+
       if (proc.healthCheck && typeof proc.healthCheck !== 'object') {
         processErrors.push(`Process "${processId}": "healthCheck" must be an object`);
+      }
+
+      if (proc.schedule && typeof proc.schedule !== 'object') {
+        processErrors.push(`Process "${processId}": "schedule" must be an object`);
+      }
+
+      // Validate schedule object if present
+      if (proc.schedule && typeof proc.schedule === 'object') {
+        const schedule = proc.schedule;
+
+        if (schedule.enabled !== undefined && typeof schedule.enabled !== 'boolean') {
+          processErrors.push(`Process "${processId}": "schedule.enabled" must be a boolean`);
+        }
+
+        if (schedule.cron !== undefined && typeof schedule.cron !== 'string') {
+          processErrors.push(`Process "${processId}": "schedule.cron" must be a string`);
+        }
+
+        if (schedule.timezone !== undefined && typeof schedule.timezone !== 'string') {
+          processErrors.push(`Process "${processId}": "schedule.timezone" must be a string`);
+        }
+
+        if (schedule.maxDuration !== undefined && typeof schedule.maxDuration !== 'number') {
+          processErrors.push(`Process "${processId}": "schedule.maxDuration" must be a number`);
+        }
+
+        if (schedule.autoStop !== undefined && typeof schedule.autoStop !== 'boolean') {
+          processErrors.push(`Process "${processId}": "schedule.autoStop" must be a boolean`);
+        }
+
+        if (schedule.skipIfRunning !== undefined && typeof schedule.skipIfRunning !== 'boolean') {
+          processErrors.push(`Process "${processId}": "schedule.skipIfRunning" must be a boolean`);
+        }
+      }
+
+      // Validate envValidation object if present
+      if (proc.envValidation && typeof proc.envValidation === 'object') {
+        const envValidation = proc.envValidation;
+
+        if (envValidation.required !== undefined && !Array.isArray(envValidation.required)) {
+          processErrors.push(`Process "${processId}": "envValidation.required" must be an array`);
+        }
+
+        if (envValidation.optional !== undefined && !Array.isArray(envValidation.optional)) {
+          processErrors.push(`Process "${processId}": "envValidation.optional" must be an array`);
+        }
+
+        if (envValidation.validateOnStart !== undefined && typeof envValidation.validateOnStart !== 'boolean') {
+          processErrors.push(`Process "${processId}": "envValidation.validateOnStart" must be a boolean`);
+        }
+
+        if (envValidation.failOnMissing !== undefined && typeof envValidation.failOnMissing !== 'boolean') {
+          processErrors.push(`Process "${processId}": "envValidation.failOnMissing" must be a boolean`);
+        }
       }
     }
 
