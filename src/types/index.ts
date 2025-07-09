@@ -121,7 +121,11 @@ export interface ProxyConfig {
   };
 }
 
-export interface CertificateInfo {
+// Re-export shared types
+export * from './shared';
+
+// Backend-specific CertificateInfo with Date type
+export interface CertificateInfoBackend {
   domain: string;
   certPath: string;
   keyPath: string;
@@ -299,43 +303,7 @@ export interface DevelopmentSettings {
   hotReload?: boolean;
 }
 
-export interface RouteStats {
-  name?: string; // Route name from configuration
-  domain: string;
-  target: string;
-  requests: number;
-  avgResponseTime: number;
-  topCountries: Array<{
-    country: string;
-    city?: string;
-    count: number;
-    percentage: number;
-  }>;
-  uniqueIPs: number;
-  methods: string[];
-}
 
-// Type for /oauth/session response
-export interface OAuthSessionResponse {
-  authenticated: boolean;
-  provider: string;
-  timestamp: string;
-  subscriptionKey?: string;
-  subscriptionKeyHeader?: string;
-  session?: {
-    accessToken: string;
-    tokenType?: string;
-    scope?: string;
-    expiresAt?: string;
-    isExpired?: boolean;
-    expiresIn?: number | null;
-    sessionId?: string;
-  };
-}
 
-export interface ConfigSaveRequest {
-  content: string;
-  createBackup?: boolean;
-  configType?: 'proxy' | 'processes' | 'main';
-  path?: string;
-}
+
+
