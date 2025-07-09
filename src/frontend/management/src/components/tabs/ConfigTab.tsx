@@ -4,6 +4,7 @@ import { useNotifications } from '../NotificationProvider';
 import { ConfigData, ConfigSaveResponse, BackupItem } from '../../types';
 import { formatLocalTime, formatBytes } from '../../utils';
 import { ConfigSaveRequest } from '../../types/shared';
+import { API_BASE, ValidateConfigResponse, GetConfigResponse, SaveConfigResponse, CreateBackupResponse, GetBackupsResponse, RestoreBackupResponse } from '../../utils/api-client';
 
 type ConfigType = 'main' | 'proxy' | 'processes';
 
@@ -36,18 +37,18 @@ export const ConfigTab: React.FC = () => {
 
   const validateYAML = useCallback(async (content: string): Promise<ValidationResult> => {
     try {
-      const response = await fetch('/api/config/validate', {
+      const response = await fetch(`${API_BASE}/api/config/validate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content, type: activeConfigType })
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        return result.success ? result.data : { isValid: false, error: result.error };
-      } else {
-        return { isValid: false, error: 'Validation service unavailable' };
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
+
+      const result = await response.json() as ValidateConfigResponse;
+      return result.success && result.data ? result.data : { isValid: false, error: result.error || 'Validation failed' };
     } catch (error) {
       return { isValid: false, error: 'Failed to validate configuration' };
     }
@@ -59,8 +60,12 @@ export const ConfigTab: React.FC = () => {
       setValidationResult(null);
       setHasUnsavedChanges(false);
 
-      const response = await fetch(`/api/config/${type}`);
-      const data = await response.json() as ConfigSaveResponse;
+      const response = await fetch(`${API_BASE}/api/config/${type}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json() as GetConfigResponse;
 
       if (data.success && data.data) {
         setConfigData(data.data);
@@ -104,13 +109,17 @@ export const ConfigTab: React.FC = () => {
     const createBackup = confirm('Create a backup before saving? (Recommended)');
 
     try {
-      const response = await fetch(`/api/config/${activeConfigType}/save`, {
+      const response = await fetch(`${API_BASE}/api/config/${activeConfigType}/save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content, createBackup } as ConfigSaveRequest)
       });
 
-      const data = await response.json() as ConfigSaveResponse;
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json() as SaveConfigResponse;
 
       if (data.success) {
         showNotification('Configuration saved successfully', 'success');
@@ -129,8 +138,12 @@ export const ConfigTab: React.FC = () => {
 
   const handleBackupConfig = async () => {
     try {
-      const response = await fetch(`/api/config/${activeConfigType}/backup`, { method: 'POST' });
-      const data: ConfigSaveResponse = await response.json();
+      const response = await fetch(`${API_BASE}/api/config/${activeConfigType}/backup`, { method: 'POST' });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json() as CreateBackupResponse;
 
       if (data.success) {
         showNotification('Configuration backup created successfully', 'success');
@@ -145,8 +158,12 @@ export const ConfigTab: React.FC = () => {
 
   const handleShowBackups = async () => {
     try {
-      const response = await fetch(`/api/config/${activeConfigType}/backups`);
-      const data = await response.json();
+      const response = await fetch(`${API_BASE}/api/config/${activeConfigType}/backups`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json() as GetBackupsResponse;
 
       if (data.success) {
         setBackups(data.data || []);
@@ -166,13 +183,17 @@ export const ConfigTab: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`/api/config/${activeConfigType}/restore`, {
+      const response = await fetch(`${API_BASE}/api/config/${activeConfigType}/restore`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ backupPath })
       });
 
-      const data: ConfigSaveResponse = await response.json();
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json() as RestoreBackupResponse;
 
       if (data.success) {
         showNotification('Configuration restored successfully', 'success');
