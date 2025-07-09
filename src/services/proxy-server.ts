@@ -207,7 +207,7 @@ export class ProxyServer {
     logger.info('Proxy server stopped successfully');
   }
 
-  private async handleRequest(req: BunRequest, server: Server): Promise<Response> {
+  private async handleRequest(req: Request, server: Server): Promise<Response> {
     const url = new URL(req.url);
     const method = req.method;
     const pathname = url.pathname;
@@ -221,9 +221,9 @@ export class ProxyServer {
       headers,
       body: req.body,
       query: Object.fromEntries(url.searchParams.entries()),
-      ip: this.getClientIP(req, server),
+      ip: this.getClientIP(req as any, server),
       originalUrl: req.url,
-      req,
+      req: req as any,
       server
     };
 
@@ -265,7 +265,7 @@ export class ProxyServer {
 
     // Handle unmatched requests (404)
     const startTime = Date.now();
-    const clientIP = this.getClientIP(req, server);
+    const clientIP = this.getClientIP(req as any, server);
     const geolocation = this.getGeolocation(clientIP);
     const userAgent = headers['user-agent'] || 'Unknown';
 
@@ -279,7 +279,7 @@ export class ProxyServer {
       query: Object.fromEntries(url.searchParams.entries()),
       ip: clientIP,
       originalUrl: req.url,
-      req,
+      req: req as any,
       server
     };
 

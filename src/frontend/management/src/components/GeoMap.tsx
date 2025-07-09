@@ -177,7 +177,7 @@ export const GeoMap: React.FC<GeoMapProps> = ({
         size,
         displayName: coords.name
       };
-    }).filter(Boolean);
+    }).filter((data): data is NonNullable<typeof data> => data !== null);
   }, [countryData]);
 
   const totalRequests = countryData.reduce((sum, d) => sum + d.count, 0);

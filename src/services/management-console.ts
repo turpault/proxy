@@ -2,7 +2,7 @@ import { Server, ServerWebSocket } from 'bun';
 import { existsSync, readFileSync } from 'fs';
 import * as path from 'path';
 import managementHtml from '../frontend/management/index.html';
-import { ProxyConfig } from '../types';
+import { ConfigSaveRequest, ProxyConfig } from '../types';
 import { logger } from '../utils/logger';
 import { cacheService } from './cache';
 import { configService } from './config-service';
@@ -95,11 +95,25 @@ export class ManagementConsole {
               switch (type) {
                 case 'proxy':
                   configData = configService.getServerConfig();
-                  configPath = configService.getMainConfig().config.proxy;
+                  const mainConfigProxy = configService.getMainConfig();
+                  if (!mainConfigProxy) {
+                    return new Response(JSON.stringify({ error: 'Main configuration not available' }), {
+                      status: 500,
+                      headers: { 'Content-Type': 'application/json' }
+                    });
+                  }
+                  configPath = mainConfigProxy.config.proxy;
                   break;
                 case 'processes':
                   configData = configService.getProcessConfig();
-                  configPath = configService.getMainConfig().config.processes;
+                  const mainConfigProcesses = configService.getMainConfig();
+                  if (!mainConfigProcesses) {
+                    return new Response(JSON.stringify({ error: 'Main configuration not available' }), {
+                      status: 500,
+                      headers: { 'Content-Type': 'application/json' }
+                    });
+                  }
+                  configPath = mainConfigProcesses.config.processes;
                   break;
                 case 'main':
                   configData = configService.getMainConfig();
@@ -151,15 +165,29 @@ export class ManagementConsole {
             const type = url.pathname.split('/')[3];
 
             try {
-              const newConfig = await req.json();
+              const newConfig = await req.json() as ConfigSaveRequest;
               let configPath: string;
 
               switch (type) {
                 case 'proxy':
-                  configPath = configService.getMainConfig().config.proxy;
+                  const mainConfigSaveProxy = configService.getMainConfig();
+                  if (!mainConfigSaveProxy) {
+                    return new Response(JSON.stringify({ error: 'Main configuration not available' }), {
+                      status: 500,
+                      headers: { 'Content-Type': 'application/json' }
+                    });
+                  }
+                  configPath = mainConfigSaveProxy.config.proxy;
                   break;
                 case 'processes':
-                  configPath = configService.getMainConfig().config.processes;
+                  const mainConfigSaveProcesses = configService.getMainConfig();
+                  if (!mainConfigSaveProcesses) {
+                    return new Response(JSON.stringify({ error: 'Main configuration not available' }), {
+                      status: 500,
+                      headers: { 'Content-Type': 'application/json' }
+                    });
+                  }
+                  configPath = mainConfigSaveProcesses.config.processes;
                   break;
                 case 'main':
                   configPath = configService.getMainConfigPath();
@@ -200,10 +228,24 @@ export class ManagementConsole {
               let configPath: string;
               switch (type) {
                 case 'proxy':
-                  configPath = configService.getMainConfig().config.proxy;
+                  const mainConfigBackupProxy = configService.getMainConfig();
+                  if (!mainConfigBackupProxy) {
+                    return new Response(JSON.stringify({ error: 'Main configuration not available' }), {
+                      status: 500,
+                      headers: { 'Content-Type': 'application/json' }
+                    });
+                  }
+                  configPath = mainConfigBackupProxy.config.proxy;
                   break;
                 case 'processes':
-                  configPath = configService.getMainConfig().config.processes;
+                  const mainConfigBackupProcesses = configService.getMainConfig();
+                  if (!mainConfigBackupProcesses) {
+                    return new Response(JSON.stringify({ error: 'Main configuration not available' }), {
+                      status: 500,
+                      headers: { 'Content-Type': 'application/json' }
+                    });
+                  }
+                  configPath = mainConfigBackupProcesses.config.processes;
                   break;
                 case 'main':
                   configPath = configService.getMainConfigPath();
@@ -241,10 +283,24 @@ export class ManagementConsole {
               let configPath: string;
               switch (type) {
                 case 'proxy':
-                  configPath = configService.getMainConfig().config.proxy;
+                  const mainConfigBackupsProxy = configService.getMainConfig();
+                  if (!mainConfigBackupsProxy) {
+                    return new Response(JSON.stringify({ error: 'Main configuration not available' }), {
+                      status: 500,
+                      headers: { 'Content-Type': 'application/json' }
+                    });
+                  }
+                  configPath = mainConfigBackupsProxy.config.proxy;
                   break;
                 case 'processes':
-                  configPath = configService.getMainConfig().config.processes;
+                  const mainConfigBackupsProcesses = configService.getMainConfig();
+                  if (!mainConfigBackupsProcesses) {
+                    return new Response(JSON.stringify({ error: 'Main configuration not available' }), {
+                      status: 500,
+                      headers: { 'Content-Type': 'application/json' }
+                    });
+                  }
+                  configPath = mainConfigBackupsProcesses.config.processes;
                   break;
                 case 'main':
                   configPath = configService.getMainConfigPath();
@@ -303,10 +359,24 @@ export class ManagementConsole {
               let configPath: string;
               switch (type) {
                 case 'proxy':
-                  configPath = configService.getMainConfig().config.proxy;
+                  const mainConfigRestoreProxy = configService.getMainConfig();
+                  if (!mainConfigRestoreProxy) {
+                    return new Response(JSON.stringify({ error: 'Main configuration not available' }), {
+                      status: 500,
+                      headers: { 'Content-Type': 'application/json' }
+                    });
+                  }
+                  configPath = mainConfigRestoreProxy.config.proxy;
                   break;
                 case 'processes':
-                  configPath = configService.getMainConfig().config.processes;
+                  const mainConfigRestoreProcesses = configService.getMainConfig();
+                  if (!mainConfigRestoreProcesses) {
+                    return new Response(JSON.stringify({ error: 'Main configuration not available' }), {
+                      status: 500,
+                      headers: { 'Content-Type': 'application/json' }
+                    });
+                  }
+                  configPath = mainConfigRestoreProcesses.config.processes;
                   break;
                 case 'main':
                   configPath = configService.getMainConfigPath();
@@ -1023,7 +1093,11 @@ export class ManagementConsole {
 
   async handleProcessConfigUpdate(newConfig: any): Promise<void> {
     // Save the new process config and reload processes
-    const configPath = configService.getMainConfig().config.processes;
+    const mainConfig = configService.getMainConfig();
+    if (!mainConfig) {
+      throw new Error('Main configuration not available');
+    }
+    const configPath = mainConfig.config.processes;
     const yamlContent = yamlStringify(newConfig);
     await fs.writeFile(configPath, yamlContent);
     logger.info('Process config updated and saved, reloading processes');

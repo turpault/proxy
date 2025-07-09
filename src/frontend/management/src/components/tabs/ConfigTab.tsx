@@ -306,7 +306,7 @@ export const ConfigTab: React.FC = () => {
             <button
               className="btn btn-save"
               onClick={handleSaveConfig}
-              disabled={!hasUnsavedChanges || (validationResult && !validationResult.isValid)}
+              disabled={!hasUnsavedChanges || (validationResult ? !validationResult.isValid : false)}
             >
               Save Configuration
             </button>

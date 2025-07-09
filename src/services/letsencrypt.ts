@@ -154,7 +154,7 @@ export class LetsEncryptService {
       domain,
       certPath,
       keyPath,
-      expiresAt: certInfo.expiresAt,
+      expiresAt: certInfo.expiresAt.toISOString(),
       isValid: certInfo.isValid,
       issuer: certInfo.issuer,
     };
@@ -258,7 +258,7 @@ export class LetsEncryptService {
         domain,
         certPath,
         keyPath,
-        expiresAt: certInfo.expiresAt,
+        expiresAt: certInfo.expiresAt.toISOString(),
         isValid: certInfo.isValid,
         issuer: certInfo.issuer,
       };
@@ -275,7 +275,8 @@ export class LetsEncryptService {
 
   async shouldRenewCertificate(certInfo: CertificateInfo): Promise<boolean> {
     const now = new Date();
-    const daysUntilExpiry = Math.floor((certInfo.expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    const expiryDate = new Date(certInfo.expiresAt);
+    const daysUntilExpiry = Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
     // Renew if less than 30 days until expiry
     return daysUntilExpiry < 30;

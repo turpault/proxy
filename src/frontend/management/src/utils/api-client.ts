@@ -118,7 +118,7 @@ export const statisticsApi = {
   getStatistics: () => typedFetch('GET /api/statistics'),
 
   getDetailedStatistics: (period?: string) =>
-    typedFetch('GET /api/statistics/detailed', { query: { period } }),
+    typedFetch('GET /api/statistics/detailed', { query: period ? { period } : {} }),
 
   getStatisticsSummary: () => typedFetch('GET /api/statistics/summary'),
 
@@ -154,7 +154,7 @@ export const processesApi = {
 
   getProcessLogs: (id: string, lines?: string) =>
     typedFetch('GET /api/processes/:id/logs', {
-      query: { id, lines }
+      query: { id, ...(lines ? { lines } : {}) }
     }),
 
   getProcessConfig: () => typedFetch('GET /api/processes/config'),
