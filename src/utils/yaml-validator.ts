@@ -1,5 +1,13 @@
 import { parse, YAMLError } from 'yaml';
+import Joi from 'joi';
 import { logger } from './logger';
+
+// Import schemas from loader.ts
+import {
+  processManagementConfigSchema,
+  configSchema as proxyConfigSchema,
+  mainConfigSchema
+} from '../config/loader';
 
 export interface YAMLValidationResult {
   isValid: boolean;
@@ -225,130 +233,115 @@ export function validateProcessConfigYAML(content: string): YAMLValidationResult
     // Parse the YAML
     const config = parse(content);
 
-    // Basic structure validation
-    if (!config || typeof config !== 'object') {
-      return {
-        isValid: false,
-        error: 'Invalid configuration structure',
-        details: 'Configuration must be a valid YAML object',
-        suggestions: ['Ensure the file starts with a valid YAML structure']
-      };
-    }
+    // Validate using the schema from loader.ts
+    const { error, value } = processManagementConfigSchema.validate(config, {
+      abortEarly: false,
+      allowUnknown: false,
+    });
 
-    // Check for required sections
-    if (!config.processes) {
+    if (error) {
+      const errorMessages = error.details.map(detail => detail.message);
       return {
         isValid: false,
-        error: 'Missing required section',
-        details: 'Configuration must contain a "processes" section',
+        error: 'Process configuration validation failed',
+        details: errorMessages.join('\n'),
         suggestions: [
-          'Add a "processes:" section at the root level',
-          'Example:\nprocesses:\n  my-process:\n    command: "node"'
+          'Check the process configuration documentation',
+          'Ensure all required fields are present',
+          'Verify field types (strings, arrays, objects)',
+          'Make sure the "processes" section is properly defined'
         ]
       };
     }
 
-    // Validate each process configuration
-    const processErrors: string[] = [];
+    return { isValid: true };
 
-    for (const [processId, processConfig] of Object.entries(config.processes)) {
-      if (typeof processConfig !== 'object' || processConfig === null) {
-        processErrors.push(`Process "${processId}": configuration must be an object`);
-        continue;
-      }
+  } catch (error) {
+    return {
+      isValid: false,
+      error: 'Configuration validation error',
+      details: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
 
-      const proc = processConfig as any;
+/**
+ * Validate YAML with proxy configuration schema
+ */
+export function validateProxyConfigYAML(content: string): YAMLValidationResult {
+  // First validate basic YAML syntax
+  const basicValidation = validateYAML(content);
+  if (!basicValidation.isValid) {
+    return basicValidation;
+  }
 
-      // Check for required fields
-      if (!proc.command) {
-        processErrors.push(`Process "${processId}": missing required field "command"`);
-      }
+  try {
+    // Parse the YAML
+    const config = parse(content);
 
-      // Check for valid field types
-      if (proc.args && !Array.isArray(proc.args)) {
-        processErrors.push(`Process "${processId}": "args" must be an array`);
-      }
+    // Validate using the schema from loader.ts
+    const { error, value } = proxyConfigSchema.validate(config, {
+      abortEarly: false,
+      allowUnknown: false,
+    });
 
-      if (proc.env && typeof proc.env !== 'object') {
-        processErrors.push(`Process "${processId}": "env" must be an object`);
-      }
-
-      if (proc.requiredEnv && !Array.isArray(proc.requiredEnv)) {
-        processErrors.push(`Process "${processId}": "requiredEnv" must be an array`);
-      }
-
-      if (proc.envValidation && typeof proc.envValidation !== 'object') {
-        processErrors.push(`Process "${processId}": "envValidation" must be an object`);
-      }
-
-      if (proc.healthCheck && typeof proc.healthCheck !== 'object') {
-        processErrors.push(`Process "${processId}": "healthCheck" must be an object`);
-      }
-
-      if (proc.schedule && typeof proc.schedule !== 'object') {
-        processErrors.push(`Process "${processId}": "schedule" must be an object`);
-      }
-
-      // Validate schedule object if present
-      if (proc.schedule && typeof proc.schedule === 'object') {
-        const schedule = proc.schedule;
-
-        if (schedule.enabled !== undefined && typeof schedule.enabled !== 'boolean') {
-          processErrors.push(`Process "${processId}": "schedule.enabled" must be a boolean`);
-        }
-
-        if (schedule.cron !== undefined && typeof schedule.cron !== 'string') {
-          processErrors.push(`Process "${processId}": "schedule.cron" must be a string`);
-        }
-
-        if (schedule.timezone !== undefined && typeof schedule.timezone !== 'string') {
-          processErrors.push(`Process "${processId}": "schedule.timezone" must be a string`);
-        }
-
-        if (schedule.maxDuration !== undefined && typeof schedule.maxDuration !== 'number') {
-          processErrors.push(`Process "${processId}": "schedule.maxDuration" must be a number`);
-        }
-
-        if (schedule.autoStop !== undefined && typeof schedule.autoStop !== 'boolean') {
-          processErrors.push(`Process "${processId}": "schedule.autoStop" must be a boolean`);
-        }
-
-        if (schedule.skipIfRunning !== undefined && typeof schedule.skipIfRunning !== 'boolean') {
-          processErrors.push(`Process "${processId}": "schedule.skipIfRunning" must be a boolean`);
-        }
-      }
-
-      // Validate envValidation object if present
-      if (proc.envValidation && typeof proc.envValidation === 'object') {
-        const envValidation = proc.envValidation;
-
-        if (envValidation.required !== undefined && !Array.isArray(envValidation.required)) {
-          processErrors.push(`Process "${processId}": "envValidation.required" must be an array`);
-        }
-
-        if (envValidation.optional !== undefined && !Array.isArray(envValidation.optional)) {
-          processErrors.push(`Process "${processId}": "envValidation.optional" must be an array`);
-        }
-
-        if (envValidation.validateOnStart !== undefined && typeof envValidation.validateOnStart !== 'boolean') {
-          processErrors.push(`Process "${processId}": "envValidation.validateOnStart" must be a boolean`);
-        }
-
-        if (envValidation.failOnMissing !== undefined && typeof envValidation.failOnMissing !== 'boolean') {
-          processErrors.push(`Process "${processId}": "envValidation.failOnMissing" must be a boolean`);
-        }
-      }
-    }
-
-    if (processErrors.length > 0) {
+    if (error) {
+      const errorMessages = error.details.map(detail => detail.message);
       return {
         isValid: false,
-        error: 'Process configuration validation failed',
-        details: processErrors.join('\n'),
+        error: 'Proxy configuration validation failed',
+        details: errorMessages.join('\n'),
         suggestions: [
-          'Check the process configuration documentation',
+          'Check the proxy configuration documentation',
           'Ensure all required fields are present',
-          'Verify field types (strings, arrays, objects)'
+          'Verify route configurations are properly formatted',
+          'Check that SSL and Let\'s Encrypt settings are valid'
+        ]
+      };
+    }
+
+    return { isValid: true };
+
+  } catch (error) {
+    return {
+      isValid: false,
+      error: 'Configuration validation error',
+      details: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
+/**
+ * Validate YAML with main configuration schema
+ */
+export function validateMainConfigYAML(content: string): YAMLValidationResult {
+  // First validate basic YAML syntax
+  const basicValidation = validateYAML(content);
+  if (!basicValidation.isValid) {
+    return basicValidation;
+  }
+
+  try {
+    // Parse the YAML
+    const config = parse(content);
+
+    // Validate using the schema from loader.ts
+    const { error, value } = mainConfigSchema.validate(config, {
+      abortEarly: false,
+      allowUnknown: false,
+    });
+
+    if (error) {
+      const errorMessages = error.details.map(detail => detail.message);
+      return {
+        isValid: false,
+        error: 'Main configuration validation failed',
+        details: errorMessages.join('\n'),
+        suggestions: [
+          'Check the main configuration documentation',
+          'Ensure management port and host are properly configured',
+          'Verify config file paths are correct',
+          'Check that settings directories are properly defined'
         ]
       };
     }

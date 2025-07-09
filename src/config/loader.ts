@@ -127,7 +127,7 @@ const corsConfigSchema = Joi.object({
 });
 
 // Process Management Configuration schema
-const processManagementConfigSchema = Joi.object({
+export const processManagementConfigSchema = Joi.object({
   processes: Joi.object().pattern(Joi.string(), processConfigSchema).required(),
   settings: Joi.object({
     defaultHealthCheck: Joi.object({
@@ -154,7 +154,7 @@ const processManagementConfigSchema = Joi.object({
 });
 
 // Main Configuration schema
-const mainConfigSchema = Joi.object({
+export const mainConfigSchema = Joi.object({
   management: Joi.object({
     port: Joi.number().required(),
     host: Joi.string().default('0.0.0.0'),
@@ -203,7 +203,7 @@ const mainConfigSchema = Joi.object({
   }).optional(),
 });
 
-const configSchema = Joi.object({
+export const configSchema = Joi.object({
   port: Joi.number().default(80),
   httpsPort: Joi.number().default(443),
   routes: Joi.array().items(
