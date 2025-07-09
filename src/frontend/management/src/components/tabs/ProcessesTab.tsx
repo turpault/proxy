@@ -5,7 +5,7 @@ import { useNotifications } from '../NotificationProvider';
 import { Process } from '../../types';
 import { ProcessCard } from '../ProcessCard';
 import { ProcessDetails } from '../ProcessDetails';
-import { processesApi, handleApiSuccess } from '../../utils/api-client';
+import { API_BASE, StartProcessResponse, StopProcessResponse, RestartProcessResponse } from '../../utils/api-client';
 
 export const ProcessesTab: React.FC = () => {
   const { processes, status } = useWebSocket();
@@ -25,15 +25,39 @@ export const ProcessesTab: React.FC = () => {
       let success = false;
 
       switch (action) {
-        case 'start':
-          success = await handleApiSuccess(processesApi.startProcess(processId));
+        case 'start': {
+          const response = await fetch(`${API_BASE}/api/processes/${processId}/start`, {
+            method: 'POST',
+          });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          const data = await response.json() as StartProcessResponse;
+          success = data.success;
           break;
-        case 'stop':
-          success = await handleApiSuccess(processesApi.stopProcess(processId));
+        }
+        case 'stop': {
+          const response = await fetch(`${API_BASE}/api/processes/${processId}/stop`, {
+            method: 'POST',
+          });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          const data = await response.json() as StopProcessResponse;
+          success = data.success;
           break;
-        case 'restart':
-          success = await handleApiSuccess(processesApi.restartProcess(processId));
+        }
+        case 'restart': {
+          const response = await fetch(`${API_BASE}/api/processes/${processId}/restart`, {
+            method: 'POST',
+          });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          const data = await response.json() as RestartProcessResponse;
+          success = data.success;
           break;
+        }
       }
 
       if (success) {

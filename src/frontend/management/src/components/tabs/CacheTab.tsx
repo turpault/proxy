@@ -2,7 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useNotifications } from '../NotificationProvider';
 import { CacheData, CacheEntry } from '../../types';
 import { formatBytes, formatLocalTime } from '../../utils';
-import { cacheApi, handleApiResponse, handleApiSuccess } from '../../utils/api-client';
+import {
+  API_BASE,
+  GetCacheStatsResponse,
+  GetCacheEntriesResponse,
+  ClearCacheResponse,
+  DeleteCacheEntryResponse
+} from '../../utils/api-client';
 
 export const CacheTab: React.FC = () => {
   const [cacheData, setCacheData] = useState<CacheData | null>(null);
@@ -18,8 +24,16 @@ export const CacheTab: React.FC = () => {
   const loadCacheStats = async () => {
     try {
       setLoading(true);
-      const data = await handleApiResponse(cacheApi.getCacheStats());
-      setCacheData(data);
+      const response = await fetch(`${API_BASE}/api/cache/stats`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      const data = await response.json() as GetCacheStatsResponse;
+      if (data.success && data.data) {
+        setCacheData(data.data);
+      } else {
+        throw new Error('Failed to load cache stats');
+      }
     } catch (error) {
       console.error('Failed to load cache stats:', error);
       showNotification('Failed to load cache stats', 'error');
@@ -30,9 +44,17 @@ export const CacheTab: React.FC = () => {
 
   const loadCacheEntries = async (page: number = 1) => {
     try {
-      const data = await handleApiResponse(cacheApi.getCacheEntries({ page: page.toString(), limit: '50' }));
-      setCacheEntries(data.entries || []);
-      setCurrentPage(page);
+      const response = await fetch(`${API_BASE}/api/cache/entries?page=${page}&limit=50`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      const data = await response.json() as GetCacheEntriesResponse;
+      if (data.success && data.data) {
+        setCacheEntries(data.data.entries || []);
+        setCurrentPage(page);
+      } else {
+        throw new Error('Failed to load cache entries');
+      }
     } catch (error) {
       console.error('Failed to load cache entries:', error);
       showNotification('Failed to load cache entries', 'error');
@@ -45,8 +67,14 @@ export const CacheTab: React.FC = () => {
     }
 
     try {
-      const success = await handleApiSuccess(cacheApi.clearCache());
-      if (success) {
+      const response = await fetch(`${API_BASE}/api/cache/clear`, {
+        method: 'POST',
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      const data = await response.json() as ClearCacheResponse;
+      if (data.success) {
         showNotification('Cache cleared successfully', 'success');
         loadCacheStats();
         loadCacheEntries(1);
@@ -65,8 +93,14 @@ export const CacheTab: React.FC = () => {
     }
 
     try {
-      const success = await handleApiSuccess(cacheApi.deleteCacheEntry(key));
-      if (success) {
+      const response = await fetch(`${API_BASE}/api/cache/delete/${key}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      const data = await response.json() as DeleteCacheEntryResponse;
+      if (data.success) {
         showNotification('Cache entry deleted successfully', 'success');
         loadCacheStats();
         loadCacheEntries(currentPage);

@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useWebSocket } from '../WebSocketProvider';
 import { StatisticsSummary, DetailedStatistics, RouteStatistics } from '../../types';
 import { GeoMap } from '../GeoMap';
-import { statisticsApi, handleApiResponse } from '../../utils/api-client';
+import { API_BASE, GetStatisticsResponse, GetDetailedStatisticsResponse } from '../../utils/api-client';
 
 export const StatisticsTab: React.FC = () => {
   const { status } = useWebSocket();
@@ -17,8 +17,16 @@ export const StatisticsTab: React.FC = () => {
   useEffect(() => {
     const loadStatistics = async () => {
       try {
-        const data = await handleApiResponse(statisticsApi.getStatistics());
-        setStatistics(data);
+        const response = await fetch(`${API_BASE}/api/statistics`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        const data = await response.json() as GetStatisticsResponse;
+        if (data.success && data.data) {
+          setStatistics(data.data);
+        } else {
+          throw new Error('Failed to load statistics');
+        }
       } catch (error) {
         console.error('Failed to load statistics:', error);
       }
@@ -26,8 +34,20 @@ export const StatisticsTab: React.FC = () => {
 
     const loadDetailedStatistics = async () => {
       try {
-        const data = await handleApiResponse(statisticsApi.getDetailedStatistics(selectedPeriod));
-        setDetailedStatistics(data);
+        let url = `${API_BASE}/api/statistics/detailed`;
+        if (selectedPeriod) {
+          url += `?period=${selectedPeriod}`;
+        }
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        const data = await response.json() as GetDetailedStatisticsResponse;
+        if (data.success && data.data) {
+          setDetailedStatistics(data.data);
+        } else {
+          throw new Error('Failed to load detailed statistics');
+        }
       } catch (error) {
         console.error('Failed to load detailed statistics:', error);
       }
