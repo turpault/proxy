@@ -2,6 +2,7 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import { logger } from '../utils/logger';
 import { GeolocationInfo } from './geolocation';
+import { configService } from './config-service';
 
 export interface RequestStats {
   ip: string;
@@ -132,9 +133,12 @@ export class StatisticsService {
   private isShuttingDown = false;
   private saveInterval: NodeJS.Timeout | null = null;
 
-  constructor(reportDir?: string, dataDir?: string) {
-    this.reportDir = reportDir || path.resolve(process.cwd(), 'logs', 'statistics');
-    this.dataDir = dataDir || path.resolve(process.cwd(), 'data', 'statistics');
+  constructor() {
+    // Get directories from configService
+    const logsDir = configService.getSetting<string>('logsDir');
+    this.reportDir = logsDir ? path.join(logsDir, 'statistics') : path.resolve(process.cwd(), 'logs', 'statistics');
+    this.dataDir = configService.getSetting<string>('statsDir') || path.resolve(process.cwd(), 'data', 'statistics');
+
     this.ensureReportDirectory();
     this.ensureDataDirectory();
     this.loadPersistedStats();
@@ -149,9 +153,9 @@ export class StatisticsService {
     return StatisticsService.instance;
   }
 
-  public static initialize(reportDir?: string, dataDir?: string): StatisticsService {
+  public static initialize(): StatisticsService {
     if (!StatisticsService.instance) {
-      StatisticsService.instance = new StatisticsService(reportDir, dataDir);
+      StatisticsService.instance = new StatisticsService();
     }
     return StatisticsService.instance;
   }
