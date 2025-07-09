@@ -52,13 +52,14 @@ function parseYAMLError(error: YAMLError, content: string): YAMLValidationResult
   const lineMatch = message.match(/at line (\d+)/i);
   const columnMatch = message.match(/at column (\d+)/i);
 
-  const line = lineMatch ? parseInt(lineMatch[1]) : undefined;
-  const column = columnMatch ? parseInt(columnMatch[1]) : undefined;
+  const line = lineMatch && lineMatch[1] ? parseInt(lineMatch[1]) : undefined;
+  const column = columnMatch && columnMatch[1] ? parseInt(columnMatch[1]) : undefined;
 
   // Get the problematic line if available
   let problematicLine = '';
   if (line && line > 0 && line <= lines.length) {
-    problematicLine = lines[line - 1];
+    const lineContent = lines[line - 1];
+    problematicLine = lineContent || '';
   }
 
   // Generate suggestions based on error type

@@ -102,7 +102,8 @@ export class BunMiddleware {
 
     if (xForwardedFor) {
       // X-Forwarded-For can contain multiple IPs, first one is the original client
-      return xForwardedFor.split(',')[0].trim();
+      const firstIP = xForwardedFor.split(',')[0];
+      return firstIP ? firstIP.trim() : 'unknown';
     }
 
     if (xRealIP) {

@@ -274,9 +274,9 @@ export class ConfigLoader {
       logger.info(`Loading main configuration from ${configFile}`);
 
       // Resolve the main config file path
-      const resolvedPath = path.isAbsolute(configFile)
-        ? configFile
-        : path.resolve(process.cwd(), configFile);
+      const resolvedPath = path.isAbsolute(configFile!)
+        ? configFile!
+        : path.resolve(process.cwd(), configFile!);
 
       // Check if config file exists
       const configExists = await fs.pathExists(resolvedPath);
@@ -286,7 +286,7 @@ export class ConfigLoader {
 
       // Read and parse YAML config
       const configContent = await fs.readFile(resolvedPath, 'utf8');
-      const rawConfig = parseYaml(configContent);
+      const rawConfig = parseYaml(configContent as string);
 
       // Validate main configuration
       const { error, value } = mainConfigSchema.validate(rawConfig, {

@@ -24,7 +24,7 @@ export function parseAnsiToHtml(text: string): string {
     if (!token.color) {
       return escapeHtml(token.text);
     }
-    
+
     const styles: string[] = [];
     if (token.color.foreground) {
       styles.push(`color: ${token.color.foreground}`);
@@ -41,11 +41,11 @@ export function parseAnsiToHtml(text: string): string {
     if (token.color.underline) {
       styles.push('text-decoration: underline');
     }
-    
+
     if (styles.length === 0) {
       return escapeHtml(token.text);
     }
-    
+
     return `<span style="${styles.join('; ')}">${escapeHtml(token.text)}</span>`;
   }).join('');
 }
@@ -57,22 +57,22 @@ export function parseAnsi(text: string): AnsiToken[] {
   const tokens: AnsiToken[] = [];
   let currentText = '';
   let currentColor: AnsiColor = {};
-  
+
   // ANSI escape sequence regex
   const ansiRegex = /\x1b\[([0-9;]*)m/g;
   let lastIndex = 0;
   let match;
-  
+
   while ((match = ansiRegex.exec(text)) !== null) {
     // Add text before the escape sequence
     if (match.index > lastIndex) {
       currentText += text.slice(lastIndex, match.index);
     }
-    
+
     // Process the escape sequence
-    const codes = match[1].split(';').map(Number);
+    const codes = match[1] ? match[1].split(';').map(Number) : [];
     currentColor = parseAnsiCodes(codes, currentColor);
-    
+
     // If we have accumulated text, add it as a token
     if (currentText) {
       tokens.push({
@@ -81,22 +81,22 @@ export function parseAnsi(text: string): AnsiToken[] {
       });
       currentText = '';
     }
-    
+
     lastIndex = match.index + match[0].length;
   }
-  
+
   // Add remaining text
   if (lastIndex < text.length) {
     currentText += text.slice(lastIndex);
   }
-  
+
   if (currentText) {
     tokens.push({
       text: currentText,
       color: Object.keys(currentColor).length > 0 ? { ...currentColor } : undefined
     });
   }
-  
+
   return tokens;
 }
 
@@ -105,10 +105,10 @@ export function parseAnsi(text: string): AnsiToken[] {
  */
 function parseAnsiCodes(codes: number[], currentColor: AnsiColor): AnsiColor {
   const color: AnsiColor = { ...currentColor };
-  
+
   for (let i = 0; i < codes.length; i++) {
     const code = codes[i];
-    
+
     switch (code) {
       case 0: // Reset
         return {};
@@ -135,7 +135,7 @@ function parseAnsiCodes(codes: number[], currentColor: AnsiColor): AnsiColor {
         break;
     }
   }
-  
+
   return color;
 }
 

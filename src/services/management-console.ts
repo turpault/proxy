@@ -258,7 +258,9 @@ export class ManagementConsole {
         "/api/config/validate": {
           POST: async (req: Request) => {
             try {
-              const { content, type } = await req.json();
+              const body = await req.json() as { content?: string; type?: string };
+              const content = body?.content;
+              const type = body?.type;
 
               if (!content || typeof content !== 'string') {
                 return new Response(JSON.stringify({

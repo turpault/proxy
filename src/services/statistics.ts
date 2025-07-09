@@ -432,8 +432,8 @@ export class StatisticsService {
       .map(([cityKey, data]) => {
         const [city, country] = cityKey.split(', ');
         return {
-          city,
-          country,
+          city: city || 'Unknown',
+          country: country || 'Unknown',
           count: data.count,
           percentage: (data.count / totalRequests) * 100,
         };
@@ -512,8 +512,8 @@ export class StatisticsService {
         byCity: Array.from(cityStats.entries()).map(([cityKey, data]) => {
           const [city, country] = cityKey.split(', ');
           return {
-            city,
-            country,
+            city: city || 'Unknown',
+            country: country || 'Unknown',
             count: data.count,
             percentage: (data.count / totalRequests) * 100,
             ips: Array.from(data.ips),
@@ -554,8 +554,10 @@ export class StatisticsService {
 
     statsArray.forEach(stat => {
       const day = stat.lastSeen.toISOString().split('T')[0]; // YYYY-MM-DD format
-      const current = dailyStats.get(day) || 0;
-      dailyStats.set(day, current + stat.count);
+      if (day) {
+        const current = dailyStats.get(day) || 0;
+        dailyStats.set(day, current + stat.count);
+      }
     });
 
     return Array.from(dailyStats.entries())

@@ -82,10 +82,10 @@ export class GeolocationService {
     if (ip.includes('.')) {
       const parts = ip.split('.');
       if (parts.length !== 4) return false;
-      
-      const first = parseInt(parts[0]);
-      const second = parseInt(parts[1]);
-      
+
+      const first = parseInt(parts[0] || '0');
+      const second = parseInt(parts[1] || '0');
+
       return (
         first === 10 ||
         (first === 172 && second >= 16 && second <= 31) ||
@@ -93,7 +93,7 @@ export class GeolocationService {
         first === 127
       );
     }
-    
+
     // IPv6 private ranges
     if (ip.includes(':')) {
       return (
@@ -103,7 +103,7 @@ export class GeolocationService {
         ip.startsWith('fe80')
       );
     }
-    
+
     return false;
   }
 

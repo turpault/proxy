@@ -35,7 +35,7 @@ export class ProxyServer {
     const logsDir = configService.getSetting<string>('logsDir');
     const reportDir = logsDir ? path.join(logsDir, 'statistics') : undefined;
     const dataDir = configService.getSetting<string>('statsDir');
-    this.statisticsService = getStatisticsService(reportDir, dataDir);
+    this.statisticsService = getStatisticsService();
 
     // Get temp directory from main config
     const tempDir = configService.getSetting<string>('tempDir');
@@ -146,19 +146,24 @@ export class ProxyServer {
       if (validCertificates.length > 0) {
         // Use the first valid certificate as default for HTTPS server
         const defaultCert = validCertificates[0];
-        const tlsOptions = this.proxyCertificates.getBunTLSOptions(defaultCert.domain);
+        if (defaultCert) {
+          const tlsOptions = this.proxyCertificates.getBunTLSOptions(defaultCert.domain);
 
-        if (tlsOptions) {
-          this.httpsServer = Bun.serve({
-            port: this.config.httpsPort || 4443,
-            fetch: this.handleRequest.bind(this),
-            error: this.handleError.bind(this),
-            tls: tlsOptions
-          });
+          if (tlsOptions) {
+            this.httpsServer = Bun.serve({
+              port: this.config.httpsPort || 4443,
+              fetch: this.handleRequest.bind(this),
+              error: this.handleError.bind(this),
+              tls: tlsOptions
+            });
 
-          logger.info(`HTTPS server started on port ${this.config.httpsPort || 4443} with certificate for ${defaultCert.domain}`);
+            logger.info(`HTTPS server started on port ${this.config.httpsPort || 4443} with certificate for ${defaultCert.domain}`);
+          } else {
+            logger.warn('Failed to get TLS options for HTTPS server');
+            this.httpsServer = null;
+          }
         } else {
-          logger.warn('Failed to get TLS options for HTTPS server');
+          logger.warn('No valid certificates available, HTTPS server will not start');
           this.httpsServer = null;
         }
       } else {
@@ -523,7 +528,8 @@ export class ProxyServer {
     const xClientIP = headers.get('x-client-ip');
 
     if (xForwardedFor) {
-      return xForwardedFor.split(',')[0].trim();
+      const firstIP = xForwardedFor.split(',')[0];
+      return firstIP ? firstIP.trim() : 'unknown';
     }
 
     if (xRealIP) {
