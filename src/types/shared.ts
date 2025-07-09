@@ -65,11 +65,7 @@ export interface ConfigData {
 }
 
 // Configuration save response type
-export interface ConfigSaveResponse {
-  success: boolean;
-  data?: ConfigData;
-  error?: string;
-}
+export type ConfigSaveResponse = DataResponse<ConfigData>;
 
 // Backup item type
 export interface BackupItem {
@@ -80,11 +76,7 @@ export interface BackupItem {
 }
 
 // Backup response type
-export interface BackupResponse {
-  success: boolean;
-  data?: BackupItem[];
-  error?: string;
-}
+export type BackupResponse = DataResponse<BackupItem[]>;
 
 // Restore backup request type
 export interface RestoreBackupRequest {
@@ -145,15 +137,8 @@ export interface DetailedStatistics {
 }
 
 // Statistics response types
-export interface StatisticsResponse {
-  success: boolean;
-  data: StatisticsSummary;
-}
-
-export interface DetailedStatisticsResponse {
-  success: boolean;
-  data: DetailedStatistics;
-}
+export type StatisticsResponse = DataResponse<StatisticsSummary>;
+export type DetailedStatisticsResponse = DataResponse<DetailedStatistics>;
 
 // ============================================================================
 // CACHE
@@ -270,10 +255,17 @@ export interface EmptyRequest {
   // No request body needed
 }
 
-// Generic success response for simple operations
+// Generic response types
 export interface SuccessResponse {
   success: boolean;
   message?: string;
+  error?: string;
+}
+
+// Generic response with optional data
+export interface DataResponse<T = any> {
+  success: boolean;
+  data?: T;
   error?: string;
 }
 
@@ -281,11 +273,7 @@ export interface SuccessResponse {
 // STATUS API
 // ============================================================================
 
-export interface StatusResponse {
-  success: boolean;
-  data: StatusData;
-  error?: string;
-}
+export type StatusResponse = DataResponse<StatusData>;
 
 // ============================================================================
 // CONFIGURATION API
@@ -295,208 +283,100 @@ export interface GetConfigRequest {
   type: 'proxy' | 'processes' | 'main';
 }
 
-export interface GetConfigResponse {
-  success: boolean;
-  data?: ConfigData;
-  error?: string;
-}
+export type GetConfigResponse = DataResponse<ConfigData>;
 
-export interface SaveConfigRequest extends ConfigSaveRequest {
-  // Inherits from shared ConfigSaveRequest
-}
+export type SaveConfigRequest = ConfigSaveRequest;
+export type SaveConfigResponse = ConfigSaveResponse;
 
-export interface SaveConfigResponse extends ConfigSaveResponse {
-  // Inherits from shared ConfigSaveResponse
-}
-
-export interface CreateBackupResponse {
-  success: boolean;
-  message?: string;
-  error?: string;
-}
-
-export interface GetBackupsResponse {
-  success: boolean;
-  data?: BackupItem[];
-  error?: string;
-}
-
-export interface RestoreBackupApiRequest extends RestoreBackupRequest {
-  // Inherits from shared RestoreBackupRequest
-}
-
-export interface RestoreBackupResponse {
-  success: boolean;
-  message?: string;
-  error?: string;
-}
+export type CreateBackupResponse = SuccessResponse;
+export type GetBackupsResponse = DataResponse<BackupItem[]>;
+export type RestoreBackupApiRequest = RestoreBackupRequest;
+export type RestoreBackupResponse = SuccessResponse;
 
 export interface ValidateConfigRequest {
   content: string;
   type?: 'proxy' | 'processes' | 'main';
 }
 
-export interface ValidateConfigResponse {
-  success: boolean;
-  data?: ValidationStatus;
-  error?: string;
-}
+export type ValidateConfigResponse = DataResponse<ValidationStatus>;
 
 // ============================================================================
 // STATISTICS API
 // ============================================================================
 
-export interface GetStatisticsResponse extends StatisticsResponse {
-  // Inherits from shared StatisticsResponse
-}
+export type GetStatisticsResponse = StatisticsResponse;
 
-export interface GetDetailedStatisticsRequest {
+export type GetDetailedStatisticsRequest = {
   period?: string; // Query parameter
-}
+};
 
-export interface GetDetailedStatisticsResponse extends DetailedStatisticsResponse {
-  // Inherits from shared DetailedStatisticsResponse
-}
+export type GetDetailedStatisticsResponse = DetailedStatisticsResponse;
 
-export interface GetStatisticsSummaryResponse extends StatisticsResponse {
-  // Inherits from shared StatisticsResponse
-}
+export type GetStatisticsSummaryResponse = StatisticsResponse;
 
-export interface GenerateReportResponse {
-  success: boolean;
+export type GenerateReportResponse = DataResponse<{
+  filepath: string;
+  summary: StatisticsSummary;
+}> & {
   message?: string;
-  data?: {
-    filepath: string;
-    summary: StatisticsSummary;
-  };
-  error?: string;
-}
+};
 
 // ============================================================================
 // PROCESSES API
 // ============================================================================
 
-export interface GetProcessesResponse {
-  success: boolean;
-  data?: Process[];
-  error?: string;
-}
+export type GetProcessesResponse = DataResponse<Process[]>;
+export type ReloadProcessesResponse = SuccessResponse;
+export type StartProcessResponse = SuccessResponse;
+export type StopProcessResponse = SuccessResponse;
+export type RestartProcessResponse = SuccessResponse;
 
-export interface ReloadProcessesResponse {
-  success: boolean;
-  message?: string;
-  error?: string;
-}
-
-export interface StartProcessResponse {
-  success: boolean;
-  message?: string;
-  error?: string;
-}
-
-export interface StopProcessResponse {
-  success: boolean;
-  message?: string;
-  error?: string;
-}
-
-export interface RestartProcessResponse {
-  success: boolean;
-  message?: string;
-  error?: string;
-}
-
-export interface GetProcessLogsRequest {
+export type GetProcessLogsRequest = {
   lines?: string; // Query parameter
-}
+};
 
-export interface GetProcessLogsResponse {
-  success: boolean;
-  data?: {
-    processId: string;
-    logs: LogLine[];
-  };
-  error?: string;
-}
+export type GetProcessLogsResponse = DataResponse<{
+  processId: string;
+  logs: LogLine[];
+}>;
 
-export interface GetProcessConfigResponse {
-  success: boolean;
-  data?: any; // Process configuration object
-  error?: string;
-}
-
-export interface UpdateProcessConfigRequest {
-  // Process configuration object
-  [key: string]: any;
-}
-
-export interface UpdateProcessConfigResponse {
-  success: boolean;
-  message?: string;
-  error?: string;
-}
+export type GetProcessConfigResponse = DataResponse<any>;
+export type UpdateProcessConfigRequest = Record<string, any>;
+export type UpdateProcessConfigResponse = SuccessResponse;
 
 // ============================================================================
 // CERTIFICATES API
 // ============================================================================
 
-export interface GetCertificatesResponse extends CertificatesResponse {
-  // Inherits from shared CertificatesResponse
-}
+export type GetCertificatesResponse = CertificatesResponse;
 
 // ============================================================================
 // CACHE API
 // ============================================================================
 
-export interface GetCacheStatsResponse {
-  success: boolean;
-  data?: CacheData;
-  error?: string;
-}
-
-export interface GetCacheEntriesRequest {
+export type GetCacheStatsResponse = DataResponse<CacheData>;
+export type GetCacheEntriesRequest = {
   page?: string; // Query parameter
   limit?: string; // Query parameter
   userId?: string; // Query parameter
   inMRU?: string; // Query parameter
-}
-
-export interface GetCacheEntriesResponse {
-  success: boolean;
-  data?: {
-    entries: CacheEntry[];
-    total: number;
-    page: number;
-    limit: number;
-  };
-  error?: string;
-}
-
-export interface ClearCacheResponse {
-  success: boolean;
-  message?: string;
-  error?: string;
-}
-
-export interface DeleteCacheEntryResponse {
-  success: boolean;
-  message?: string;
-  error?: string;
-}
+};
+export type GetCacheEntriesResponse = DataResponse<{
+  entries: CacheEntry[];
+  total: number;
+  page: number;
+  limit: number;
+}>;
+export type ClearCacheResponse = SuccessResponse;
+export type DeleteCacheEntryResponse = SuccessResponse;
 
 // ============================================================================
 // OAUTH API
 // ============================================================================
 
-export interface GetOAuthSessionResponse extends OAuthSessionResponse {
-  // Inherits from shared OAuthSessionResponse
-}
+export type GetOAuthSessionResponse = OAuthSessionResponse;
 
-export interface LogoutResponse {
-  success: boolean;
-  message?: string;
-  error?: string;
-}
+export type LogoutResponse = SuccessResponse;
 
 // ============================================================================
 // HEALTH API
@@ -532,11 +412,7 @@ export interface WebSocketRequest {
   lines?: number | string;
 }
 
-export interface WebSocketResponse {
-  type: 'processes' | 'processes_update' | 'status' | 'logs' | 'logs_update' | 'error' | 'pong';
-  data: any;
-  timestamp: string;
-}
+export type WebSocketResponse = WebSocketMessage;
 
 // ============================================================================
 // UTILITY TYPES
@@ -547,17 +423,13 @@ export interface PaginationParams {
   limit?: number;
 }
 
-export interface PaginatedResponse<T> {
-  success: boolean;
-  data: {
-    items: T[];
-    total: number;
-    page: number;
-    limit: number;
-    hasMore: boolean;
-  };
-  error?: string;
-}
+export type PaginatedResponse<T> = DataResponse<{
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+}>;
 
 // ============================================================================
 // FRONTEND-SPECIFIC TYPES
