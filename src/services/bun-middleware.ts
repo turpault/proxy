@@ -28,7 +28,7 @@ export class BunMiddleware {
     this.statisticsService = statisticsService;
   }
 
-  async processRequest(requestContext: BunRequestContext): Promise<Response | null> {
+  async processRequest(requestContext: BunRequestContext, route: ProxyRoute): Promise<Response | null> {
     // Apply security headers
     const securityHeaders = this.buildSecurityHeaders();
 
@@ -36,13 +36,13 @@ export class BunMiddleware {
     const corsHeaders = this.buildCorsHeaders();
 
     // Apply geolocation filtering
-    const geolocationResult = await this.processGeolocation(requestContext);
+    const geolocationResult = await this.processGeolocation(requestContext,);
     if (geolocationResult) {
       return geolocationResult;
     }
 
     // Apply OAuth2 authentication
-    const oauth2Result = await this.processOAuth2(requestContext);
+    const oauth2Result = await this.processOAuth2(requestContext, route);
     if (oauth2Result) {
       return oauth2Result;
     }
@@ -108,14 +108,8 @@ export class BunMiddleware {
     }
   }
 
-  private async processOAuth2(requestContext: BunRequestContext): Promise<Response | null> {
+  private async processOAuth2(requestContext: BunRequestContext, route: ProxyRoute): Promise<Response | null> {
     try {
-      // Find the matching route for this request
-      const route = this.findMatchingRoute(requestContext.pathname);
-      if (!route) {
-        return null; // No route found, continue processing
-      }
-
       // Check if OAuth2 is enabled for this route
       if (!route.oauth2?.enabled) {
         return null; // OAuth2 not enabled for this route

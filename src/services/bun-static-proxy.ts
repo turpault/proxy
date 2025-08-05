@@ -49,8 +49,7 @@ export class BunStaticProxy {
     const result = await StaticFileUtils.serveStaticFile(
       requestContext,
       staticConfig,
-      route,
-      this.statisticsService
+      route
     );
 
     return result.response;

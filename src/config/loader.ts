@@ -45,6 +45,7 @@ const oauth2ConfigSchema = Joi.object({
   clientId: Joi.string().required(),
   clientSecret: Joi.string().required(),
   authorizationEndpoint: Joi.string().uri().required(),
+  relativePath: Joi.string().optional(),
   tokenEndpoint: Joi.string().uri().required(),
   callbackUrl: Joi.string().uri().required(),
   scopes: Joi.array().items(Joi.string()).optional(),

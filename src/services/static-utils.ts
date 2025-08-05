@@ -43,11 +43,8 @@ export class StaticFileUtils {
 
       // If file doesn't exist and SPA fallback is enabled
       if (spaFallback) {
-        return await this.handleSPAFallback(requestContext, staticPath, route, startTime);
+        return await this.handleSPAFallback(requestContext, staticPath, route);
       }
-
-      // File not found
-      logger.info(`[STATIC] ${requestContext.method} ${requestContext.originalUrl} [404] (${responseTime}ms)`);
 
       return {
         response: new Response(JSON.stringify({

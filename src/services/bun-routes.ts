@@ -299,7 +299,7 @@ export class BunRoutes {
       }
     }
 
-    return null;
+    throw new Error('No route found');
   }
 
   async handleRequest(req: Request, server: Server): Promise<Response | null> {
@@ -317,13 +317,13 @@ export class BunRoutes {
       server
     };
 
+    const { route, handler } = this.getHandler(requestContext);
     const startTime = Date.now();
     // Apply middleware
-    const middlewareResult = await this.middleware?.processRequest(requestContext);
+    const middlewareResult = await this.middleware?.processRequest(requestContext, route);
     if (middlewareResult) {
       return middlewareResult;
     }
-    const { route, handler } = this.getHandler(requestContext);
 
     if (handler) {
       logger.info(`[BUN ROUTES] ${requestContext.method} ${requestContext.originalUrl} - found handler`);

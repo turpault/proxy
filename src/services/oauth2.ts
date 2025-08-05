@@ -353,33 +353,16 @@ export class OAuth2Service {
   createBunMiddleware(config: OAuth2Config, publicPaths: string[] = [], baseRoutePath: string = ''): (requestContext: BunRequestContext) => Promise<Response | null> {
     // Validate configuration when middleware is created
     this.validateConfig(config);
+    const relativePath = baseRoutePath + (config.relativePath || '/oauth');
 
     // Get endpoint paths from config with defaults
-    const sessionEndpoint = config.sessionEndpoint || '/oauth/session';
-    const logoutEndpoint = config.logoutEndpoint || '/oauth/logout';
-    const loginPath = config.loginPath || '/oauth/login';
+    const sessionEndpoint = relativePath + '/session';
+    const logoutEndpoint = relativePath + '/logout';
+    const loginPath = relativePath + '/login';
 
     // Extract callback path from callbackUrl by removing host and base path
     const callbackUrl = new URL(config.callbackUrl);
     let callbackPath = callbackUrl.pathname;
-
-    // Remove base path if it exists
-    if (baseRoutePath && baseRoutePath !== '/') {
-      if (callbackPath.startsWith(baseRoutePath)) {
-        callbackPath = callbackPath.substring(baseRoutePath.length);
-      }
-    }
-
-    // Ensure callback path starts with /
-    if (!callbackPath.startsWith('/')) {
-      callbackPath = '/' + callbackPath;
-    }
-
-    // Fallback to default if empty
-    if (callbackPath === '/') {
-      callbackPath = '/callback';
-    }
-    // Get session ID from cookie or create new one
 
     return async (requestContext: BunRequestContext) => {
       // Generate unique cookie name for this route
@@ -485,7 +468,7 @@ export class OAuth2Service {
       }
 
       // Handle OAuth2 callback (both success and error cases)
-      if (requestContext.url.startsWith(callbackPath)) {
+      if (requestContext.pathname === callbackPath) {
         logger.info(`[OAUTH2 - Callback] ${requestContext.method} ${requestContext.originalUrl} - path: ${requestContext.pathname} - cookie: ${cookieName}`);
         // Handle OAuth2 error responses
         if (requestContext.query.error) {
@@ -567,7 +550,7 @@ export class OAuth2Service {
 
       // Not authenticated and not a public path - redirect to login
       const response = new Response(null, { status: 302 });
-      response.headers.set('Location', `${baseRoutePath}${loginPath}`);
+      response.headers.set('Location', loginPath);
       response.headers.set('Set-Cookie', `${cookieName}=${sessionId}; HttpOnly; Path=/; Max-Age=${24 * 60 * 60}`);
       return response;
     };

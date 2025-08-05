@@ -199,6 +199,7 @@ export interface OAuth2Config {
   clientId: string;
   clientSecret: string;
   authorizationEndpoint: string;
+  relativePath?: string;
   tokenEndpoint: string;
   callbackUrl: string;
   scopes?: string[];
@@ -208,9 +209,6 @@ export interface OAuth2Config {
   subscriptionKey?: string;
   subscriptionKeyHeader?: string; // Required if subscriptionKey is provided
   // Custom endpoint paths
-  sessionEndpoint?: string; // Default: /oauth/session
-  logoutEndpoint?: string; // Default: /oauth/logout
-  loginPath?: string; // Default: /oauth/login - path that initiates login process
   callbackRedirectEndpoint?: string; // Endpoint to redirect after successful callback (default: /)
 }
 
