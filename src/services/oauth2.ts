@@ -135,6 +135,7 @@ export class OAuth2Service {
     config: OAuth2Config
   ): Promise<{ success: boolean; error?: string; redirectUrl?: string }> {
     try {
+      logger.info(`[OAUTH2 - Handle Callback] ${code} - ${state} - ${sessionId} - ${config.provider}`);
       // Validate state
       const stateData = this.states.get(state);
       if (!stateData) {
@@ -358,15 +359,42 @@ export class OAuth2Service {
     const logoutEndpoint = config.logoutEndpoint || '/oauth/logout';
     const loginPath = config.loginPath || '/oauth/login';
 
+    // Extract callback path from callbackUrl by removing host and base path
+    const callbackUrl = new URL(config.callbackUrl);
+    let callbackPath = callbackUrl.pathname;
+
+    // Remove base path if it exists
+    if (baseRoutePath && baseRoutePath !== '/') {
+      if (callbackPath.startsWith(baseRoutePath)) {
+        callbackPath = callbackPath.substring(baseRoutePath.length);
+      }
+    }
+
+    // Ensure callback path starts with /
+    if (!callbackPath.startsWith('/')) {
+      callbackPath = '/' + callbackPath;
+    }
+
+    // Fallback to default if empty
+    if (callbackPath === '/') {
+      callbackPath = '/callback';
+    }
+    // Get session ID from cookie or create new one
+
     return async (requestContext: BunRequestContext) => {
       // Generate unique cookie name for this route
       const cookieName = this.generateCookieName(config, baseRoutePath);
 
       // Parse cookies from headers
       const cookies = this.parseCookies(requestContext.headers['cookie']);
+      let sessionId = cookies[cookieName];
+      if (!sessionId) {
+        logger.info(`[OAUTH2 - No Session ID] ${requestContext.method} ${requestContext.originalUrl} - path: ${requestContext.pathname} - cookie: ${cookieName}`);
+        sessionId = crypto.randomUUID();
+      }
 
       // Add debug logging
-      logger.info(`[OAUTH2] ${requestContext.method} ${requestContext.originalUrl} - path: ${requestContext.pathname} - cookie: ${cookieName}`);
+      logger.info(`[OAUTH2] ${requestContext.method} ${requestContext.originalUrl} - path: ${requestContext.pathname} - cookie: ${cookieName} - isAuthenticated: ${this.isAuthenticated(sessionId)}`);
 
       // Handle session endpoint
       if (requestContext.pathname === sessionEndpoint) {
@@ -446,6 +474,7 @@ export class OAuth2Service {
           response.headers.set('Set-Cookie', `${cookieName}=${sessionId}; HttpOnly; Path=/; Max-Age=${24 * 60 * 60}`);
           return response;
         }
+        logger.info(`[OAUTH2 - Not Authenticated] ${requestContext.method} ${requestContext.originalUrl} - path: ${requestContext.pathname} - cookie: ${cookieName} - sessionId: ${sessionId} - isAuthenticated: ${this.isAuthenticated(sessionId)}`);
 
         // Redirect to OAuth2 authorization
         const { url } = this.buildAuthorizationUrl(config);
@@ -455,31 +484,9 @@ export class OAuth2Service {
         return response;
       }
 
-      // Skip authentication for other public paths
-      const isPublicPath = publicPaths.some(path =>
-        requestContext.pathname.startsWith(path) || requestContext.pathname === path
-      );
-
-      if (isPublicPath) {
-        return null; // Continue to next handler
-      }
-
-      // Get session ID from cookie or create new one
-      let sessionId = cookies[cookieName];
-      if (!sessionId) {
-        sessionId = crypto.randomUUID();
-      }
-
-      // Check if authenticated
-      if (this.isAuthenticated(sessionId)) {
-        // Add session data to request context
-        (requestContext as any).oauth2Session = this.getSession(sessionId);
-        return null; // Continue to next handler
-      }
-
       // Handle OAuth2 callback (both success and error cases)
-      const callbackPath = new URL(config.callbackUrl).pathname;
-      if (requestContext.pathname === callbackPath) {
+      if (requestContext.url.startsWith(callbackPath)) {
+        logger.info(`[OAUTH2 - Callback] ${requestContext.method} ${requestContext.originalUrl} - path: ${requestContext.pathname} - cookie: ${cookieName}`);
         // Handle OAuth2 error responses
         if (requestContext.query.error) {
           logger.error(`OAuth2 authorization error: ${requestContext.query.error}`, {
@@ -538,6 +545,25 @@ export class OAuth2Service {
           }
         }
       }
+
+
+      // Skip authentication for other public paths
+      const isPublicPath = publicPaths.some(path =>
+        requestContext.pathname.startsWith(path) || requestContext.pathname === path
+      );
+
+      if (isPublicPath) {
+        return null; // Continue to next handler
+      }
+
+
+      // Check if authenticated
+      if (this.isAuthenticated(sessionId)) {
+        // Add session data to request context
+        (requestContext as any).oauth2Session = this.getSession(sessionId);
+        return null; // Continue to next handler
+      }
+
 
       // Not authenticated and not a public path - redirect to login
       const response = new Response(null, { status: 302 });
