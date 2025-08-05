@@ -16,18 +16,20 @@ export interface ProxyRequestConfig {
 }
 
 import { geolocationService } from './geolocation';
-import { BunRequestContext } from './bun-middleware';
+import { BunRequestContext, BunMiddleware } from './bun-middleware';
 import path from 'path';
 import { Server } from 'bun';
 
 export class BunRoutes {
   private statisticsService: any;
   private tempDir?: string;
+  private middleware?: BunMiddleware;
   private routeHandlers: Map<string, (requestContext: BunRequestContext, server: Server) => Promise<Response | null>> = new Map();
 
-  constructor(tempDir?: string, statisticsService?: any) {
+  constructor(tempDir?: string, statisticsService?: any, middleware?: BunMiddleware) {
     this.statisticsService = statisticsService;
     this.tempDir = tempDir;
+    this.middleware = middleware;
   }
 
   setupRoutes(config: ProxyConfig): void {
@@ -135,7 +137,9 @@ export class BunRoutes {
       const redirectUrl = route.redirectTo!;
 
       // Record statistics
-      this.recordRequestStats(requestContext, route, redirectUrl, Date.now() - start, 301, 'redirect');
+      if (this.middleware) {
+        this.middleware.recordRequestStats(requestContext, route, redirectUrl, Date.now() - start, 301, 'redirect');
+      }
 
       return new Response(null, {
         status: 301,
@@ -160,7 +164,9 @@ export class BunRoutes {
         const redirectUrl = route.redirectTo!;
 
         // Record statistics
-        this.recordRequestStats(requestContext, route, redirectUrl, Date.now() - start, 301, 'redirect');
+        if (this.middleware) {
+          this.middleware.recordRequestStats(requestContext, route, redirectUrl, Date.now() - start, 301, 'redirect');
+        }
 
         return new Response(null, {
           status: 301,
@@ -194,7 +200,9 @@ export class BunRoutes {
 
         // Record statistics for successful classic proxy request
         const responseTime = Date.now() - startTime;
-        this.recordRequestStats(requestContext, route, route.target!, responseTime, response.status, 'proxy');
+        if (this.middleware) {
+          this.middleware.recordRequestStats(requestContext, route, route.target!, responseTime, response.status, 'proxy');
+        }
 
         return response;
       } catch (error) {
@@ -229,7 +237,9 @@ export class BunRoutes {
 
           // Record statistics for successful classic proxy request
           const responseTime = Date.now() - startTime;
-          this.recordRequestStats(requestContext, route, route.target!, responseTime, response.status, 'proxy');
+          if (this.middleware) {
+            this.middleware.recordRequestStats(requestContext, route, route.target!, responseTime, response.status, 'proxy');
+          }
 
           return response;
         } catch (error) {
@@ -277,7 +287,9 @@ export class BunRoutes {
 
         // Record statistics for successful CORS forwarder request
         const responseTime = Date.now() - startTime;
-        this.recordRequestStats(requestContext, route, target, responseTime, response.status, 'cors-forwarder');
+        if (this.middleware) {
+          this.middleware.recordRequestStats(requestContext, route, target, responseTime, response.status, 'cors-forwarder');
+        }
 
         return response;
       } catch (error) {
@@ -325,7 +337,9 @@ export class BunRoutes {
 
           // Record statistics for successful CORS forwarder request
           const responseTime = Date.now() - startTime;
-          this.recordRequestStats(requestContext, route, target, responseTime, response.status, 'cors-forwarder');
+          if (this.middleware) {
+            this.middleware.recordRequestStats(requestContext, route, target, responseTime, response.status, 'cors-forwarder');
+          }
 
           return response;
         } catch (error) {
@@ -463,6 +477,12 @@ export class BunRoutes {
     const statusCode = customErrorResponse?.code ? parseInt(customErrorResponse.code) : 502;
     const message = customErrorResponse?.message || 'Bad Gateway';
 
+    // Record statistics for error
+    if (this.middleware) {
+      const requestType = routeIdentifier.includes('cors-forwarder') ? 'cors-forwarder' : 'proxy';
+      this.middleware.recordRequestStats(requestContext, route, target, 0, statusCode, requestType);
+    }
+
     return new Response(JSON.stringify({
       error: 'Proxy Error',
       message,
@@ -473,42 +493,5 @@ export class BunRoutes {
     });
   }
 
-  private recordRequestStats(
-    requestContext: BunRequestContext,
-    route: ProxyRoute,
-    target: string,
-    responseTime: number,
-    statusCode: number,
-    requestType: string = 'proxy'
-  ): void {
-    if (!this.statisticsService) return;
 
-    const clientIP = this.getClientIP(requestContext);
-    const geolocation = this.getGeolocation(clientIP);
-    const userAgent = requestContext.headers['user-agent'] || 'Unknown';
-
-    this.statisticsService.recordRequest(
-      clientIP,
-      geolocation,
-      requestContext.pathname,
-      requestContext.method,
-      userAgent,
-      responseTime,
-      route.domain || 'unknown',
-      target,
-      requestType
-    );
-  }
-
-  private getClientIP(requestContext: BunRequestContext): string {
-    return requestContext.ip || 'unknown';
-  }
-
-  private getGeolocation(ip: string): any {
-    try {
-      return geolocationService.getGeolocation(ip);
-    } catch (error) {
-      return null;
-    }
-  }
 } 

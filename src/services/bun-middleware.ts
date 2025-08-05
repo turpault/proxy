@@ -20,10 +20,12 @@ export interface BunRequestContext {
 export class BunMiddleware {
   private config: ProxyConfig;
   private oauth2Service: OAuth2Service;
+  private statisticsService?: any;
 
-  constructor(config: ProxyConfig) {
+  constructor(config: ProxyConfig, statisticsService?: any) {
     this.config = config;
     this.oauth2Service = new OAuth2Service();
+    this.statisticsService = statisticsService;
   }
 
   async processRequest(requestContext: BunRequestContext): Promise<Response | null> {
@@ -260,5 +262,46 @@ export class BunMiddleware {
     // This would be implemented based on your specific CSP logic
     // For now, return null to indicate no CSP
     return null;
+  }
+
+  /**
+   * Records request statistics for analytics and monitoring
+   */
+  recordRequestStats(
+    requestContext: BunRequestContext,
+    route: any,
+    target: string,
+    responseTime: number,
+    statusCode: number,
+    requestType: string = 'proxy'
+  ): void {
+    if (!this.statisticsService) return;
+
+    const clientIP = this.getClientIP(requestContext);
+    const geolocation = this.getGeolocation(clientIP);
+    const userAgent = requestContext.headers['user-agent'] || 'Unknown';
+
+    this.statisticsService.recordRequest(
+      clientIP,
+      geolocation,
+      requestContext.pathname,
+      requestContext.method,
+      userAgent,
+      responseTime,
+      route?.domain || 'unknown',
+      target,
+      requestType
+    );
+  }
+
+  /**
+   * Gets geolocation for an IP address
+   */
+  private getGeolocation(ip: string): any {
+    try {
+      return geolocationService.getGeolocation(ip);
+    } catch (error) {
+      return null;
+    }
   }
 } 

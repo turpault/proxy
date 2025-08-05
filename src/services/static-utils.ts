@@ -1,7 +1,7 @@
 import path from 'path';
 import { logger } from '../utils/logger';
 import { ProxyRoute } from '../types';
-import { BunRequestContext } from './bun-middleware';
+import { BunRequestContext, BunMiddleware } from './bun-middleware';
 
 export interface StaticFileConfig {
   staticPath: string;
@@ -23,7 +23,7 @@ export class StaticFileUtils {
     requestContext: BunRequestContext,
     config: StaticFileConfig,
     route: ProxyRoute,
-    statisticsService?: any
+    middleware?: BunMiddleware
   ): Promise<StaticFileResult> {
     const startTime = Date.now();
     const { staticPath, spaFallback } = config;
@@ -41,7 +41,9 @@ export class StaticFileUtils {
         logger.info(`[STATIC] ${requestContext.method} ${requestContext.originalUrl} [200] (${responseTime}ms)`);
 
         // Record statistics
-        this.recordRequestStats(requestContext, route, staticPath, responseTime, 200, 'static', statisticsService);
+        if (middleware) {
+          middleware.recordRequestStats(requestContext, route, staticPath, responseTime, 200, 'static');
+        }
 
         return {
           response: new Response(file),
@@ -52,14 +54,16 @@ export class StaticFileUtils {
 
       // If file doesn't exist and SPA fallback is enabled
       if (spaFallback) {
-        return await this.handleSPAFallback(requestContext, staticPath, route, startTime, statisticsService);
+        return await this.handleSPAFallback(requestContext, staticPath, route, startTime, middleware);
       }
 
       // File not found
       const responseTime = Date.now() - startTime;
       logger.info(`[STATIC] ${requestContext.method} ${requestContext.originalUrl} [404] (${responseTime}ms)`);
 
-      this.recordRequestStats(requestContext, route, staticPath, responseTime, 404, 'static', statisticsService);
+      if (middleware) {
+        middleware.recordRequestStats(requestContext, route, staticPath, responseTime, 404, 'static');
+      }
 
       return {
         response: new Response(JSON.stringify({
@@ -78,7 +82,9 @@ export class StaticFileUtils {
       logger.error(`[STATIC] Error serving static files for ${staticPath}`, error);
 
       // Record statistics for error
-      this.recordRequestStats(requestContext, route, staticPath, responseTime, 500, 'static', statisticsService);
+      if (middleware) {
+        middleware.recordRequestStats(requestContext, route, staticPath, responseTime, 500, 'static');
+      }
 
       return {
         response: new Response(JSON.stringify({
@@ -102,7 +108,7 @@ export class StaticFileUtils {
     staticPath: string,
     route: ProxyRoute,
     startTime: number,
-    statisticsService?: any
+    middleware?: BunMiddleware
   ): Promise<StaticFileResult> {
     // Skip if this is an API route or static asset
     if (requestContext.pathname.startsWith('/api/') ||
@@ -110,7 +116,9 @@ export class StaticFileUtils {
       requestContext.pathname.includes('.')) {
 
       const responseTime = Date.now() - startTime;
-      this.recordRequestStats(requestContext, route, staticPath, responseTime, 404, 'static', statisticsService);
+      if (middleware) {
+        middleware.recordRequestStats(requestContext, route, staticPath, responseTime, 404, 'static');
+      }
 
       return {
         response: new Response(JSON.stringify({
@@ -131,7 +139,9 @@ export class StaticFileUtils {
 
     if (await indexFile.exists()) {
       const responseTime = Date.now() - startTime;
-      this.recordRequestStats(requestContext, route, staticPath, responseTime, 200, 'static', statisticsService);
+      if (middleware) {
+        middleware.recordRequestStats(requestContext, route, staticPath, responseTime, 200, 'static');
+      }
 
       return {
         response: new Response(indexFile),
@@ -141,7 +151,9 @@ export class StaticFileUtils {
     }
 
     const responseTime = Date.now() - startTime;
-    this.recordRequestStats(requestContext, route, staticPath, responseTime, 404, 'static', statisticsService);
+    if (middleware) {
+      middleware.recordRequestStats(requestContext, route, staticPath, responseTime, 404, 'static');
+    }
 
     return {
       response: new Response(JSON.stringify({
@@ -165,72 +177,5 @@ export class StaticFileUtils {
       : pathname;
   }
 
-  /**
-   * Records request statistics
-   */
-  private static recordRequestStats(
-    requestContext: BunRequestContext,
-    route: ProxyRoute,
-    target: string,
-    responseTime: number,
-    statusCode: number,
-    requestType: string = 'static',
-    statisticsService?: any
-  ): void {
-    if (!statisticsService) return;
 
-    const clientIP = this.getClientIP(requestContext);
-    const geolocation = this.getGeolocation(clientIP);
-    const userAgent = requestContext.headers['user-agent'] || 'Unknown';
-
-    statisticsService.recordRequest(
-      clientIP,
-      geolocation,
-      requestContext.pathname,
-      requestContext.method,
-      userAgent,
-      responseTime,
-      route?.domain || 'unknown',
-      target,
-      requestType
-    );
-  }
-
-  /**
-   * Gets client IP from request context
-   */
-  private static getClientIP(requestContext: BunRequestContext): string {
-    const headers = requestContext.headers;
-    const xForwardedFor = headers['x-forwarded-for'];
-    const xRealIP = headers['x-real-ip'];
-    const xClientIP = headers['x-client-ip'];
-
-    if (xForwardedFor) {
-      const firstIP = xForwardedFor.split(',')[0];
-      return firstIP ? firstIP.trim() : 'unknown';
-    }
-
-    if (xRealIP) {
-      return xRealIP;
-    }
-
-    if (xClientIP) {
-      return xClientIP;
-    }
-
-    return requestContext.ip || 'unknown';
-  }
-
-  /**
-   * Gets geolocation for an IP address
-   */
-  private static getGeolocation(ip: string): any {
-    try {
-      // Import geolocation service dynamically to avoid circular dependencies
-      const { geolocationService } = require('./geolocation');
-      return geolocationService.getGeolocation(ip);
-    } catch (error) {
-      return null;
-    }
-  }
 } 

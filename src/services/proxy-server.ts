@@ -39,8 +39,8 @@ export class ProxyServer {
 
     // Get temp directory from main config
     const tempDir = configService.getSetting<string>('tempDir');
-    this.proxyRoutes = new BunRoutes(tempDir, this.statisticsService);
-    this.proxyMiddleware = new BunMiddleware(this.config);
+    this.proxyMiddleware = new BunMiddleware(this.config, this.statisticsService);
+    this.proxyRoutes = new BunRoutes(tempDir, this.statisticsService, this.proxyMiddleware);
     this.proxyCertificates = ProxyCertificates.getInstance(config);
 
     // Set cache expiration from main config if available
@@ -288,7 +288,7 @@ export class ProxyServer {
     };
 
     // Record statistics for unmatched request
-    this.recordRequestStats(unmatchedRequestContext, { name: 'unmatched' }, 'unmatched', Date.now() - startTime, 404, 'unmatched');
+    this.proxyMiddleware.recordRequestStats(unmatchedRequestContext, { name: 'unmatched' }, 'unmatched', Date.now() - startTime, 404, 'unmatched');
 
     await sleep(10000);
     return new Response(JSON.stringify({
@@ -341,7 +341,7 @@ export class ProxyServer {
       requestContext,
       staticConfig,
       route,
-      this.statisticsService
+      this.proxyMiddleware
     );
 
     return result.response;
@@ -354,7 +354,7 @@ export class ProxyServer {
     const start = Date.now();
 
     // Record statistics
-    this.recordRequestStats(requestContext, { name: 'redirect' }, redirectTarget, Date.now() - start, 301, 'redirect');
+    this.proxyMiddleware.recordRequestStats(requestContext, { name: 'redirect' }, redirectTarget, Date.now() - start, 301, 'redirect');
 
     return new Response(null, {
       status: 301,
@@ -382,7 +382,7 @@ export class ProxyServer {
 
       // Record statistics
       const responseTime = Date.now() - startTime;
-      this.recordRequestStats(requestContext, route, target, responseTime, response.status, 'proxy');
+      this.proxyMiddleware.recordRequestStats(requestContext, route, target, responseTime, response.status, 'proxy');
 
       return response;
     } catch (error) {
@@ -390,7 +390,7 @@ export class ProxyServer {
       logger.error(`[NATIVE PROXY] Error in proxy request for ${requestContext.pathname}`, error);
 
       // Record statistics for error
-      this.recordRequestStats(requestContext, route, target, responseTime, 502, 'proxy');
+      this.proxyMiddleware.recordRequestStats(requestContext, route, target, responseTime, 502, 'proxy');
 
       return new Response(JSON.stringify({
         error: 'Proxy Error',
@@ -436,7 +436,7 @@ export class ProxyServer {
 
       // Record statistics for successful CORS request
       const responseTime = Date.now() - startTime;
-      this.recordRequestStats(requestContext, route, target, responseTime, response.status, 'cors-forwarder');
+      this.proxyMiddleware.recordRequestStats(requestContext, route, target, responseTime, response.status, 'cors-forwarder');
 
       return response;
     } catch (error) {
@@ -444,7 +444,7 @@ export class ProxyServer {
       logger.error(`[NATIVE CORS] Error in proxy request for ${requestContext.pathname}`, error);
 
       // Record statistics for error
-      this.recordRequestStats(requestContext, route, target, responseTime, 502, 'cors-forwarder');
+      this.proxyMiddleware.recordRequestStats(requestContext, route, target, responseTime, 502, 'cors-forwarder');
 
       return new Response(JSON.stringify({
         error: 'CORS Proxy Error',
@@ -476,25 +476,7 @@ export class ProxyServer {
 
 
 
-  private recordRequestStats(requestContext: BunRequestContext, route: any, target: string, responseTime: number, statusCode: number, requestType: string = 'proxy'): void {
-    if (this.statisticsService) {
-      const clientIP = this.getClientIPFromContext(requestContext);
-      const geolocation = this.getGeolocation(clientIP);
-      const userAgent = requestContext.headers['user-agent'] || 'Unknown';
 
-      this.statisticsService.recordRequest(
-        clientIP,
-        geolocation,
-        requestContext.pathname,
-        requestContext.method,
-        userAgent,
-        responseTime,
-        route?.domain || 'unknown',
-        target,
-        requestType
-      );
-    }
-  }
 
   private handleError(error: Error): Response {
     logger.error('Server error', error);
