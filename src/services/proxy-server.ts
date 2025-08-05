@@ -10,7 +10,6 @@ import { configService } from './config-service';
 import { BunClassicProxy } from './bun-classic-proxy';
 import { BunCorsProxy } from './bun-cors-proxy';
 import { geolocationService } from './geolocation';
-import { OAuth2Service } from './oauth2';
 import { StaticFileUtils, StaticFileConfig } from './static-utils';
 import path from 'path';
 
@@ -22,10 +21,9 @@ export class ProxyServer {
   private proxyMiddleware: BunMiddleware;
   private proxyCertificates: ProxyCertificates;
   private statisticsService: any;
-  private oauth2Service: OAuth2Service;
 
   // Native route handlers for better performance
-  private staticRoutes: Map<string, { staticPath: string; spaFallback: boolean; publicPaths: string[]; route: ProxyRoute; oauth2Service?: OAuth2Service }> = new Map();
+  private staticRoutes: Map<string, { staticPath: string; spaFallback: boolean; publicPaths: string[]; route: ProxyRoute }> = new Map();
   private redirectRoutes: Map<string, string> = new Map();
   private proxyRoutesMap: Map<string, { target: string; route: ProxyRoute }> = new Map();
   private corsRoutes: Map<string, { route: ProxyRoute; corsProxy: BunCorsProxy }> = new Map();
@@ -33,7 +31,6 @@ export class ProxyServer {
   constructor(config: ProxyConfig) {
     this.config = config;
 
-    this.oauth2Service = new OAuth2Service();
     // Initialize statistics service with configuration
     const logsDir = configService.getSetting<string>('logsDir');
     const reportDir = logsDir ? path.join(logsDir, 'statistics') : undefined;
@@ -83,9 +80,7 @@ export class ProxyServer {
     this.config.routes.forEach(route => {
       if (route.path) {
         const routePath = route.path;
-        if (route.oauth2?.enabled) {
-          route.oauthMiddleware = this.oauth2Service.createBunMiddleware(route.oauth2, route.publicPaths || [], routePath);
-        }
+
 
         switch (route.type) {
           case 'static':
@@ -333,13 +328,7 @@ export class ProxyServer {
       }
     }
 
-    // Handle OAuth middleware if present
-    if (route.oauthMiddleware) {
-      const oauthResult = await route.oauthMiddleware(requestContext);
-      if (oauthResult) {
-        return oauthResult;
-      }
-    }
+
 
     // Use shared static file utilities
     const staticConfig: StaticFileConfig = {

@@ -1,6 +1,7 @@
-import { CSPConfig, CSPDirectives, GeolocationFilter, ProxyConfig } from '../types';
+import { CSPConfig, CSPDirectives, GeolocationFilter, ProxyConfig, ProxyRoute } from '../types';
 import { logger } from '../utils/logger';
 import { geolocationService, GeolocationInfo } from './geolocation';
+import { OAuth2Service } from './oauth2';
 import { BunRequest, Server } from 'bun';
 
 export interface BunRequestContext {
@@ -18,9 +19,11 @@ export interface BunRequestContext {
 
 export class BunMiddleware {
   private config: ProxyConfig;
+  private oauth2Service: OAuth2Service;
 
   constructor(config: ProxyConfig) {
     this.config = config;
+    this.oauth2Service = new OAuth2Service();
   }
 
   async processRequest(requestContext: BunRequestContext): Promise<Response | null> {
@@ -34,6 +37,12 @@ export class BunMiddleware {
     const geolocationResult = await this.processGeolocation(requestContext);
     if (geolocationResult) {
       return geolocationResult;
+    }
+
+    // Apply OAuth2 authentication
+    const oauth2Result = await this.processOAuth2(requestContext);
+    if (oauth2Result) {
+      return oauth2Result;
     }
 
     // Log request
@@ -97,6 +106,49 @@ export class BunMiddleware {
     }
   }
 
+  private async processOAuth2(requestContext: BunRequestContext): Promise<Response | null> {
+    try {
+      // Find the matching route for this request
+      const route = this.findMatchingRoute(requestContext.pathname);
+      if (!route) {
+        return null; // No route found, continue processing
+      }
+
+      // Check if OAuth2 is enabled for this route
+      if (!route.oauth2?.enabled) {
+        return null; // OAuth2 not enabled for this route
+      }
+
+      // Check if this is a public path that doesn't require authentication
+      const isPublicPath = this.isPublicPath(requestContext.pathname, route);
+      if (isPublicPath) {
+        return null; // Public path, no authentication required
+      }
+
+      // Use the existing OAuth2 middleware if it's already created
+      if (route.oauthMiddleware) {
+        return await route.oauthMiddleware(requestContext);
+      }
+
+      // Create OAuth2 middleware for this route
+      const oauth2Middleware = this.oauth2Service.createBunMiddleware(
+        route.oauth2,
+        route.publicPaths || [],
+        route.path || ''
+      );
+
+      // Store the middleware for future use
+      route.oauthMiddleware = oauth2Middleware;
+
+      // Process the request with OAuth2 middleware
+      return await oauth2Middleware(requestContext);
+
+    } catch (error) {
+      logger.error('Error in OAuth2 middleware', error);
+      return null; // Continue without OAuth2
+    }
+  }
+
   private getClientIP(requestContext: BunRequestContext): string {
     const headers = requestContext.headers;
     const xForwardedFor = headers['x-forwarded-for'];
@@ -143,6 +195,32 @@ export class BunMiddleware {
     if (geolocation.country) parts.push(geolocation.country);
 
     return parts.length > 0 ? `${clientIP} (${parts.join(', ')})` : clientIP;
+  }
+
+  private findMatchingRoute(pathname: string): ProxyRoute | null {
+    // Find the longest matching route
+    let bestMatch: ProxyRoute | null = null;
+    let bestLength = 0;
+
+    for (const route of this.config.routes) {
+      if (route.path && pathname.startsWith(route.path) && route.path.length > bestLength) {
+        bestMatch = route;
+        bestLength = route.path.length;
+      }
+    }
+
+    return bestMatch;
+  }
+
+  private isPublicPath(pathname: string, route: ProxyRoute): boolean {
+    // Check if the path is in the public paths list
+    if (route.publicPaths) {
+      return route.publicPaths.some(publicPath =>
+        pathname.startsWith(publicPath) || pathname === publicPath
+      );
+    }
+
+    return false;
   }
 
   buildCSPHeader(cspConfig: CSPConfig): string {
