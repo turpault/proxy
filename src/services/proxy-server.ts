@@ -10,6 +10,7 @@ import { configService } from './config-service';
 import { BunClassicProxy } from './bun-classic-proxy';
 import { BunCorsProxy } from './bun-cors-proxy';
 import { geolocationService } from './geolocation';
+import { OAuth2Service } from './oauth2';
 import path from 'path';
 
 export class ProxyServer {
@@ -20,9 +21,10 @@ export class ProxyServer {
   private proxyMiddleware: BunMiddleware;
   private proxyCertificates: ProxyCertificates;
   private statisticsService: any;
+  private oauth2Service: OAuth2Service;
 
   // Native route handlers for better performance
-  private staticRoutes: Map<string, { staticPath: string; spaFallback: boolean; publicPaths: string[]; route: ProxyRoute }> = new Map();
+  private staticRoutes: Map<string, { staticPath: string; spaFallback: boolean; publicPaths: string[]; route: ProxyRoute; oauth2Service?: OAuth2Service }> = new Map();
   private redirectRoutes: Map<string, string> = new Map();
   private proxyRoutesMap: Map<string, { target: string; route: ProxyRoute }> = new Map();
   private corsRoutes: Map<string, { route: ProxyRoute; corsProxy: BunCorsProxy }> = new Map();
@@ -30,6 +32,7 @@ export class ProxyServer {
   constructor(config: ProxyConfig) {
     this.config = config;
 
+    this.oauth2Service = new OAuth2Service();
     // Initialize statistics service with configuration
     const logsDir = configService.getSetting<string>('logsDir');
     const reportDir = logsDir ? path.join(logsDir, 'statistics') : undefined;
@@ -79,6 +82,9 @@ export class ProxyServer {
     this.config.routes.forEach(route => {
       if (route.path) {
         const routePath = route.path;
+        if (route.oauth2?.enabled) {
+          route.oauthMiddleware = this.oauth2Service.createBunMiddleware(route.oauth2, route.publicPaths || [], routePath);
+        }
 
         switch (route.type) {
           case 'static':
@@ -234,6 +240,7 @@ export class ProxyServer {
       return middlewareResult;
     }
 
+
     // Handle native static routes first (most efficient)
     const staticRoute = this.findStaticRoute(pathname);
     if (staticRoute) {
@@ -313,9 +320,9 @@ export class ProxyServer {
     return bestMatch;
   }
 
-  private async handleStaticRoute(requestContext: BunRequestContext, config: { staticPath: string; spaFallback: boolean; publicPaths: string[]; route: ProxyRoute }): Promise<Response> {
+  private async handleStaticRoute(requestContext: BunRequestContext, config: { staticPath: string; spaFallback: boolean; route: ProxyRoute }): Promise<Response> {
     const startTime = Date.now();
-    const { staticPath, spaFallback, publicPaths, route } = config;
+    const { staticPath, spaFallback, route } = config;
 
     try {
       logger.info(`[NATIVE STATIC] ${requestContext.method} ${requestContext.originalUrl} -> ${staticPath}`);
@@ -328,31 +335,12 @@ export class ProxyServer {
           break;
         }
       }
-
-      // Apply OAuth2 middleware if configured
-      if (route.oauth2?.enabled) {
-        const { OAuth2Service } = await import('./oauth2');
-        const oauth2Service = new OAuth2Service();
-
-        // Create a modified request context with the route path for OAuth2 middleware
-        const oauthRequestContext = {
-          ...requestContext,
-          pathname: requestContext.pathname.replace(routePath, '') || '/'
-        };
-
-        const oauthMiddleware = oauth2Service.createBunMiddleware(route.oauth2, publicPaths, routePath);
-
-        const oauthResult = await oauthMiddleware(oauthRequestContext);
+      if (route.oauthMiddleware) {
+        const oauthResult = await route.oauthMiddleware(requestContext);
         if (oauthResult) {
           return oauthResult;
         }
       }
-
-      // Check if this is a public path that doesn't require authentication
-      const isPublicPath = publicPaths.some(publicPath =>
-        requestContext.pathname.startsWith(publicPath)
-      );
-
       // Remove the base path from the request pathname to get the relative path
       const relativePath = requestContext.pathname.startsWith(routePath)
         ? requestContext.pathname.substring(routePath.length)

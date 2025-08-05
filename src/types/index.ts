@@ -1,3 +1,5 @@
+import { BunRequestContext } from '../services/bun-middleware';
+
 // Re-export API types
 export * from './api';
 
@@ -78,6 +80,7 @@ export interface ProxyRoute {
   headers?: Record<string, string>;
   cors?: CORSConfig;
   oauth2?: OAuth2Config;
+  oauthMiddleware?: (requestContext: BunRequestContext) => Promise<Response | null>;
   requireAuth?: boolean;
   publicPaths?: string[];
   spaFallback?: boolean;
