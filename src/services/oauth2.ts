@@ -349,7 +349,7 @@ export class OAuth2Service {
   }
 
   // Create Bun-native middleware function
-  createBunMiddleware(config: OAuth2Config, publicPaths: string[] = []): (requestContext: BunRequestContext) => Promise<Response | null> {
+  createBunMiddleware(config: OAuth2Config, publicPaths: string[] = [], baseRoutePath: string = ''): (requestContext: BunRequestContext) => Promise<Response | null> {
     // Validate configuration when middleware is created
     this.validateConfig(config);
 
@@ -360,7 +360,7 @@ export class OAuth2Service {
 
     return async (requestContext: BunRequestContext) => {
       // Generate unique cookie name for this route
-      const cookieName = this.generateCookieName(config, requestContext.pathname);
+      const cookieName = this.generateCookieName(config, baseRoutePath);
 
       // Parse cookies from headers
       const cookies = this.parseCookies(requestContext.headers['cookie']);
@@ -492,7 +492,7 @@ export class OAuth2Service {
             <h1>OAuth2 Authorization Failed</h1>
             <p><strong>Error:</strong> ${requestContext.query.error}</p>
             <p><strong>Description:</strong> ${requestContext.query.error_description || 'No description provided'}</p>
-            <p><a href="${loginPath}">Try again</a></p>
+            <p><a href="${baseRoutePath}${loginPath}">Try again</a></p>
           `, {
             status: 400,
             headers: { 'Content-Type': 'text/html' }
@@ -525,7 +525,7 @@ export class OAuth2Service {
             const response = new Response(`
               <h1>OAuth2 Callback Failed</h1>
               <p><strong>Error:</strong> ${result.error}</p>
-              <p><a href="${loginPath}">Try again</a></p>
+              <p><a href="${baseRoutePath}${loginPath}">Try again</a></p>
             `, {
               status: 400,
               headers: { 'Content-Type': 'text/html' }
@@ -537,21 +537,11 @@ export class OAuth2Service {
             return response;
           }
         }
-
-        // Invalid callback request
-        return new Response(`
-          <h1>Invalid OAuth2 Callback</h1>
-          <p>No authorization code or error information provided.</p>
-          <p><a href="${loginPath}">Try again</a></p>
-        `, {
-          status: 400,
-          headers: { 'Content-Type': 'text/html' }
-        });
       }
 
-      // Redirect to login path instead of directly to OAuth provider
+      // Not authenticated and not a public path - redirect to login
       const response = new Response(null, { status: 302 });
-      response.headers.set('Location', loginPath);
+      response.headers.set('Location', `${baseRoutePath}${loginPath}`);
       response.headers.set('Set-Cookie', `${cookieName}=${sessionId}; HttpOnly; Path=/; Max-Age=${24 * 60 * 60}`);
       return response;
     };

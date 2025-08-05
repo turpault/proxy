@@ -340,7 +340,7 @@ export class ProxyServer {
           pathname: requestContext.pathname.replace(routePath, '') || '/'
         };
 
-        const oauthMiddleware = oauth2Service.createBunMiddleware(route.oauth2, publicPaths);
+        const oauthMiddleware = oauth2Service.createBunMiddleware(route.oauth2, publicPaths, routePath);
 
         const oauthResult = await oauthMiddleware(oauthRequestContext);
         if (oauthResult) {
