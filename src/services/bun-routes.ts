@@ -298,23 +298,25 @@ export class BunRoutes {
         }
       } else {
         // Path-based route
+        logger.info(`[BUN ROUTES] ${requestContext.method} : ${requestContext.pathname} - checking path ${routePath}`);
         if (requestContext.pathname === routePath || requestContext.pathname.startsWith(routePath + '/')) {
           return handler;
         }
       }
     }
+
     return null;
   }
 
   async handleRequest(req: Request, server: Server): Promise<Response | null> {
-
+    const url = new URL(req.url);
     const requestContext: BunRequestContext = {
       method: req.method,
       url: req.url,
-      pathname: req.url,
+      pathname: url.pathname,
       headers: Object.fromEntries(req.headers as any),
       body: req.body,
-      query: Object.fromEntries(new URL(req.url).searchParams.entries()),
+      query: Object.fromEntries(url.searchParams.entries()),
       ip: req.headers.get('x-forwarded-for') || '',
       originalUrl: req.url,
       req: req as any,
@@ -328,8 +330,9 @@ export class BunRoutes {
       return middlewareResult;
     }
     const handler = this.getHandler(requestContext);
-    let response: Response | null = null;
+
     if (handler) {
+      logger.info(`[BUN ROUTES] ${requestContext.method} ${requestContext.originalUrl} - found handler`);
       const { route, response } = handler(requestContext, server);
       if (response) {
         let responseData = await response;
@@ -345,6 +348,7 @@ export class BunRoutes {
         return responseData;
       }
     }
+    logger.info(`[BUN ROUTES] ${requestContext.method} ${requestContext.originalUrl} - no handler found`);
     // No route found, record statistics for unmatched request
     const responseTime = Date.now() - startTime;
     this.middleware?.recordRequestStats(requestContext, { name: 'unmatched' }, '', responseTime, 404, 'unmatched');

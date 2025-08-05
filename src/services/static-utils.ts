@@ -1,7 +1,7 @@
 import path from 'path';
-import { logger } from '../utils/logger';
 import { ProxyRoute } from '../types';
-import { BunRequestContext, BunMiddleware } from './bun-middleware';
+import { logger } from '../utils/logger';
+import { BunRequestContext } from './bun-middleware';
 
 export interface StaticFileConfig {
   staticPath: string;
@@ -11,7 +11,6 @@ export interface StaticFileConfig {
 
 export interface StaticFileResult {
   response: Response;
-  responseTime: number;
   statusCode: number;
 }
 
@@ -22,8 +21,7 @@ export class StaticFileUtils {
   static async serveStaticFile(
     requestContext: BunRequestContext,
     config: StaticFileConfig,
-    route: ProxyRoute,
-    middleware?: BunMiddleware
+    route: ProxyRoute
   ): Promise<StaticFileResult> {
     const startTime = Date.now();
     const { staticPath, spaFallback } = config;
@@ -37,33 +35,19 @@ export class StaticFileUtils {
       const file = Bun.file(filePath);
 
       if (await file.exists()) {
-        const responseTime = Date.now() - startTime;
-        logger.info(`[STATIC] ${requestContext.method} ${requestContext.originalUrl} [200] (${responseTime}ms)`);
-
-        // Record statistics
-        if (middleware) {
-          middleware.recordRequestStats(requestContext, route, staticPath, responseTime, 200, 'static');
-        }
-
         return {
           response: new Response(file),
-          responseTime,
           statusCode: 200
         };
       }
 
       // If file doesn't exist and SPA fallback is enabled
       if (spaFallback) {
-        return await this.handleSPAFallback(requestContext, staticPath, route, startTime, middleware);
+        return await this.handleSPAFallback(requestContext, staticPath, route, startTime);
       }
 
       // File not found
-      const responseTime = Date.now() - startTime;
       logger.info(`[STATIC] ${requestContext.method} ${requestContext.originalUrl} [404] (${responseTime}ms)`);
-
-      if (middleware) {
-        middleware.recordRequestStats(requestContext, route, staticPath, responseTime, 404, 'static');
-      }
 
       return {
         response: new Response(JSON.stringify({
@@ -73,18 +57,11 @@ export class StaticFileUtils {
           status: 404,
           headers: { 'Content-Type': 'application/json' }
         }),
-        responseTime,
         statusCode: 404
       };
 
     } catch (error) {
-      const responseTime = Date.now() - startTime;
       logger.error(`[STATIC] Error serving static files for ${staticPath}`, error);
-
-      // Record statistics for error
-      if (middleware) {
-        middleware.recordRequestStats(requestContext, route, staticPath, responseTime, 500, 'static');
-      }
 
       return {
         response: new Response(JSON.stringify({
@@ -94,7 +71,6 @@ export class StaticFileUtils {
           status: 500,
           headers: { 'Content-Type': 'application/json' }
         }),
-        responseTime,
         statusCode: 500
       };
     }
@@ -106,19 +82,12 @@ export class StaticFileUtils {
   private static async handleSPAFallback(
     requestContext: BunRequestContext,
     staticPath: string,
-    route: ProxyRoute,
-    startTime: number,
-    middleware?: BunMiddleware
+    route: ProxyRoute
   ): Promise<StaticFileResult> {
     // Skip if this is an API route or static asset
     if (requestContext.pathname.startsWith('/api/') ||
       requestContext.pathname.startsWith('/static/') ||
       requestContext.pathname.includes('.')) {
-
-      const responseTime = Date.now() - startTime;
-      if (middleware) {
-        middleware.recordRequestStats(requestContext, route, staticPath, responseTime, 404, 'static');
-      }
 
       return {
         response: new Response(JSON.stringify({
@@ -128,7 +97,6 @@ export class StaticFileUtils {
           status: 404,
           headers: { 'Content-Type': 'application/json' }
         }),
-        responseTime,
         statusCode: 404
       };
     }
@@ -138,21 +106,11 @@ export class StaticFileUtils {
     const indexFile = Bun.file(indexPath);
 
     if (await indexFile.exists()) {
-      const responseTime = Date.now() - startTime;
-      if (middleware) {
-        middleware.recordRequestStats(requestContext, route, staticPath, responseTime, 200, 'static');
-      }
 
       return {
         response: new Response(indexFile),
-        responseTime,
         statusCode: 200
       };
-    }
-
-    const responseTime = Date.now() - startTime;
-    if (middleware) {
-      middleware.recordRequestStats(requestContext, route, staticPath, responseTime, 404, 'static');
     }
 
     return {
@@ -163,7 +121,6 @@ export class StaticFileUtils {
         status: 404,
         headers: { 'Content-Type': 'application/json' }
       }),
-      responseTime,
       statusCode: 404
     };
   }

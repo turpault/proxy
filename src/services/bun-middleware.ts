@@ -123,27 +123,27 @@ export class BunMiddleware {
 
       // Check if this is a public path that doesn't require authentication
       const isPublicPath = this.isPublicPath(requestContext.pathname, route);
+      logger.info(`[OAUTH2] ${requestContext.method} ${requestContext.pathname} - isPublicPath: ${isPublicPath}`);
       if (isPublicPath) {
         return null; // Public path, no authentication required
       }
 
       // Use the existing OAuth2 middleware if it's already created
-      if (route.oauthMiddleware) {
-        return await route.oauthMiddleware(requestContext);
+      if (!route.oauthMiddleware) {
+
+        // Create OAuth2 middleware for this route
+        const oauth2Middleware = this.oauth2Service.createBunMiddleware(
+          route.oauth2,
+          route.publicPaths || [],
+          route.path || ''
+        );
+
+        // Store the middleware for future use
+        route.oauthMiddleware = oauth2Middleware;
       }
 
-      // Create OAuth2 middleware for this route
-      const oauth2Middleware = this.oauth2Service.createBunMiddleware(
-        route.oauth2,
-        route.publicPaths || [],
-        route.path || ''
-      );
-
-      // Store the middleware for future use
-      route.oauthMiddleware = oauth2Middleware;
-
       // Process the request with OAuth2 middleware
-      return await oauth2Middleware(requestContext);
+      return await route.oauthMiddleware(requestContext);
 
     } catch (error) {
       logger.error('Error in OAuth2 middleware', error);
@@ -217,8 +217,10 @@ export class BunMiddleware {
   private isPublicPath(pathname: string, route: ProxyRoute): boolean {
     // Check if the path is in the public paths list
     if (route.publicPaths) {
+      logger.info(`[OAUTH2] ${pathname} - publicPaths: ${route.publicPaths}`);
+
       return route.publicPaths.some(publicPath =>
-        pathname.startsWith(publicPath) || pathname === publicPath
+        pathname.startsWith(`${route.path}${publicPath}`)
       );
     }
 

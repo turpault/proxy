@@ -1,17 +1,12 @@
-import { BunRequest, Server, sleep } from 'bun';
-import { ProxyConfig, MainConfig, ProxyRoute } from '../types';
+import { Server } from 'bun';
+import { ProxyConfig } from '../types';
 import { logger } from '../utils/logger';
-import { cacheService, setCacheExpiration } from './cache';
-import { getStatisticsService } from './statistics';
+import { BunMiddleware } from './bun-middleware';
 import { BunRoutes } from './bun-routes';
-import { BunMiddleware, BunRequestContext } from './bun-middleware';
-import { ProxyCertificates } from './proxy-certificates';
+import { cacheService, setCacheExpiration } from './cache';
 import { configService } from './config-service';
-import { BunClassicProxy } from './bun-classic-proxy';
-import { BunCorsProxy } from './bun-cors-proxy';
-import { geolocationService } from './geolocation';
-import { StaticFileUtils, StaticFileConfig } from './static-utils';
-import path from 'path';
+import { ProxyCertificates } from './proxy-certificates';
+import { getStatisticsService } from './statistics';
 
 export class ProxyServer {
   private httpServer: Server | null = null;
@@ -172,32 +167,6 @@ export class ProxyServer {
     return new Response('Internal Server Error', { status: 500 });
   }
 
-  private getClientIP(req: BunRequest, server: Server): string {
-    const headers = req.headers;
-    const xForwardedFor = headers.get('x-forwarded-for');
-    const xRealIP = headers.get('x-real-ip');
-    const xClientIP = headers.get('x-client-ip');
-
-    if (xForwardedFor) {
-      const firstIP = xForwardedFor.split(',')[0];
-      return firstIP ? firstIP.trim() : 'unknown';
-    }
-
-    if (xRealIP) {
-      return xRealIP;
-    }
-
-    if (xClientIP) {
-      return xClientIP;
-    }
-
-    const remoteAddress = server.requestIP(req);
-    if (remoteAddress) {
-      return remoteAddress.address;
-    }
-
-    return 'unknown';
-  }
 
 
   getStatus(): any {

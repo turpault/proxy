@@ -1,8 +1,6 @@
-import path from 'path';
-import { logger } from '../utils/logger';
 import { ProxyRoute } from '../types';
 import { BunRequestContext } from './bun-middleware';
-import { StaticFileUtils, StaticFileConfig } from './static-utils';
+import { StaticFileConfig, StaticFileUtils } from './static-utils';
 
 export interface ProxyRequestConfig {
   route: ProxyRoute;
@@ -38,18 +36,8 @@ export class BunStaticProxy {
     requestContext: BunRequestContext,
     config: ProxyRequestConfig
   ): Promise<Response> {
-    const { route, routeIdentifier } = config;
+    const { route } = config;
 
-    // Check if this is a public path that doesn't require authentication
-    const isPublicPath = this.publicPaths.some(publicPath =>
-      requestContext.pathname.startsWith(publicPath)
-    );
-
-    if (!isPublicPath && route.oauth2?.enabled) {
-      // OAuth2 authentication would be handled by middleware before this point
-      // This is just a fallback check
-      logger.debug(`[STATIC PROXY] OAuth2 check for ${routeIdentifier}`);
-    }
 
     // Use shared static file utilities
     const staticConfig: StaticFileConfig = {
