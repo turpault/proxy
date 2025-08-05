@@ -72,7 +72,7 @@ export interface ProxyRoute {
   domain: string;
   target?: string; // Optional since cors-forwarder routes get target from request
   ssl?: boolean;
-  path?: string;
+  path: string;
   type?: 'proxy' | 'static' | 'redirect' | 'cors-forwarder';
   staticPath?: string;
   redirectTo?: string;
