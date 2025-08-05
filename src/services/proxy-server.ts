@@ -22,7 +22,7 @@ export class ProxyServer {
   private statisticsService: any;
 
   // Native route handlers for better performance
-  private staticRoutes: Map<string, { staticPath: string; spaFallback: boolean; publicPaths: string[] }> = new Map();
+  private staticRoutes: Map<string, { staticPath: string; spaFallback: boolean; publicPaths: string[]; route: ProxyRoute }> = new Map();
   private redirectRoutes: Map<string, string> = new Map();
   private proxyRoutesMap: Map<string, { target: string; route: ProxyRoute }> = new Map();
   private corsRoutes: Map<string, { route: ProxyRoute; corsProxy: BunCorsProxy }> = new Map();
@@ -86,7 +86,8 @@ export class ProxyServer {
               this.staticRoutes.set(routePath, {
                 staticPath: route.staticPath,
                 spaFallback: route.spaFallback || false,
-                publicPaths: route.publicPaths || []
+                publicPaths: route.publicPaths || [],
+                route: route
               });
               logger.info(`Native static route configured: ${routePath} -> ${route.staticPath}`);
             }
@@ -297,9 +298,9 @@ export class ProxyServer {
     });
   }
 
-  private findStaticRoute(pathname: string): { staticPath: string; spaFallback: boolean; publicPaths: string[] } | null {
+  private findStaticRoute(pathname: string): { staticPath: string; spaFallback: boolean; publicPaths: string[]; route: ProxyRoute } | null {
     // Find the longest matching static route
-    let bestMatch: { staticPath: string; spaFallback: boolean; publicPaths: string[] } | null = null;
+    let bestMatch: { staticPath: string; spaFallback: boolean; publicPaths: string[]; route: ProxyRoute } | null = null;
     let bestLength = 0;
 
     for (const [routePath, config] of this.staticRoutes) {
@@ -312,17 +313,12 @@ export class ProxyServer {
     return bestMatch;
   }
 
-  private async handleStaticRoute(requestContext: BunRequestContext, config: { staticPath: string; spaFallback: boolean; publicPaths: string[] }): Promise<Response> {
+  private async handleStaticRoute(requestContext: BunRequestContext, config: { staticPath: string; spaFallback: boolean; publicPaths: string[]; route: ProxyRoute }): Promise<Response> {
     const startTime = Date.now();
-    const { staticPath, spaFallback, publicPaths } = config;
+    const { staticPath, spaFallback, publicPaths, route } = config;
 
     try {
       logger.info(`[NATIVE STATIC] ${requestContext.method} ${requestContext.originalUrl} -> ${staticPath}`);
-
-      // Check if this is a public path that doesn't require authentication
-      const isPublicPath = publicPaths.some(publicPath =>
-        requestContext.pathname.startsWith(publicPath)
-      );
 
       // Find the matching route path to remove from the request pathname
       let routePath = '';
@@ -332,6 +328,30 @@ export class ProxyServer {
           break;
         }
       }
+
+      // Apply OAuth2 middleware if configured
+      if (route.oauth2?.enabled) {
+        const { OAuth2Service } = await import('./oauth2');
+        const oauth2Service = new OAuth2Service();
+
+        // Create a modified request context with the route path for OAuth2 middleware
+        const oauthRequestContext = {
+          ...requestContext,
+          pathname: requestContext.pathname.replace(routePath, '') || '/'
+        };
+
+        const oauthMiddleware = oauth2Service.createBunMiddleware(route.oauth2, publicPaths);
+
+        const oauthResult = await oauthMiddleware(oauthRequestContext);
+        if (oauthResult) {
+          return oauthResult;
+        }
+      }
+
+      // Check if this is a public path that doesn't require authentication
+      const isPublicPath = publicPaths.some(publicPath =>
+        requestContext.pathname.startsWith(publicPath)
+      );
 
       // Remove the base path from the request pathname to get the relative path
       const relativePath = requestContext.pathname.startsWith(routePath)
@@ -346,21 +366,21 @@ export class ProxyServer {
         logger.info(`[NATIVE STATIC] ${requestContext.method} ${requestContext.originalUrl} [200] (${responseTime}ms)`);
 
         // Record statistics
-        this.recordRequestStats(requestContext, { name: 'static' }, staticPath, responseTime, 200, 'static');
+        this.recordRequestStats(requestContext, route, staticPath, responseTime, 200, 'static');
 
         return new Response(file);
       }
 
       // If file doesn't exist and SPA fallback is enabled
       if (spaFallback) {
-        return this.handleSPAFallback(requestContext, staticPath);
+        return this.handleSPAFallback(requestContext, staticPath, route);
       }
 
       // File not found
       const responseTime = Date.now() - startTime;
       logger.info(`[NATIVE STATIC] ${requestContext.method} ${requestContext.originalUrl} [404] (${responseTime}ms)`);
 
-      this.recordRequestStats(requestContext, { name: 'static' }, staticPath, responseTime, 404, 'static');
+      this.recordRequestStats(requestContext, route, staticPath, responseTime, 404, 'static');
 
       return new Response(JSON.stringify({
         error: 'Not Found',
@@ -375,7 +395,7 @@ export class ProxyServer {
       logger.error(`[NATIVE STATIC] Error serving static files for ${staticPath}`, error);
 
       // Record statistics for error
-      this.recordRequestStats(requestContext, { name: 'static' }, staticPath, responseTime, 500, 'static');
+      this.recordRequestStats(requestContext, route, staticPath, responseTime, 500, 'static');
 
       return new Response(JSON.stringify({
         error: 'Static Proxy Error',
@@ -387,7 +407,7 @@ export class ProxyServer {
     }
   }
 
-  private async handleSPAFallback(requestContext: BunRequestContext, staticPath: string): Promise<Response> {
+  private async handleSPAFallback(requestContext: BunRequestContext, staticPath: string, route: ProxyRoute): Promise<Response> {
     const startTime = Date.now();
 
     // Skip if this is an API route or static asset
@@ -396,7 +416,7 @@ export class ProxyServer {
       requestContext.pathname.includes('.')) {
 
       const responseTime = Date.now() - startTime;
-      this.recordRequestStats(requestContext, { name: 'static' }, staticPath, responseTime, 404, 'static');
+      this.recordRequestStats(requestContext, route, staticPath, responseTime, 404, 'static');
 
       return new Response(JSON.stringify({
         error: 'Not Found',
@@ -413,13 +433,13 @@ export class ProxyServer {
 
     if (await indexFile.exists()) {
       const responseTime = Date.now() - startTime;
-      this.recordRequestStats(requestContext, { name: 'static' }, staticPath, responseTime, 200, 'static');
+      this.recordRequestStats(requestContext, route, staticPath, responseTime, 200, 'static');
 
       return new Response(indexFile);
     }
 
     const responseTime = Date.now() - startTime;
-    this.recordRequestStats(requestContext, { name: 'static' }, staticPath, responseTime, 404, 'static');
+    this.recordRequestStats(requestContext, route, staticPath, responseTime, 404, 'static');
 
     return new Response(JSON.stringify({
       error: 'Not Found',
