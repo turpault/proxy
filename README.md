@@ -185,20 +185,27 @@ Access the management console at `http://localhost:4481` (or the configured port
 
 ### OAuth2 Integration
 
-The proxy server includes built-in OAuth2 support for various providers:
+The proxy server includes built-in OAuth2 support for any route type (static, proxy, redirect, cors-forwarder) through centralized middleware processing:
 
 ```yaml
 routes:
   - domain: "example.com"
-    path: "/oauth"
+    path: "/app"
+    type: "static"
+    staticPath: "/path/to/files"
     oauth2:
-      provider: "example"
-      clientId: "${EXAMPLE_CLIENT_ID}"
-      clientSecret: "${EXAMPLE_CLIENT_SECRET}"
-      authorizationEndpoint: "https://oauth.example.com/authorize"
-      tokenEndpoint: "https://oauth.example.com/token"
-      callbackUrl: "https://example.com/oauth/callback"
+      enabled: true
+      provider: "google"
+      clientId: "${GOOGLE_CLIENT_ID}"
+      clientSecret: "${GOOGLE_CLIENT_SECRET}"
+      authorizationEndpoint: "https://accounts.google.com/oauth/authorize"
+      tokenEndpoint: "https://oauth2.googleapis.com/token"
+      callbackUrl: "https://example.com/app/oauth/callback"
+      scopes: ["openid", "email", "profile"]
+    publicPaths: ["/app/public", "/app/assets"]
 ```
+
+OAuth2 authentication is now handled centrally in the middleware and works with all route types. See the [OAuth2 Integration Guide](docs/oauth2-integration.md) for detailed configuration options.
 
 ### Process Management
 

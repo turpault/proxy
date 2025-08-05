@@ -1,18 +1,20 @@
-# OAuth2 Authentication for Classic Proxy Routes
+# OAuth2 Authentication for Any Route Type
 
-This document explains how to configure and use OAuth2 authentication with classic proxy routes in the proxy server.
+This document explains how to configure and use OAuth2 authentication with any route type (static, proxy, redirect, cors-forwarder) in the proxy server.
 
 ## Overview
 
-Classic proxy routes now support OAuth2 authentication, allowing you to protect your API endpoints with industry-standard OAuth2 flows. The proxy server handles the OAuth2 authentication process and forwards authenticated session data to your backend services.
+All route types now support OAuth2 authentication through centralized middleware processing, allowing you to protect any endpoint with industry-standard OAuth2 flows. The proxy server handles the OAuth2 authentication process automatically and forwards authenticated session data to your backend services.
 
 ## Features
 
+- **Universal Route Support**: Works with static, proxy, redirect, and cors-forwarder routes
 - **Multiple OAuth2 Providers**: Support for Google, GitHub, and custom OAuth2 providers
 - **Session Management**: Automatic session handling with secure cookies
 - **Unique Cookie Names**: Each route uses unique cookie names to maintain independent sessions
 - **Route Protection**: Protect specific routes or entire domains
 - **Public Paths**: Configure paths that don't require authentication
+- **Centralized Middleware**: OAuth2 processing happens before route-specific handling
 - **Session Data Forwarding**: OAuth session information is forwarded to target services
 - **Subscription Keys**: Support for enterprise APIs requiring subscription keys
 - **Custom Endpoints**: Configurable OAuth endpoint paths
@@ -23,12 +25,12 @@ Classic proxy routes now support OAuth2 authentication, allowing you to protect 
 
 ```yaml
 routes:
+  # Proxy route with OAuth2
   - domain: "api.example.com"
     type: "proxy"
     path: "/protected-api"
     target: "http://localhost:3000"
     ssl: true
-    requireAuth: true
     oauth2:
       enabled: true
       provider: "google"
@@ -39,16 +41,36 @@ routes:
       callbackUrl: "https://api.example.com/protected-api/oauth/callback"
       scopes: ["openid", "profile", "email"]
       pkce: true
+      # Custom endpoint paths
+      sessionEndpoint: "/auth/session"
+      logoutEndpoint: "/auth/logout"
+      loginPath: "/auth/login"
+      callbackRedirectEndpoint: "/dashboard"
     publicPaths:
       - "/oauth/callback"
-      - "/oauth/session"
-      - "/oauth/logout"
+      - "/auth/session"
+      - "/auth/logout"
+      - "/auth/login"
       - "/health"
-    # Custom endpoint paths
-    sessionEndpoint: "/auth/session"
-    logoutEndpoint: "/auth/logout"
-    loginPath: "/auth/login"
-    callbackRedirectEndpoint: "/dashboard"
+
+  # Static route with OAuth2
+  - domain: "app.example.com"
+    type: "static"
+    path: "/app"
+    staticPath: "/var/www/app"
+    spaFallback: true
+    oauth2:
+      enabled: true
+      provider: "github"
+      clientId: "${GITHUB_CLIENT_ID}"
+      clientSecret: "${GITHUB_CLIENT_SECRET}"
+      authorizationEndpoint: "https://github.com/login/oauth/authorize"
+      tokenEndpoint: "https://github.com/login/oauth/access_token"
+      callbackUrl: "https://app.example.com/app/oauth/callback"
+      scopes: ["read:user", "user:email"]
+    publicPaths:
+      - "/app/public"
+      - "/app/assets"
 ```
 
 ### Configuration Options
