@@ -11,6 +11,7 @@ import { BunClassicProxy } from './bun-classic-proxy';
 import { BunCorsProxy } from './bun-cors-proxy';
 import { geolocationService } from './geolocation';
 import { OAuth2Service } from './oauth2';
+import { StaticFileUtils, StaticFileConfig } from './static-utils';
 import path from 'path';
 
 export class ProxyServer {
@@ -320,123 +321,44 @@ export class ProxyServer {
     return bestMatch;
   }
 
-  private async handleStaticRoute(requestContext: BunRequestContext, config: { staticPath: string; spaFallback: boolean; route: ProxyRoute }): Promise<Response> {
-    const startTime = Date.now();
+  private async handleStaticRoute(requestContext: BunRequestContext, config: { staticPath: string; spaFallback: boolean; publicPaths: string[]; route: ProxyRoute }): Promise<Response> {
     const { staticPath, spaFallback, route } = config;
 
-    try {
-      logger.info(`[NATIVE STATIC] ${requestContext.method} ${requestContext.originalUrl} -> ${staticPath}`);
-
-      // Find the matching route path to remove from the request pathname
-      let routePath = '';
-      for (const [route, routeConfig] of this.staticRoutes) {
-        if (routeConfig === config) {
-          routePath = route;
-          break;
-        }
+    // Find the matching route path to remove from the request pathname
+    let routePath = '';
+    for (const [route, routeConfig] of this.staticRoutes) {
+      if (routeConfig === config) {
+        routePath = route;
+        break;
       }
-      if (route.oauthMiddleware) {
-        const oauthResult = await route.oauthMiddleware(requestContext);
-        if (oauthResult) {
-          return oauthResult;
-        }
-      }
-      // Remove the base path from the request pathname to get the relative path
-      const relativePath = requestContext.pathname.startsWith(routePath)
-        ? requestContext.pathname.substring(routePath.length)
-        : requestContext.pathname;
-
-      const filePath = path.join(staticPath, relativePath);
-      const file = Bun.file(filePath);
-
-      if (await file.exists()) {
-        const responseTime = Date.now() - startTime;
-        logger.info(`[NATIVE STATIC] ${requestContext.method} ${requestContext.originalUrl} [200] (${responseTime}ms)`);
-
-        // Record statistics
-        this.recordRequestStats(requestContext, route, staticPath, responseTime, 200, 'static');
-
-        return new Response(file);
-      }
-
-      // If file doesn't exist and SPA fallback is enabled
-      if (spaFallback) {
-        return this.handleSPAFallback(requestContext, staticPath, route);
-      }
-
-      // File not found
-      const responseTime = Date.now() - startTime;
-      logger.info(`[NATIVE STATIC] ${requestContext.method} ${requestContext.originalUrl} [404] (${responseTime}ms)`);
-
-      this.recordRequestStats(requestContext, route, staticPath, responseTime, 404, 'static');
-
-      return new Response(JSON.stringify({
-        error: 'Not Found',
-        message: 'File not found'
-      }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      });
-
-    } catch (error) {
-      const responseTime = Date.now() - startTime;
-      logger.error(`[NATIVE STATIC] Error serving static files for ${staticPath}`, error);
-
-      // Record statistics for error
-      this.recordRequestStats(requestContext, route, staticPath, responseTime, 500, 'static');
-
-      return new Response(JSON.stringify({
-        error: 'Static Proxy Error',
-        message: 'An error occurred while serving static files'
-      }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
     }
+
+    // Handle OAuth middleware if present
+    if (route.oauthMiddleware) {
+      const oauthResult = await route.oauthMiddleware(requestContext);
+      if (oauthResult) {
+        return oauthResult;
+      }
+    }
+
+    // Use shared static file utilities
+    const staticConfig: StaticFileConfig = {
+      staticPath,
+      spaFallback,
+      publicPaths: config.publicPaths || []
+    };
+
+    const result = await StaticFileUtils.serveStaticFile(
+      requestContext,
+      staticConfig,
+      route,
+      this.statisticsService
+    );
+
+    return result.response;
   }
 
-  private async handleSPAFallback(requestContext: BunRequestContext, staticPath: string, route: ProxyRoute): Promise<Response> {
-    const startTime = Date.now();
 
-    // Skip if this is an API route or static asset
-    if (requestContext.pathname.startsWith('/api/') ||
-      requestContext.pathname.startsWith('/static/') ||
-      requestContext.pathname.includes('.')) {
-
-      const responseTime = Date.now() - startTime;
-      this.recordRequestStats(requestContext, route, staticPath, responseTime, 404, 'static');
-
-      return new Response(JSON.stringify({
-        error: 'Not Found',
-        message: 'File not found'
-      }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Serve index.html for SPA routes
-    const indexPath = path.join(staticPath, 'index.html');
-    const indexFile = Bun.file(indexPath);
-
-    if (await indexFile.exists()) {
-      const responseTime = Date.now() - startTime;
-      this.recordRequestStats(requestContext, route, staticPath, responseTime, 200, 'static');
-
-      return new Response(indexFile);
-    }
-
-    const responseTime = Date.now() - startTime;
-    this.recordRequestStats(requestContext, route, staticPath, responseTime, 404, 'static');
-
-    return new Response(JSON.stringify({
-      error: 'Not Found',
-      message: 'SPA fallback file not found'
-    }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
 
   private handleRedirectRoute(requestContext: BunRequestContext, redirectTarget: string): Response {
     logger.info(`[NATIVE REDIRECT] ${requestContext.method} ${requestContext.originalUrl} -> ${redirectTarget}`);
@@ -562,6 +484,8 @@ export class ProxyServer {
 
     return null;
   }
+
+
 
   private recordRequestStats(requestContext: BunRequestContext, route: any, target: string, responseTime: number, statusCode: number, requestType: string = 'proxy'): void {
     if (this.statisticsService) {
