@@ -14,6 +14,31 @@ export interface ProxyRequestConfig {
 import { BunRequestContext } from './bun-middleware';
 
 export class BunClassicProxy {
+  /**
+   * Apply URL rewrite rules to the pathname
+   * @param pathname Original pathname
+   * @param rewriteRules Record of regex patterns to replacement strings
+   * @returns Rewritten pathname
+   */
+  private applyRewriteRules(pathname: string, rewriteRules: Record<string, string>): string {
+    let rewrittenPath = pathname;
+
+    for (const [pattern, replacement] of Object.entries(rewriteRules)) {
+      try {
+        const regex = new RegExp(pattern);
+        if (regex.test(rewrittenPath)) {
+          rewrittenPath = rewrittenPath.replace(regex, replacement);
+          logger.debug(`[CLASSIC PROXY] Applied rewrite rule: ${pattern} -> ${replacement}, result: ${rewrittenPath}`);
+          break; // Apply only the first matching rule
+        }
+      } catch (error) {
+        logger.error(`[CLASSIC PROXY] Invalid rewrite pattern: ${pattern}`, error);
+      }
+    }
+
+    return rewrittenPath;
+  }
+
   async handleProxyRequest(
     requestContext: BunRequestContext,
     config: ProxyRequestConfig
@@ -24,8 +49,19 @@ export class BunClassicProxy {
     try {
       logger.info(`[CLASSIC PROXY] ${requestContext.method} ${requestContext.originalUrl} -> ${target}`);
 
-      // Build the target URL
-      const targetUrl = new URL(requestContext.pathname, target);
+      // Apply URL rewrite rules if configured
+      let pathname = requestContext.pathname;
+      if (route.rewrite && Object.keys(route.rewrite).length > 0) {
+        const originalPathname = pathname;
+        pathname = this.applyRewriteRules(pathname, route.rewrite);
+
+        if (pathname !== originalPathname) {
+          logger.info(`[CLASSIC PROXY] URL rewrite applied: ${originalPathname} -> ${pathname}`);
+        }
+      }
+
+      // Build the target URL with rewritten pathname
+      const targetUrl = new URL(pathname, target);
 
       // Copy query parameters
       for (const [key, value] of Object.entries(requestContext.query)) {
