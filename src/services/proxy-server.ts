@@ -7,6 +7,8 @@ import { cacheService, setCacheExpiration } from './cache';
 import { configService } from './config-service';
 import { ProxyCertificates } from './proxy-certificates';
 import { getStatisticsService } from './statistics';
+import * as fs from 'fs-extra';
+import * as path from 'path';
 
 export class ProxyServer {
   private httpServer: Server | null = null;
@@ -94,7 +96,7 @@ export class ProxyServer {
             }
           });
 
-          logger.info(`HTTPS server started on port ${this.config.httpsPort || 4443} with certificate for ${defaultCert.domain}`);
+          logger.info(`HTTPS server started on port ${this.config.httpsPort || 4443} with ${tlsOptions.length} certificates`);
         } else {
           logger.warn('Failed to get TLS options for HTTPS server');
           this.httpsServer = null;
@@ -137,22 +139,47 @@ export class ProxyServer {
     logger.info('Proxy server stopped successfully');
   }
 
-  private async handleRequest(req: Request, server: Server): Promise<Response> {
+  async handleRequest(req: Request, server: Server): Promise<Response> {
+    const url = new URL(req.url);
+
+    // Handle ACME challenge files for Let's Encrypt
+    if (url.pathname.startsWith('/.well-known/acme-challenge/')) {
+      return this.handleAcmeChallenge(url.pathname);
+    }
+
+    // Try to handle the request through the routes
+    const routeResponse = await this.proxyRoutes.handleRequest(req, server);
+    if (routeResponse) {
+      return routeResponse;
+    }
+
+    // If no route handled the request, return 404
+    return new Response('Not Found', { status: 404 });
+  }
+
+  private async handleAcmeChallenge(pathname: string): Promise<Response> {
     try {
-      const response = await this.proxyRoutes.handleRequest(req, server);
-      if (!response) {
-        throw new Error('No route found');
+      const challengeFilePath = path.join(process.cwd(), pathname);
+
+      // Check if the challenge file exists
+      if (await fs.pathExists(challengeFilePath)) {
+        const challengeContent = await fs.readFile(challengeFilePath, 'utf8');
+        logger.info(`[ACME] Serving challenge file: ${pathname}`);
+
+        return new Response(challengeContent, {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/plain',
+            'Cache-Control': 'no-cache',
+          }
+        });
+      } else {
+        logger.warn(`[ACME] Challenge file not found: ${pathname}`);
+        return new Response('Challenge file not found', { status: 404 });
       }
-      return response;
-    } catch (e) {
-      logger.error('Error handling request', e);
-      return new Response(JSON.stringify({
-        error: 'Internal Server Error',
-        message: 'An error occurred while handling the request'
-      }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
+    } catch (error) {
+      logger.error(`[ACME] Error serving challenge file ${pathname}:`, error);
+      return new Response('Internal Server Error', { status: 500 });
     }
   }
 
