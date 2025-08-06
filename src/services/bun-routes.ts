@@ -325,7 +325,6 @@ export class BunRoutes {
       }
 
       if (handler) {
-        logger.info(`[BUN ROUTES] ${requestContext.method} ${requestContext.originalUrl} - found handler`);
         const response = handler(requestContext, server);
         if (response) {
           let responseData = await response;

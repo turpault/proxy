@@ -326,8 +326,7 @@ export class ProxyServer {
             tls: tlsOptions,
             websocket: this.createWebSocketHandlers(),
             routes: {
-              "/robots.txt": () => new Response("User-agent: *\nDisallow: /", { status: 200 }),
-              "/": () => new Response("Hello World", { status: 200 })
+              "/robots.txt": () => new Response("User-agent: *\nDisallow: /", { status: 200 })
             }
           });
 
