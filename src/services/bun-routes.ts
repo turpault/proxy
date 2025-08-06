@@ -281,25 +281,23 @@ export class BunRoutes {
   }
 
   private getHandler(requestContext: BunRequestContext) {
-    // Check for exact path matches first
+    // Check for matches
     for (const [route, handler] of this.routeHandlers.entries()) {
-      if (route.path!.startsWith('domain:')) {
-        // Domain-based route
-        const domain = route.domain || route.path!.substring(7);
+      if (!route.path) {
+        // Domain-based route (no path property)
         const host = requestContext.headers['host'];
-        if (host === domain || host === `www.${domain}`) {
+        if (host === route.domain || host === `www.${route.domain}`) {
           return { route, handler };
         }
       } else {
         // Path-based route
-        logger.info(`[BUN ROUTES] ${requestContext.method} : ${requestContext.pathname} - checking path ${route.path}`);
         if (requestContext.pathname === route.path || requestContext.pathname.startsWith(route.path + '/')) {
           return { route, handler };
         }
       }
     }
 
-    throw new Error('No route found');
+    return { route: null, handler: null };
   }
 
   async handleRequest(req: Request, server: Server): Promise<Response | null> {
@@ -311,7 +309,7 @@ export class BunRoutes {
       headers: Object.fromEntries(req.headers as any),
       body: req.body,
       query: Object.fromEntries(url.searchParams.entries()),
-      ip: req.headers.get('x-forwarded-for') || '',
+      ip: server.requestIP(req)?.address || '',
       originalUrl: req.url,
       req: req as any,
       server
@@ -319,27 +317,29 @@ export class BunRoutes {
 
     const { route, handler } = this.getHandler(requestContext);
     const startTime = Date.now();
-    // Apply middleware
-    const middlewareResult = await this.middleware?.processRequest(requestContext, route);
-    if (middlewareResult) {
-      return middlewareResult;
-    }
+    if (route && handler) {
+      // Apply middleware
+      const middlewareResult = await this.middleware?.processRequest(requestContext, route);
+      if (middlewareResult) {
+        return middlewareResult;
+      }
 
-    if (handler) {
-      logger.info(`[BUN ROUTES] ${requestContext.method} ${requestContext.originalUrl} - found handler`);
-      const response = handler(requestContext, server);
-      if (response) {
-        let responseData = await response;
-        if (!responseData) {
-          responseData = new Response(null, {
-            status: 404,
-            headers: { 'Content-Type': 'application/json' }
-          });
+      if (handler) {
+        logger.info(`[BUN ROUTES] ${requestContext.method} ${requestContext.originalUrl} - found handler`);
+        const response = handler(requestContext, server);
+        if (response) {
+          let responseData = await response;
+          if (!responseData) {
+            responseData = new Response(null, {
+              status: 404,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+          // Record statistics for unmatched request
+          const responseTime = Date.now() - startTime;
+          this.middleware?.recordRequestStats(requestContext, route, route.path || route.domain || '', responseTime, responseData.status, route.type);
+          return responseData;
         }
-        // Record statistics for unmatched request
-        const responseTime = Date.now() - startTime;
-        this.middleware?.recordRequestStats(requestContext, route, route.path || route.domain || '', responseTime, responseData.status, route.type);
-        return responseData;
       }
     }
     logger.info(`[BUN ROUTES] ${requestContext.method} ${requestContext.originalUrl} - no handler found`);

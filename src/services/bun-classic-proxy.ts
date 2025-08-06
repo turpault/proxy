@@ -90,7 +90,21 @@ export class BunClassicProxy {
         redirect: 'manual' // Don't follow redirects automatically
       });
 
-      const response = await fetch(proxyRequest);
+      let response = await fetch(proxyRequest);
+      const contentType = response.headers?.get('content-type') || '';
+      if ((contentType.includes('text/html') || contentType.includes('application/json') || contentType.includes('text/javascript')) && route.replace && Object.keys(route.replace).length > 0) {
+        let newBody = await response.text();
+        for (const [pattern, replacement] of Object.entries(route.replace)) {
+          // replace all occurences of pattern with replacement
+          newBody = newBody.replace(new RegExp(pattern, 'g'), replacement);
+        }
+        response = new Response(newBody, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers
+        });
+      }
+
       const responseTime = Date.now() - startTime;
 
       logger.info(`[CLASSIC PROXY] ${requestContext.method} ${requestContext.originalUrl} [${response.status}] (${responseTime}ms)`);

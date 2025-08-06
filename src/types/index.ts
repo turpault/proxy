@@ -77,6 +77,7 @@ export interface ProxyRoute {
   staticPath?: string;
   redirectTo?: string;
   rewrite?: Record<string, string>;
+  replace?: Record<string, string>;
   headers?: Record<string, string>;
   cors?: CORSConfig;
   oauth2?: OAuth2Config;

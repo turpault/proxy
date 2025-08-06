@@ -35,12 +35,6 @@ export class BunMiddleware {
     // Apply CORS headers
     const corsHeaders = this.buildCorsHeaders();
 
-    // Apply domain filtering
-    const domainFilterResult = this.processDomainFilter(requestContext, route);
-    if (domainFilterResult) {
-      return domainFilterResult;
-    }
-
     // Apply geolocation filtering
     const geolocationResult = await this.processGeolocation(requestContext,);
     if (geolocationResult) {
@@ -78,64 +72,6 @@ export class BunMiddleware {
       'Access-Control-Allow-Credentials': 'true',
       'Access-Control-Max-Age': '86400'
     };
-  }
-
-  private processDomainFilter(requestContext: BunRequestContext, route: ProxyRoute): Response | null {
-    try {
-      const host = requestContext.headers['host'];
-      if (!host) {
-        logger.warn(`[DOMAIN FILTER] Request blocked - missing Host header`, {
-          url: requestContext.originalUrl,
-          method: requestContext.method
-        });
-
-        return new Response(JSON.stringify({
-          error: 'Bad Request',
-          message: 'Host header is required'
-        }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      // Extract hostname without port
-      const requestedHost = host.split(':')[0];
-      const configuredDomain = route.domain;
-
-      // Check if the requested host matches the configured domain
-      // Allow both exact match and www subdomain
-      const isValidDomain = requestedHost === configuredDomain ||
-        requestedHost === `www.${configuredDomain}` ||
-        (requestedHost.startsWith('www.') && requestedHost.substring(4) === configuredDomain);
-
-      if (!isValidDomain) {
-        logger.warn(`[DOMAIN FILTER] Request blocked - domain mismatch`, {
-          requestedHost,
-          configuredDomain,
-          url: requestContext.originalUrl,
-          method: requestContext.method,
-          ip: requestContext.ip
-        });
-
-        return new Response(JSON.stringify({
-          error: 'Access Denied',
-          message: 'Requested domain does not match configured route domain'
-        }), {
-          status: 403,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      logger.debug(`[DOMAIN FILTER] Domain validation passed`, {
-        requestedHost,
-        configuredDomain
-      });
-
-      return null; // Domain validation passed, continue processing
-    } catch (error) {
-      logger.error('Error in domain filtering middleware', error);
-      return null; // Continue without domain filtering on error
-    }
   }
 
   private async processGeolocation(requestContext: BunRequestContext): Promise<Response | null> {
