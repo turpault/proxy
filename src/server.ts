@@ -46,7 +46,7 @@ export class BunProxyServer {
     logger.info('Starting Bun proxy server...');
 
     // Start proxy server
-    await this.proxyServer.start();
+    await this.proxyServer.startHttpsServer();
 
     // Start management console only if not disabled
     if (!disableManagementServer) {

@@ -9,7 +9,6 @@ import { ProxyCertificates } from './proxy-certificates';
 import { getStatisticsService } from './statistics';
 import * as fs from 'fs-extra';
 import * as path from 'path';
-
 export class ProxyServer {
   private httpServer: Server | null = null;
   private httpsServer: Server | null = null;
@@ -41,6 +40,9 @@ export class ProxyServer {
   async initialize(): Promise<void> {
     logger.info('Initializing proxy server...');
 
+    // Start HTTP server (for ACME challenges)
+    await this.startHttpServer();
+
     // Set up SSL certificates
     await this.proxyCertificates.setupCertificates();
 
@@ -63,7 +65,7 @@ export class ProxyServer {
     logger.info('Cache cleanup scheduled (every hour)');
   }
 
-  async start(): Promise<void> {
+  async startHttpServer(): Promise<void> {
     logger.info('Starting proxy server...');
 
     // Start HTTP server
@@ -74,7 +76,8 @@ export class ProxyServer {
     });
 
     logger.info(`HTTP server started on port ${this.config.port}`);
-
+  }
+  async startHttpsServer(): Promise<void> {
     // Start HTTPS server only if we have valid certificates
     try {
       const certificates = this.proxyCertificates.getAllCertificates();
@@ -140,6 +143,7 @@ export class ProxyServer {
   }
 
   async handleRequest(req: Request, server: Server): Promise<Response> {
+    logger.info(`[PROXY] Handling request: ${req.url}`);
     const url = new URL(req.url);
 
     // Handle ACME challenge files for Let's Encrypt

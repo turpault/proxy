@@ -1,5 +1,4 @@
 import * as fs from 'fs-extra';
-import * as path from 'path';
 import { CertificateInfo, ProxyConfig } from '../types';
 import { logger } from '../utils/logger';
 import { LetsEncryptService } from './letsencrypt';
@@ -170,23 +169,23 @@ export class ProxyCertificates {
    * Returns Bun-compatible TLS options for a given domain, or null if not available.
    * Usage: Bun.serve({ tls: proxyCertificates.getBunTLSOptions(domain) })
    */
-  getBunTLSOptions(domain: string): { key: string; cert: string } | null {
+  getBunTLSOptions(domain: string) {
     const certInfo = this.getCertificate(domain);
     if (!certInfo || !certInfo.isValid) return null;
     try {
-      const cert = fs.readFileSync(certInfo.certPath, 'utf8');
-      const key = fs.readFileSync(certInfo.keyPath, 'utf8');
+      const cert = Bun.file(certInfo.certPath);
+      const key = Bun.file(certInfo.keyPath);
       return { key, cert };
     } catch (error) {
       logger.error(`Failed to read certificate files for ${domain}`, error);
       return null;
     }
   }
-  getBunTLSOptionsSNI(): { key: string; cert: string }[] {
+  getBunTLSOptionsSNI() {
     const domains = Array.from(this.certificates.keys());
     return domains.filter(domain => this.certificates.get(domain)?.isValid).map(domain => {
       const cert = this.certificates.get(domain)!;
-      return { key: cert.keyPath, cert: cert.certPath, domain: `*.${domain}` };
+      return { key: Bun.file(cert.keyPath), cert: Bun.file(cert.certPath), serverName: domain };
     });
   }
 } 
