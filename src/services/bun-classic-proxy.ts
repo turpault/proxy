@@ -39,10 +39,106 @@ export class BunClassicProxy {
     return rewrittenPath;
   }
 
+  /**
+   * Check if the request is a WebSocket upgrade request
+   */
+  private isWebSocketUpgrade(requestContext: BunRequestContext): boolean {
+    const connection = requestContext.headers['connection']?.toLowerCase();
+    const upgrade = requestContext.headers['upgrade']?.toLowerCase();
+    return connection === 'upgrade' && upgrade === 'websocket';
+  }
+
+  /**
+   * Handle WebSocket proxy connection
+   */
+  async handleWebSocketProxy(
+    requestContext: BunRequestContext,
+    config: ProxyRequestConfig
+  ): Promise<Response> {
+    const { route, target, routeIdentifier } = config;
+
+    try {
+      // Check if WebSocket is enabled for this route
+      if (route.websocket && route.websocket.enabled === false) {
+        logger.warn(`[CLASSIC PROXY WS] WebSocket disabled for route ${routeIdentifier}`);
+        return new Response('WebSocket not enabled for this route', { status: 403 });
+      }
+
+      logger.info(`[CLASSIC PROXY WS] ${requestContext.method} ${requestContext.originalUrl} -> ${target}`);
+
+      // Apply URL rewrite rules if configured
+      let pathname = requestContext.pathname;
+      if (route.rewrite && Object.keys(route.rewrite).length > 0) {
+        const originalPathname = pathname;
+        pathname = this.applyRewriteRules(pathname, route.rewrite);
+
+        if (pathname !== originalPathname) {
+          logger.info(`[CLASSIC PROXY WS] URL rewrite applied: ${originalPathname} -> ${pathname}`);
+        }
+      }
+
+      // Build the target WebSocket URL
+      const targetUrl = new URL(pathname, target);
+      // Convert http/https to ws/wss
+      targetUrl.protocol = targetUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+
+      // Copy query parameters
+      for (const [key, value] of Object.entries(requestContext.query)) {
+        targetUrl.searchParams.set(key, value);
+      }
+
+      // Get WebSocket configuration with defaults
+      const wsConfig = route.websocket || {};
+      const timeout = wsConfig.timeout || 30000;
+      const pingInterval = wsConfig.pingInterval || 30000;
+      const maxRetries = wsConfig.maxRetries || 3;
+      const retryDelay = wsConfig.retryDelay || 1000;
+
+      // Use Bun's server.upgrade() to handle WebSocket upgrade
+      const success = requestContext.server.upgrade(requestContext.req, {
+        data: {
+          target: targetUrl.toString(),
+          routeIdentifier,
+          headers: requestContext.headers,
+          wsConfig: {
+            timeout,
+            pingInterval,
+            maxRetries,
+            retryDelay
+          }
+        }
+      });
+
+      if (success) {
+        logger.info(`[CLASSIC PROXY WS] WebSocket upgrade successful for ${routeIdentifier}`);
+        return new Response(null); // Return empty response for successful upgrade
+      } else {
+        logger.error(`[CLASSIC PROXY WS] WebSocket upgrade failed for ${routeIdentifier}`);
+        return new Response('WebSocket upgrade failed', { status: 400 });
+      }
+
+    } catch (error) {
+      logger.error(`[CLASSIC PROXY WS] Error in WebSocket proxy for ${routeIdentifier}`, error);
+      return new Response(JSON.stringify({
+        error: 'WebSocket Proxy Error',
+        message: 'Failed to proxy WebSocket connection',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }), {
+        status: 502,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  }
+
   async handleProxyRequest(
     requestContext: BunRequestContext,
     config: ProxyRequestConfig
   ): Promise<Response> {
+    // Check if this is a WebSocket upgrade request
+    if (this.isWebSocketUpgrade(requestContext)) {
+      return this.handleWebSocketProxy(requestContext, config);
+    }
+
     const { route, target, routeIdentifier } = config;
     const startTime = Date.now();
 

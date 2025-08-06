@@ -87,6 +87,15 @@ export interface ProxyRoute {
   spaFallback?: boolean;
   geolocationFilter?: GeolocationFilter;
   csp?: CSPConfig;
+  websocket?: WebSocketConfig;
+}
+
+export interface WebSocketConfig {
+  enabled?: boolean; // Enable WebSocket proxying for this route
+  timeout?: number; // Connection timeout in milliseconds (default: 30000)
+  pingInterval?: number; // Ping interval in milliseconds (default: 30000, 0 to disable)
+  maxRetries?: number; // Maximum retry attempts for failed connections (default: 3)
+  retryDelay?: number; // Delay between retry attempts in milliseconds (default: 1000)
 }
 
 export interface GeolocationFilter {

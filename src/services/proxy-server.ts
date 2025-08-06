@@ -9,6 +9,23 @@ import { ProxyCertificates } from './proxy-certificates';
 import { getStatisticsService } from './statistics';
 import * as fs from 'fs-extra';
 import * as path from 'path';
+
+interface WebSocketProxyData {
+  target: string;
+  routeIdentifier: string;
+  headers: Record<string, string>;
+  targetWebSocket?: WebSocket;
+  wsConfig?: {
+    timeout: number;
+    pingInterval: number;
+    maxRetries: number;
+    retryDelay: number;
+  };
+  retryCount?: number;
+  pingTimer?: any;
+  connectionTimeout?: any;
+}
+
 export class ProxyServer {
   private httpServer: Server | null = null;
   private httpsServer: Server | null = null;
@@ -35,6 +52,219 @@ export class ProxyServer {
 
     // Listen for configuration changes
     this.setupConfigChangeHandling();
+  }
+
+  /**
+   * Create WebSocket handlers for proxy functionality
+   */
+  private createWebSocketHandlers() {
+    return {
+      open: (ws: any) => {
+        const data = ws.data as WebSocketProxyData;
+        logger.info(`[PROXY WS] Opening connection to ${data.target} for route ${data.routeIdentifier}`);
+
+        data.retryCount = 0;
+        this.connectToTarget(ws, data);
+      },
+
+      message: (ws: any, message: string | Buffer) => {
+        const data = ws.data as WebSocketProxyData;
+        try {
+          // Forward message from client to target
+          if (data.targetWebSocket && data.targetWebSocket.readyState === WebSocket.OPEN) {
+            data.targetWebSocket.send(message);
+          } else {
+            logger.warn(`[PROXY WS] Target WebSocket not ready for ${data.routeIdentifier}, dropping message`);
+          }
+        } catch (error) {
+          logger.error(`[PROXY WS] Error forwarding message from client to target for ${data.routeIdentifier}`, error);
+        }
+      },
+
+      close: (ws: any, code: number, reason: string) => {
+        const data = ws.data as WebSocketProxyData;
+        logger.info(`[PROXY WS] Client connection closed for ${data.routeIdentifier} (${code}: ${reason})`);
+
+        this.cleanupWebSocketConnection(data);
+      },
+
+      error: (ws: any, error: Error) => {
+        const data = ws.data as WebSocketProxyData;
+        logger.error(`[PROXY WS] Client connection error for ${data.routeIdentifier}`, error);
+
+        this.cleanupWebSocketConnection(data);
+      }
+    };
+  }
+
+  /**
+   * Connect to target WebSocket server with retry logic
+   */
+  private connectToTarget(clientWs: any, data: WebSocketProxyData) {
+    const wsConfig = data.wsConfig || { timeout: 30000, pingInterval: 30000, maxRetries: 3, retryDelay: 1000 };
+
+    try {
+      // Set connection timeout
+      data.connectionTimeout = setTimeout(() => {
+        logger.error(`[PROXY WS] Connection timeout for ${data.routeIdentifier}`);
+        try {
+          clientWs.close(1011, 'Connection timeout');
+        } catch (error) {
+          logger.error(`[PROXY WS] Error closing client connection on timeout for ${data.routeIdentifier}`, error);
+        }
+      }, wsConfig.timeout);
+
+      // Create WebSocket connection to target server
+      const targetWs = new WebSocket(data.target);
+      data.targetWebSocket = targetWs;
+
+      targetWs.onopen = () => {
+        logger.info(`[PROXY WS] Connected to target ${data.target}`);
+
+        // Clear connection timeout
+        if (data.connectionTimeout) {
+          clearTimeout(data.connectionTimeout);
+          data.connectionTimeout = null;
+        }
+
+        // Reset retry count on successful connection
+        data.retryCount = 0;
+
+        // Set up ping interval if configured (using empty message as ping)
+        if (wsConfig.pingInterval > 0) {
+          data.pingTimer = setInterval(() => {
+            try {
+              if (targetWs.readyState === WebSocket.OPEN) {
+                // Send empty message as keep-alive ping
+                targetWs.send('');
+              }
+            } catch (error) {
+              logger.error(`[PROXY WS] Error sending ping to target for ${data.routeIdentifier}`, error);
+            }
+          }, wsConfig.pingInterval);
+        }
+      };
+
+      targetWs.onmessage = (event) => {
+        try {
+          // Forward message from target to client
+          if (clientWs.readyState === 1) { // WebSocket.OPEN
+            clientWs.send(event.data);
+          }
+        } catch (error) {
+          logger.error(`[PROXY WS] Error forwarding message from target to client for ${data.routeIdentifier}`, error);
+        }
+      };
+
+      targetWs.onclose = (event) => {
+        logger.info(`[PROXY WS] Target connection closed for ${data.routeIdentifier} (${event.code}: ${event.reason})`);
+
+        // Clear timers
+        this.cleanupTimers(data);
+
+        // Attempt to reconnect if not a normal closure and retries available
+        if (event.code !== 1000 && data.retryCount! < wsConfig.maxRetries) {
+          data.retryCount = (data.retryCount || 0) + 1;
+          logger.info(`[PROXY WS] Attempting reconnection ${data.retryCount}/${wsConfig.maxRetries} for ${data.routeIdentifier}`);
+
+          setTimeout(() => {
+            this.connectToTarget(clientWs, data);
+          }, wsConfig.retryDelay);
+        } else {
+          // Close client connection
+          try {
+            clientWs.close(event.code, event.reason);
+          } catch (error) {
+            logger.error(`[PROXY WS] Error closing client connection for ${data.routeIdentifier}`, error);
+          }
+        }
+      };
+
+      targetWs.onerror = (error) => {
+        logger.error(`[PROXY WS] Target connection error for ${data.routeIdentifier}`, error);
+
+        // Clear connection timeout
+        if (data.connectionTimeout) {
+          clearTimeout(data.connectionTimeout);
+          data.connectionTimeout = null;
+        }
+
+        // Attempt to reconnect if retries available
+        if (data.retryCount! < wsConfig.maxRetries) {
+          data.retryCount = (data.retryCount || 0) + 1;
+          logger.info(`[PROXY WS] Attempting reconnection ${data.retryCount}/${wsConfig.maxRetries} after error for ${data.routeIdentifier}`);
+
+          setTimeout(() => {
+            this.connectToTarget(clientWs, data);
+          }, wsConfig.retryDelay);
+        } else {
+          // Close client connection
+          try {
+            clientWs.close(1011, 'Target connection failed');
+          } catch (err) {
+            logger.error(`[PROXY WS] Error closing client connection after target error for ${data.routeIdentifier}`, err);
+          }
+        }
+      };
+
+    } catch (error) {
+      logger.error(`[PROXY WS] Error creating target connection for ${data.routeIdentifier}`, error);
+
+      // Clear connection timeout
+      if (data.connectionTimeout) {
+        clearTimeout(data.connectionTimeout);
+        data.connectionTimeout = null;
+      }
+
+      // Attempt to reconnect if retries available
+      if (data.retryCount! < wsConfig.maxRetries) {
+        data.retryCount = (data.retryCount || 0) + 1;
+        logger.info(`[PROXY WS] Attempting reconnection ${data.retryCount}/${wsConfig.maxRetries} after creation error for ${data.routeIdentifier}`);
+
+        setTimeout(() => {
+          this.connectToTarget(clientWs, data);
+        }, wsConfig.retryDelay);
+      } else {
+        // Close client connection
+        try {
+          clientWs.close(1011, 'Failed to connect to target');
+        } catch (err) {
+          logger.error(`[PROXY WS] Error closing client connection after target creation error for ${data.routeIdentifier}`, err);
+        }
+      }
+    }
+  }
+
+  /**
+   * Clean up timers for WebSocket connection
+   */
+  private cleanupTimers(data: WebSocketProxyData) {
+    if (data.pingTimer) {
+      clearInterval(data.pingTimer);
+      data.pingTimer = null;
+    }
+
+    if (data.connectionTimeout) {
+      clearTimeout(data.connectionTimeout);
+      data.connectionTimeout = null;
+    }
+  }
+
+  /**
+   * Clean up WebSocket connection and resources
+   */
+  private cleanupWebSocketConnection(data: WebSocketProxyData) {
+    // Clean up timers
+    this.cleanupTimers(data);
+
+    // Close target connection
+    try {
+      if (data.targetWebSocket && data.targetWebSocket.readyState === WebSocket.OPEN) {
+        data.targetWebSocket.close();
+      }
+    } catch (error) {
+      logger.error(`[PROXY WS] Error closing target connection for ${data.routeIdentifier}`, error);
+    }
   }
 
   async initialize(): Promise<void> {
@@ -72,7 +302,8 @@ export class ProxyServer {
     this.httpServer = Bun.serve({
       port: this.config.port,
       fetch: this.handleRequest.bind(this),
-      error: this.handleError.bind(this)
+      error: this.handleError.bind(this),
+      websocket: this.createWebSocketHandlers()
     });
 
     logger.info(`HTTP server started on port ${this.config.port}`);
@@ -93,6 +324,7 @@ export class ProxyServer {
             fetch: this.handleRequest.bind(this),
             error: this.handleError.bind(this),
             tls: tlsOptions,
+            websocket: this.createWebSocketHandlers(),
             routes: {
               "/robots.txt": () => new Response("User-agent: *\nDisallow: /", { status: 200 }),
               "/": () => new Response("Hello World", { status: 200 })
