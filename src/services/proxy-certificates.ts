@@ -182,4 +182,11 @@ export class ProxyCertificates {
       return null;
     }
   }
+  getBunTLSOptionsSNI(): { key: string; cert: string }[] {
+    const domains = Array.from(this.certificates.keys());
+    return domains.filter(domain => this.certificates.get(domain)?.isValid).map(domain => {
+      const cert = this.certificates.get(domain)!;
+      return { key: cert.keyPath, cert: cert.certPath, domain: `*.${domain}` };
+    });
+  }
 } 

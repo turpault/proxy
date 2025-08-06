@@ -283,16 +283,16 @@ export class BunRoutes {
   private getHandler(requestContext: BunRequestContext) {
     // Check for matches
     for (const [route, handler] of this.routeHandlers.entries()) {
-      if (!route.path) {
-        // Domain-based route (no path property)
-        const host = requestContext.headers['host'];
-        if (host === route.domain || host === `www.${route.domain}`) {
+      const host = requestContext.headers['host'];
+      if (host === route.domain || host === `www.${route.domain}`) {
+        if (!route.path) {
+          // Domain-based route (no path property)
           return { route, handler };
-        }
-      } else {
-        // Path-based route
-        if (requestContext.pathname === route.path || requestContext.pathname.startsWith(route.path + '/')) {
-          return { route, handler };
+        } else {
+          // Path-based route
+          if (requestContext.pathname === route.path || requestContext.pathname.startsWith(route.path + '/')) {
+            return { route, handler };
+          }
         }
       }
     }

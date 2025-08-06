@@ -80,29 +80,23 @@ export class ProxyServer {
 
       if (validCertificates.length > 0) {
         // Use the first valid certificate as default for HTTPS server
-        const defaultCert = validCertificates[0];
-        if (defaultCert) {
-          const tlsOptions = this.proxyCertificates.getBunTLSOptions(defaultCert.domain);
+        const tlsOptions = this.proxyCertificates.getBunTLSOptionsSNI();
 
-          if (tlsOptions) {
-            this.httpsServer = Bun.serve({
-              port: this.config.httpsPort || 4443,
-              fetch: this.handleRequest.bind(this),
-              error: this.handleError.bind(this),
-              tls: tlsOptions,
-              routes: {
-                "/robots.txt": () => new Response("User-agent: *\nDisallow: /", { status: 200 }),
-                "/": () => new Response("Hello World", { status: 200 })
-              }
-            });
+        if (tlsOptions.length > 0) {
+          this.httpsServer = Bun.serve({
+            port: this.config.httpsPort || 4443,
+            fetch: this.handleRequest.bind(this),
+            error: this.handleError.bind(this),
+            tls: tlsOptions,
+            routes: {
+              "/robots.txt": () => new Response("User-agent: *\nDisallow: /", { status: 200 }),
+              "/": () => new Response("Hello World", { status: 200 })
+            }
+          });
 
-            logger.info(`HTTPS server started on port ${this.config.httpsPort || 4443} with certificate for ${defaultCert.domain}`);
-          } else {
-            logger.warn('Failed to get TLS options for HTTPS server');
-            this.httpsServer = null;
-          }
+          logger.info(`HTTPS server started on port ${this.config.httpsPort || 4443} with certificate for ${defaultCert.domain}`);
         } else {
-          logger.warn('No valid certificates available, HTTPS server will not start');
+          logger.warn('Failed to get TLS options for HTTPS server');
           this.httpsServer = null;
         }
       } else {
