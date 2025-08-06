@@ -218,7 +218,7 @@ export const configSchema = Joi.object({
       }),
       ssl: Joi.boolean().default(true),
       headers: Joi.object().pattern(Joi.string(), Joi.string()).optional(),
-      rewrite: Joi.object().pattern(Joi.string(), Joi.string()).optional(),
+      rewrite: Joi.object().pattern(Joi.string(), Joi.string().allow('')).optional(),
       path: Joi.string().optional(),
       type: Joi.string().valid('proxy', 'static', 'redirect', 'cors-forwarder').default('proxy'),
       staticPath: Joi.string().when('type', {
