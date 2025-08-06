@@ -211,6 +211,10 @@ export class ProxyServer {
       // Update server configuration
       if (newConfigs.serverConfig) {
         this.config = newConfigs.serverConfig;
+
+        // Update routes with new configuration
+        this.proxyRoutes.setupRoutes(this.config);
+        logger.info('Routes updated with new configuration');
       }
       logger.info('Proxy server configuration updated successfully');
     } catch (error) {
