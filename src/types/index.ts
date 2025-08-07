@@ -1,8 +1,24 @@
-import { BunRequestContext } from '../services/bun-middleware';
+import { BunRequest, Server } from 'bun';
+import { GeolocationInfo } from '../services/geolocation';
 
 // Re-export API types
 export * from './api';
 
+
+export interface BunRequestContext {
+  method: string;
+  url: string;
+  pathname: string;
+  headers: Record<string, string>;
+  userAgent: string;
+  body: any;
+  query: Record<string, string>;
+  ip: string;
+  originalUrl: string;
+  req: BunRequest;
+  server: Server;
+  geolocation: GeolocationInfo | null;
+}
 export interface ProcessConfig {
   enabled?: boolean;
   name?: string; // Human-readable name for the process

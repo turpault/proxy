@@ -1,4 +1,4 @@
-import { ProxyConfig, ProxyRoute } from '../types';
+import { BunRequestContext, ProxyConfig, ProxyRoute } from '../types';
 import { logger } from '../utils/logger';
 import { BunClassicProxy } from './bun-classic-proxy';
 import { BunCorsProxy } from './bun-cors-proxy';
@@ -17,22 +17,21 @@ export interface ProxyRequestConfig {
 
 import { Server, sleep, file } from 'bun';
 import path from 'path';
-import { BunMiddleware, BunRequestContext } from './bun-middleware';
+import { BunMiddleware } from './bun-middleware';
 import { geolocationService } from './geolocation';
+import { StatisticsService } from './statistics';
 
 export class BunRoutes {
-  private statisticsService: any;
-  private tempDir?: string;
-  private middleware?: BunMiddleware;
+  private statisticsService: StatisticsService;
+  private tempDir: string;
   private routeHandlers: Array<{
     route: ProxyRoute;
     handler: (requestContext: BunRequestContext, server: Server) => Promise<Response | null> | Response | null;
   }> = [];
 
-  constructor(tempDir?: string, statisticsService?: any, middleware?: BunMiddleware) {
+  constructor(tempDir: string, statisticsService: StatisticsService) {
     this.statisticsService = statisticsService;
     this.tempDir = tempDir;
-    this.middleware = middleware;
   }
 
   setupRoutes(config: ProxyConfig): void {
@@ -229,40 +228,12 @@ export class BunRoutes {
   }
 
   private setupCorsForwarderRoute(route: ProxyRoute): void {
-    const corsProxy = new BunCorsProxy(this.tempDir);
+    const corsProxy = new BunCorsProxy(this.tempDir, route);
 
     this.routeHandlers.push({
       route,
       handler: (requestContext: BunRequestContext) => {
-        const target = this.extractTargetFromRequest(requestContext);
-        if (!target) {
-          return new Response(JSON.stringify({
-            error: 'Bad Request',
-            message: 'Missing target parameter'
-          }), {
-            status: 400,
-            headers: { 'Content-Type': 'application/json' }
-          });
-        }
-
-
-        logger.info(`[CORS FORWARDER] ${requestContext.method} ${requestContext.originalUrl} -> ${target}`);
-
-        const config: ProxyRequestConfig = {
-          route,
-          target,
-          routeIdentifier: `cors-forwarder ${route.path}`,
-          secure: false,
-          timeouts: { request: 30000, proxy: 30000 },
-          logRequests: true,
-          logErrors: true
-        };
-
-        // Call the CORS proxy directly with Bun request context
-        const response = corsProxy.handleProxyRequest(requestContext, config);
-
-
-        return response;
+        return corsProxy.handleProxyRequest(requestContext);
       }
     });
 
@@ -270,43 +241,16 @@ export class BunRoutes {
   }
 
   private setupCorsForwarderDomainRoute(route: ProxyRoute): void {
-    const corsProxy = new BunCorsProxy(this.tempDir);
+    const corsProxy = new BunCorsProxy(this.tempDir, route);
 
     this.routeHandlers.push({
       route,
       handler: (requestContext: BunRequestContext) => {
         const host = requestContext.headers['host'];
         if (host === route.domain || host === `www.${route.domain}`) {
-          const target = this.extractTargetFromRequest(requestContext);
-          let response = null;
-          if (!target) {
-            response = new Response(JSON.stringify({
-              error: 'Bad Request',
-              message: 'Missing target parameter'
-            }), {
-              status: 400,
-              headers: { 'Content-Type': 'application/json' }
-            });
-          } else {
-
-            logger.info(`[CORS FORWARDER] ${requestContext.method} ${requestContext.originalUrl} -> ${target}`);
-
-            const config: ProxyRequestConfig = {
-              route,
-              target,
-              routeIdentifier: `cors-forwarder ${route.domain}`,
-              secure: false,
-              timeouts: { request: 30000, proxy: 30000 },
-              logRequests: true,
-              logErrors: true
-            };
-
-            response = corsProxy.handleProxyRequest(requestContext, config);
-
-          }
-          return response;
+          return corsProxy.handleProxyRequest(requestContext);
         }
-        return null;
+        throw new Error('No handler found');
       }
     });
 
@@ -317,7 +261,7 @@ export class BunRoutes {
     // Check for matches - routes are already sorted by path length (longest first)
     for (const { route, handler } of this.routeHandlers) {
       const host = requestContext.headers['host'];
-      if (host === route.domain || host === `www.${route.domain}`) {
+      if (host === route.domain || host === `www.${route.domain} `) {
         if (!route.path) {
           // Domain-based route (no path property)
           return { route, handler };
@@ -332,8 +276,7 @@ export class BunRoutes {
 
     return { route: null, handler: null };
   }
-
-  async handleRequest(req: Request, server: Server): Promise<Response | null> {
+  private createRequestContext(req: Request, server: Server): BunRequestContext {
     const url = new URL(req.url);
     const headers = Object.fromEntries(req.headers as any);
     let ip = server.requestIP(req)?.address || 'unknown';
@@ -358,6 +301,7 @@ export class BunRoutes {
     const requestContext: BunRequestContext = {
       method: req.method,
       geolocation: geolocationService.getGeolocation(ip),
+      userAgent: headers['user-agent'] || 'Unknown',
       url: req.url,
       pathname: url.pathname,
       headers,
@@ -369,168 +313,98 @@ export class BunRoutes {
       server
     };
 
-    const { route, handler } = this.getHandler(requestContext);
-    const startTime = Date.now();
-    if (route && handler) {
-      // Apply middleware
-      const middlewareResult = await this.middleware?.processRequest(requestContext, route);
-      if (middlewareResult) {
-        return middlewareResult;
-      }
+    return requestContext;
+  }
 
-      if (handler) {
-        const response = handler(requestContext, server);
-        if (response) {
-          let responseData = await response;
-          if (!responseData) {
-            responseData = new Response(null, {
-              status: 404,
-              headers: { 'Content-Type': 'application/json' }
-            });
+  async handleRequest(req: Request, server: Server, middleware: BunMiddleware): Promise<Response> {
+    const requestContext = this.createRequestContext(req, server);
+    let route: ProxyRoute | null = null;
+    const startTime = Date.now();
+    let response: Response | null = null;
+
+    try {
+
+      const { route: matchedRoute, handler } = this.getHandler(requestContext);
+      route = matchedRoute;
+      if (route && handler) {
+        // Apply middleware
+        if (middleware) {
+          const middlewareResult = await middleware?.processRequest(requestContext, route);
+          if (middlewareResult) {
+            response = middlewareResult;
+          } else {
+
+            response = await handler(requestContext, server);
           }
-          // Record statistics for unmatched request
-          const responseTime = Date.now() - startTime;
-          this.middleware?.recordRequestStats(requestContext, route, route.path || route.domain || '', responseTime, responseData.status, route.type);
-          return responseData;
+        }
+
+      } else {
+        logger.info(`[BUN ROUTES] ${requestContext.method} ${requestContext.originalUrl} - no handler found`);
+        // No route found, record statistics for unmatched request
+        await sleep(1000 + Math.random() * 1000);
+
+        // Return 404 with 404.jpg image
+        try {
+          const imagePath = path.join(__dirname, '404.jpg');
+          const imageFile = file(imagePath);
+          const imageExists = await imageFile.exists();
+
+          if (imageExists) {
+            return new Response(imageFile.stream(), {
+              status: 404,
+              headers: {
+                'Content-Type': 'image/jpeg',
+                'Cache-Control': 'public, max-age=3600'
+              }
+            });
+          } else {
+            logger.warn(`404.jpg not found at ${imagePath}, returning plain 404`);
+            return new Response('Not Found', { status: 404 });
+          }
+
+        } catch (error) {
+          logger.error('Error loading 404.jpg:', error);
+          return new Response('Not Found', { status: 404 });
         }
       }
-    }
-    logger.info(`[BUN ROUTES] ${requestContext.method} ${requestContext.originalUrl} - no handler found`);
-    // No route found, record statistics for unmatched request
-    const responseTime = Date.now() - startTime;
-    this.middleware?.recordRequestStats(requestContext, { name: 'unmatched' }, '', responseTime, 404, 'unmatched');
-    await sleep(1000 + Math.random() * 1000);
-    
-    // Return 404 with 404.jpg image
-    try {
-      const imagePath = path.join(__dirname, '404.jpg');
-      const imageFile = file(imagePath);
-      const imageExists = await imageFile.exists();
-      
-      if (imageExists) {
-        return new Response(imageFile.stream(), {
-          status: 404,
-          headers: {
-            'Content-Type': 'image/jpeg',
-            'Cache-Control': 'public, max-age=3600'
-          }
-        });
-      } else {
-        logger.warn(`404.jpg not found at ${imagePath}, returning plain 404`);
-        return new Response('Not Found', { status: 404 });
-      }
     } catch (error) {
-      logger.error('Error loading 404.jpg:', error);
-      return new Response('Not Found', { status: 404 });
+      response = this.handleProxyError(error as Error, requestContext, route, true);
     }
-  }
-
-  private extractTargetFromRequest(requestContext: BunRequestContext): string | null {
-    // Extract target from base64 encoded parameter
-    const targetParam = requestContext.query.target;
-    if (targetParam) {
-      try {
-        return atob(targetParam);
-      } catch (error) {
-        logger.error('Failed to decode target parameter', error);
-        return null;
+    finally {
+      const responseTime = Date.now() - startTime;
+      if (response) {
+        response.headers.set('X-Response-Time', responseTime.toString());
+        this.recordRequestStats(requestContext, route, responseTime, response);
+        return response;
       }
+      throw new Error('No response from handler');
     }
-    return null;
   }
 
-  private createMockRequest(requestContext: BunRequestContext): any {
-    // Create a mock Express-like request object
-    return {
-      method: requestContext.method,
-      url: requestContext.url,
-      originalUrl: requestContext.originalUrl,
-      path: requestContext.pathname,
-      headers: requestContext.headers,
-      query: requestContext.query,
-      body: requestContext.body,
-      ip: requestContext.ip,
-      get: (name: string) => requestContext.headers[name.toLowerCase()],
-      on: () => { },
-      pipe: () => { }
-    };
+  private recordRequestStats(requestContext: BunRequestContext, route: ProxyRoute | null, responseTime: number, response: Response) {
+    this.statisticsService.recordRequest(requestContext, route, responseTime, response);
   }
 
-  private createMockResponse(): any {
-    // Create a mock Express-like response object
-    const headers: Record<string, string> = {};
-    let statusCode = 200;
-    let body: any = null;
 
-    return {
-      status: (code: number) => {
-        statusCode = code;
-        return this;
-      },
-      set: (name: string, value: string) => {
-        headers[name] = value;
-        return this;
-      },
-      json: (data: any) => {
-        body = JSON.stringify(data);
-        headers['content-type'] = 'application/json';
-        return this;
-      },
-      send: (data: any) => {
-        body = data;
-        return this;
-      },
-      end: () => { },
-      write: (data: any) => {
-        body = data;
-        return this;
-      },
-      headersSent: false,
-      getHeaders: () => headers,
-      getStatusCode: () => statusCode,
-      getBody: () => body
-    };
-  }
-
-  private createBunResponse(mockRes: any): Response {
-    const headers = mockRes.getHeaders();
-    const status = mockRes.getStatusCode();
-    const body = mockRes.getBody();
-
-    return new Response(body, {
-      status,
-      headers
-    });
-  }
 
   private handleProxyError(
     error: Error,
     requestContext: BunRequestContext,
-    routeIdentifier: string,
-    target: string,
-    route: ProxyRoute,
+    route: ProxyRoute | null,
     logErrors: boolean,
     customErrorResponse?: { code?: string; message?: string }
   ): Response {
     const errorDetails = {
-      routeIdentifier,
-      target,
       error: error.message,
       stack: error.stack
     };
 
     if (logErrors) {
-      logger.error(`Proxy error for ${routeIdentifier}${route.cors ? ' (CORS enabled)' : ''}`, errorDetails);
+      logger.error(`Proxy error for ${route?.name}${route?.cors ? ' (CORS enabled)' : ''} `, errorDetails);
     }
 
     const statusCode = customErrorResponse?.code ? parseInt(customErrorResponse.code) : 502;
     const message = customErrorResponse?.message || 'Bad Gateway';
-
-    // Record statistics for error
-    if (this.middleware) {
-      const requestType = routeIdentifier.includes('cors-forwarder') ? 'cors-forwarder' : 'proxy';
-      this.middleware.recordRequestStats(requestContext, route, target, 0, statusCode, requestType);
-    }
 
     return new Response(JSON.stringify({
       error: 'Proxy Error',

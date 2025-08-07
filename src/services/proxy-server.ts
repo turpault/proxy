@@ -39,11 +39,11 @@ export class ProxyServer {
     this.config = config;
 
     // Initialize statistics service with configuration
-    const tempDir = configService.getSetting<string>('tempDir');
+    const tempDir = configService.getSetting<string>('tempDir') || path.join(process.cwd(), 'data', 'temp');
     this.statisticsService = getStatisticsService();
 
     this.proxyMiddleware = new BunMiddleware(this.config, this.statisticsService);
-    this.proxyRoutes = new BunRoutes(tempDir, this.statisticsService, this.proxyMiddleware);
+    this.proxyRoutes = new BunRoutes(tempDir, this.statisticsService);
     this.proxyCertificates = ProxyCertificates.getInstance(config);
 
     // Set cache expiration from main config if available
@@ -383,7 +383,7 @@ export class ProxyServer {
     }
 
     // Try to handle the request through the routes
-    const routeResponse = await this.proxyRoutes.handleRequest(req, server);
+    const routeResponse = await this.proxyRoutes.handleRequest(req, server, this.proxyMiddleware);
     if (routeResponse) {
       return routeResponse;
     }

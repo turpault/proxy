@@ -3,6 +3,7 @@ import * as path from 'path';
 import { logger } from '../utils/logger';
 import { GeolocationInfo } from './geolocation';
 import { configService } from './config-service';
+import { ProxyRoute, BunRequestContext } from '../types';
 
 export interface RequestStats {
   ip: string;
@@ -307,29 +308,24 @@ export class StatisticsService {
    * Record a request for statistics
    */
   public recordRequest(
-    ip: string,
-    geolocation: GeolocationInfo | null,
-    route: string,
-    method: string,
-    userAgent: string,
+    requestContext: BunRequestContext,
+    route: ProxyRoute | null,
     responseTime?: number,
-    domain?: string,
-    target?: string,
-    requestType: string = 'proxy' // Default to proxy for backward compatibility
+    response?: Response
   ): void {
     if (this.isShuttingDown) return;
 
     const now = new Date();
-    const existing = this.stats.get(ip);
+    const existing = this.stats.get(requestContext.ip);
 
     if (existing) {
       // Update existing stats
       existing.count++;
       existing.lastSeen = now;
-      existing.userAgents.add(userAgent);
-      existing.routes.add(route);
-      existing.methods.add(method);
-      existing.requestTypes.add(requestType);
+      existing.userAgents.add(requestContext.userAgent);
+      existing.routes.add(route?.name || 'unknown');
+      existing.methods.add(requestContext.method);
+      existing.requestTypes.add(route?.type || 'proxy');
 
       if (responseTime !== undefined) {
         existing.responseTimes.push(responseTime);
@@ -339,14 +335,14 @@ export class StatisticsService {
         }
       }
 
-      if (domain && target) {
+      if (route) {
         existing.routeDetails.push({
-          domain,
-          target,
-          method,
+          domain: route.domain,
+          target: route.target || 'unknown',
+          method: requestContext.method,
           responseTime: responseTime || 0,
           timestamp: now,
-          requestType,
+          requestType: route.type || 'proxy',
         });
         // Keep only last 1000 route details
         if (existing.routeDetails.length > 1000) {
@@ -355,24 +351,24 @@ export class StatisticsService {
       }
     } else {
       // Create new stats entry
-      this.stats.set(ip, {
-        ip,
-        geolocation,
+      this.stats.set(requestContext.ip, {
+        ip: requestContext.ip,
+        geolocation: requestContext.geolocation,
         count: 1,
         firstSeen: now,
         lastSeen: now,
-        userAgents: new Set([userAgent]),
-        routes: new Set([route]),
-        methods: new Set([method]),
+        userAgents: new Set([requestContext.userAgent]),
+        routes: new Set([route?.name || 'unknown']),
+        methods: new Set([requestContext.method]),
         responseTimes: responseTime !== undefined ? [responseTime] : [],
-        requestTypes: new Set([requestType]),
-        routeDetails: domain && target ? [{
-          domain,
-          target,
-          method,
+        requestTypes: new Set([route?.type || 'proxy']),
+        routeDetails: route ? [{
+          domain: route.domain,
+          target: route.target || 'unknown',
+          method: requestContext.method,
           responseTime: responseTime || 0,
           timestamp: now,
-          requestType,
+          requestType: route.type || 'proxy',
         }] : [],
       });
     }

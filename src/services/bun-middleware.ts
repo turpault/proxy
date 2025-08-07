@@ -1,31 +1,15 @@
-import { CSPConfig, CSPDirectives, GeolocationFilter, ProxyConfig, ProxyRoute } from '../types';
+import { BunRequestContext, CSPConfig, CSPDirectives, GeolocationFilter, ProxyConfig, ProxyRoute } from '../types';
 import { logger } from '../utils/logger';
-import { geolocationService, GeolocationInfo } from './geolocation';
+import { GeolocationInfo } from './geolocation';
 import { OAuth2Service } from './oauth2';
-import { BunRequest, Server } from 'bun';
+import { StatisticsService } from './statistics';
 
-export interface BunRequestContext {
-  method: string;
-  url: string;
-  pathname: string;
-  headers: Record<string, string>;
-  body: any;
-  query: Record<string, string>;
-  ip: string;
-  originalUrl: string;
-  req: BunRequest;
-  server: Server;
-}
 
 export class BunMiddleware {
-  private config: ProxyConfig;
   private oauth2Service: OAuth2Service;
-  private statisticsService?: any;
 
-  constructor(config: ProxyConfig, statisticsService?: any) {
-    this.config = config;
+  constructor(config: ProxyConfig, statisticsService?: StatisticsService) {
     this.oauth2Service = new OAuth2Service();
-    this.statisticsService = statisticsService;
   }
 
   async processRequest(requestContext: BunRequestContext, route: ProxyRoute): Promise<Response | null> {
@@ -36,7 +20,7 @@ export class BunMiddleware {
     const corsHeaders = this.buildCorsHeaders();
 
     // Apply geolocation filtering
-    const geolocationResult = await this.processGeolocation(requestContext,);
+    const geolocationResult = await this.processGeolocation(requestContext);
     if (geolocationResult) {
       return geolocationResult;
     }
@@ -76,19 +60,14 @@ export class BunMiddleware {
 
   private async processGeolocation(requestContext: BunRequestContext): Promise<Response | null> {
     try {
-      const clientIP = this.getClientIP(requestContext);
-      const geolocation = await geolocationService.getGeolocation(clientIP);
-
-      // Attach geolocation to request context for later use
-      (requestContext as any).geolocation = geolocation;
 
       // Check geolocation filters
       const filter = this.getGeolocationFilterForRequest(requestContext);
-      if (filter && this.shouldBlockRequest(geolocation, filter)) {
-        const locationString = this.formatLocationString(clientIP, geolocation);
+      if (filter && this.shouldBlockRequest(requestContext.geolocation, filter)) {
+        const locationString = this.formatLocationString(requestContext.ip, requestContext.geolocation);
         logger.warn(`[GEOBLOCK] Request blocked from ${locationString}`, {
-          ip: clientIP,
-          geolocation,
+          ip: requestContext.ip,
+          geolocation: requestContext.geolocation,
           filter
         });
 
@@ -143,29 +122,6 @@ export class BunMiddleware {
       logger.error('Error in OAuth2 middleware', error);
       return null; // Continue without OAuth2
     }
-  }
-
-  private getClientIP(requestContext: BunRequestContext): string {
-    const headers = requestContext.headers;
-    const xForwardedFor = headers['x-forwarded-for'];
-    const xRealIP = headers['x-real-ip'];
-    const xClientIP = headers['x-client-ip'];
-
-    if (xForwardedFor) {
-      // X-Forwarded-For can contain multiple IPs, first one is the original client
-      const firstIP = xForwardedFor.split(',')[0];
-      return firstIP ? firstIP.trim() : 'unknown';
-    }
-
-    if (xRealIP) {
-      return xRealIP;
-    }
-
-    if (xClientIP) {
-      return xClientIP;
-    }
-
-    return requestContext.ip || 'unknown';
   }
 
   private getGeolocationFilterForRequest(requestContext: BunRequestContext): GeolocationFilter | null {
@@ -245,44 +201,5 @@ export class BunMiddleware {
     return null;
   }
 
-  /**
-   * Records request statistics for analytics and monitoring
-   */
-  recordRequestStats(
-    requestContext: BunRequestContext,
-    route: any,
-    target: string,
-    responseTime: number,
-    statusCode: number,
-    requestType: string = 'proxy'
-  ): void {
-    if (!this.statisticsService) return;
 
-    const clientIP = this.getClientIP(requestContext);
-    const geolocation = this.getGeolocation(clientIP);
-    const userAgent = requestContext.headers['user-agent'] || 'Unknown';
-
-    this.statisticsService.recordRequest(
-      clientIP,
-      geolocation,
-      requestContext.pathname,
-      requestContext.method,
-      userAgent,
-      responseTime,
-      route?.domain || 'unknown',
-      target,
-      requestType
-    );
-  }
-
-  /**
-   * Gets geolocation for an IP address
-   */
-  private getGeolocation(ip: string): any {
-    try {
-      return geolocationService.getGeolocation(ip);
-    } catch (error) {
-      return null;
-    }
-  }
 } 
