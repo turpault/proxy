@@ -1,8 +1,7 @@
-import axios from 'axios';
+
 import * as crypto from 'crypto';
-import { OAuth2Config, OAuth2TokenResponse, OAuth2Session } from '../types';
+import { OAuth2Config, OAuth2TokenResponse, OAuth2Session, BunRequestContext } from '../types';
 import { logger } from '../utils/logger';
-import { BunRequestContext } from './bun-middleware';
 
 export class OAuth2Service {
   private sessions: Map<string, OAuth2Session> = new Map();
@@ -185,16 +184,21 @@ export class OAuth2Service {
         headers[headerName] = stateConfig.subscriptionKey;
       }
 
-      const tokenResponse = await axios.post<OAuth2TokenResponse>(
-        stateConfig.tokenEndpoint,
-        new URLSearchParams(tokenParams),
-        {
-          headers,
-          timeout: 30000,
-        }
-      );
+      const tokenResponse = await fetch(stateConfig.tokenEndpoint, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(tokenParams),
+        signal: AbortSignal.timeout(30000),
+      });
 
-      const tokens = tokenResponse.data;
+      if (!tokenResponse.ok) {
+        throw new Error(`Token request failed: ${tokenResponse.status} ${tokenResponse.statusText}`);
+      }
+
+      const tokens: OAuth2TokenResponse = await tokenResponse.json();
 
       // Create session
       const session: OAuth2Session = {
@@ -273,16 +277,21 @@ export class OAuth2Service {
         headers[headerName] = config.subscriptionKey;
       }
 
-      const tokenResponse = await axios.post<OAuth2TokenResponse>(
-        config.tokenEndpoint,
-        new URLSearchParams(tokenParams),
-        {
-          headers,
-          timeout: 30000,
-        }
-      );
+      const tokenResponse = await fetch(config.tokenEndpoint, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(tokenParams),
+        signal: AbortSignal.timeout(30000),
+      });
 
-      const tokens = tokenResponse.data;
+      if (!tokenResponse.ok) {
+        throw new Error(`Token refresh failed: ${tokenResponse.status} ${tokenResponse.statusText}`);
+      }
+
+      const tokens: OAuth2TokenResponse = await tokenResponse.json();
 
       // Update session
       const updatedSession: OAuth2Session = {

@@ -5,7 +5,7 @@ import { watch } from 'fs';
 import { logger } from '../utils/logger';
 import { ProcessConfig, ProcessManagementConfig, ProxyConfig } from '../types';
 import { configService } from './config-service';
-import axios from 'axios';
+
 import { ProcessScheduler } from './process-scheduler';
 
 /**
@@ -1188,10 +1188,15 @@ export class ProcessManager {
         }
 
         logger.debug(`Health check request to ${healthUrl}`);
-        const response = await axios.get(healthUrl, {
-          timeout,
-          validateStatus: (status) => status >= 200 && status < 300,
+        const response = await fetch(healthUrl, {
+          method: 'GET',
+          signal: AbortSignal.timeout(timeout),
         });
+
+        // Check if status is in the valid range (axios validateStatus equivalent)
+        if (!(response.status >= 200 && response.status < 300)) {
+          throw new Error(`Health check failed with status ${response.status}`);
+        }
 
         // Reset failure count on successful health check
         managedProcess.healthCheckFailures = 0;
