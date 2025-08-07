@@ -15,7 +15,8 @@ export interface ProxyRequestConfig {
   customErrorResponse?: { code?: string; message?: string };
 }
 
-import { Server, sleep } from 'bun';
+import { Server, sleep, file } from 'bun';
+import path from 'path';
 import { BunMiddleware, BunRequestContext } from './bun-middleware';
 import { geolocationService } from './geolocation';
 
@@ -398,8 +399,30 @@ export class BunRoutes {
     // No route found, record statistics for unmatched request
     const responseTime = Date.now() - startTime;
     this.middleware?.recordRequestStats(requestContext, { name: 'unmatched' }, '', responseTime, 404, 'unmatched');
-    await sleep(1000);
-    return new Response(null, { status: 404 }); // No matching route found
+    await sleep(1000 + Math.random() * 1000);
+    
+    // Return 404 with 404.jpg image
+    try {
+      const imagePath = path.join(__dirname, '404.jpg');
+      const imageFile = file(imagePath);
+      const imageExists = await imageFile.exists();
+      
+      if (imageExists) {
+        return new Response(imageFile.stream(), {
+          status: 404,
+          headers: {
+            'Content-Type': 'image/jpeg',
+            'Cache-Control': 'public, max-age=3600'
+          }
+        });
+      } else {
+        logger.warn(`404.jpg not found at ${imagePath}, returning plain 404`);
+        return new Response('Not Found', { status: 404 });
+      }
+    } catch (error) {
+      logger.error('Error loading 404.jpg:', error);
+      return new Response('Not Found', { status: 404 });
+    }
   }
 
   private extractTargetFromRequest(requestContext: BunRequestContext): string | null {
