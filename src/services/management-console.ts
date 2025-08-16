@@ -38,7 +38,8 @@ import {
   DeleteCacheEntryResponse,
   HealthResponse,
   ApiErrorResponse,
-  ApiSuccessResponse
+  ApiSuccessResponse,
+  LogLine
 } from '../types/shared';
 
 export class ManagementConsole {
@@ -48,6 +49,7 @@ export class ManagementConsole {
   private managementWebSockets: Set<ServerWebSocket<unknown>> = new Set();
   private logWatchers: Map<string, Set<ServerWebSocket<unknown>>> = new Map(); // processId -> Set of WebSocket clients
   private processManager: ProcessManager;
+  private lastLogTimestampMs: Map<string, number> = new Map();
 
   constructor(config: ProxyConfig, processManager: ProcessManager) {
     this.config = config;
@@ -55,6 +57,35 @@ export class ManagementConsole {
 
     // Get the statistics service singleton
     this.statisticsService = getStatisticsService();
+  }
+
+  /**
+   * Ensure log line timestamps are monotonically increasing per process.
+   * Adjusts any non-increasing timestamps by bumping to previous + 1ms.
+   * Updates the per-process cursor to the last emitted timestamp.
+   */
+  private normalizeLogLines(processId: string, lines: LogLine[]): LogLine[] {
+    let previousMs = this.lastLogTimestampMs.get(processId) ?? 0;
+    const normalized: LogLine[] = [];
+
+    for (const entry of lines) {
+      const parsedMs = entry.timestamp ? Date.parse(entry.timestamp) : NaN;
+      let currentMs = Number.isFinite(parsedMs) ? parsedMs : Date.now();
+
+      if (currentMs <= previousMs) {
+        currentMs = previousMs + 1;
+      }
+
+      normalized.push({
+        ...entry,
+        timestamp: new Date(currentMs).toISOString(),
+      });
+
+      previousMs = currentMs;
+    }
+
+    this.lastLogTimestampMs.set(processId, previousMs);
+    return normalized;
   }
 
   async initialize(): Promise<void> {
@@ -1101,7 +1132,7 @@ export class ManagementConsole {
     const rawLogs = await this.processManager.getProcessLogs(processId, lines);
 
     // Transform string logs into LogLine objects
-    return rawLogs.map((logLine: string) => {
+    const transformed: LogLine[] = rawLogs.map((logLine: string) => {
       // Parse log line format: [timestamp] [STREAM] content
       const timestampMatch = logLine.match(/^\[([^\]]+)\]\s+\[(STDOUT|STDERR)\]\s+(.*)$/);
 
@@ -1120,6 +1151,9 @@ export class ManagementConsole {
         };
       }
     });
+
+    // Enforce monotonic timestamps
+    return this.normalizeLogLines(processId, transformed);
   }
 
   async handleProcessConfigUpdate(newConfig: any): Promise<void> {
@@ -1170,7 +1204,7 @@ export class ManagementConsole {
     }
 
     // Transform logs to LogLine format
-    const logLines = newLogs.map((logLine: string) => {
+    const transformed: LogLine[] = newLogs.map((logLine: string) => {
       // Parse log line format: [timestamp] [STREAM] content
       const timestampMatch = logLine.match(/^\[([^\]]+)\]\s+\[(STDOUT|STDERR)\]\s+(.*)$/);
 
@@ -1189,6 +1223,9 @@ export class ManagementConsole {
         };
       }
     });
+
+    // Enforce monotonic timestamps for streaming updates
+    const logLines = this.normalizeLogLines(processId, transformed);
 
     const message = JSON.stringify({
       type: 'logs_update',
