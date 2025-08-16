@@ -90,6 +90,7 @@ export class ManagementConsole {
       hostname: managementHost,
       development: process.env.NODE_ENV !== 'production',
       routes: {
+        "/frontend": managementHtml,
         "/frontend/*": managementHtml,
 
         "/api/status": {
@@ -891,7 +892,7 @@ export class ManagementConsole {
           return new Response('Not Found', { status: 404 });
         },
         "/": (req: Request) => {
-          return Response.redirect(new URL('/frontend', req.url), 302);
+          return Response.redirect(new URL('/frontend/', req.url), 302);
         },
       },
       websocket: {
