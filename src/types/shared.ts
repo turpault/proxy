@@ -389,6 +389,48 @@ export type GetOAuthSessionResponse = OAuthSessionResponse;
 export type LogoutResponse = SuccessResponse;
 
 // ============================================================================
+// AUTHENTICATION API
+// ============================================================================
+
+// Login request type
+export interface LoginRequest {
+  password: string;
+}
+
+// Login response type
+export interface LoginResponse {
+  success: boolean;
+  session?: {
+    id: string;
+    userId: string;
+    createdAt: string;
+    expiresAt: string;
+  };
+  error?: string;
+}
+
+// Logout request type
+export interface LogoutRequest {
+  sessionId: string;
+}
+
+// Logout response type
+export type LogoutResponse = SuccessResponse;
+
+// Session validation response type
+export interface SessionValidationResponse {
+  success: boolean;
+  authenticated: boolean;
+  session?: {
+    id: string;
+    userId: string;
+    createdAt: string;
+    expiresAt: string;
+  };
+  error?: string;
+}
+
+// ============================================================================
 // HEALTH API
 // ============================================================================
 

@@ -6,6 +6,8 @@
 management:
   port: 4481  # Port for the management console web interface
   host: "0.0.0.0"  # Host to bind the management console to
+  adminPassword: "isa"  # Admin password for management console access
+  sessionTimeout: 3600000  # Session timeout in milliseconds (1 hour)
   cors:
     enabled: true
     origin: ["http://localhost:3000", "http://localhost:3001", "https://home.turpault.me"]

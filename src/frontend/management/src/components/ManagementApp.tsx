@@ -10,11 +10,14 @@ import { CacheTab } from './tabs/CacheTab';
 import { ConfigTab } from './tabs/ConfigTab';
 import { NotificationProvider } from './NotificationProvider';
 import { WebSocketProvider } from './WebSocketProvider';
+import { AuthProvider, useAuth } from './AuthProvider';
+import { LoginForm } from './LoginForm';
 import '../styles/global.css';
 
 const ManagementAppContent: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { isAuthenticated, isLoading, login } = useAuth();
 
   // Extract tab from URL path
   const pathSegments = location.pathname.split('/').filter(Boolean);
@@ -31,6 +34,31 @@ const ManagementAppContent: React.FC = () => {
       navigate(tab);
     }
   };
+
+  const handleLoginSuccess = () => {
+    login();
+  };
+
+  const handleLoginError = (error: string) => {
+    console.error('Login error:', error);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="loading-container">
+        <div className="loading-spinner">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <LoginForm
+        onLoginSuccess={handleLoginSuccess}
+        onLoginError={handleLoginError}
+      />
+    );
+  }
 
   return (
     <div className="management-app">
@@ -54,10 +82,12 @@ const ManagementAppContent: React.FC = () => {
 
 export const ManagementApp: React.FC = () => {
   return (
-    <NotificationProvider>
-      <WebSocketProvider>
-        <ManagementAppContent />
-      </WebSocketProvider>
-    </NotificationProvider>
+    <AuthProvider>
+      <NotificationProvider>
+        <WebSocketProvider>
+          <ManagementAppContent />
+        </WebSocketProvider>
+      </NotificationProvider>
+    </AuthProvider>
   );
 }; 

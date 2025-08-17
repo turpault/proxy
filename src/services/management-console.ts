@@ -9,6 +9,8 @@ import { configService } from './config-service';
 import { ProcessManager } from './process-manager';
 import { ProxyCertificates } from './proxy-certificates';
 import { getStatisticsService, StatisticsService } from './statistics';
+import { authService } from './auth-service';
+import { sessionManager } from './session-manager';
 import { stringify as yamlStringify } from 'yaml';
 import * as fs from 'fs-extra';
 import {
@@ -39,7 +41,12 @@ import {
   HealthResponse,
   ApiErrorResponse,
   ApiSuccessResponse,
-  LogLine
+  LogLine,
+  LoginRequest,
+  LoginResponse,
+  LogoutRequest,
+  LogoutResponse,
+  SessionValidationResponse
 } from '../types/shared';
 
 export class ManagementConsole {
@@ -57,6 +64,48 @@ export class ManagementConsole {
 
     // Get the statistics service singleton
     this.statisticsService = getStatisticsService();
+  }
+
+  /**
+   * Extract session ID from request cookies
+   */
+  private getSessionIdFromCookies(req: Request): string | null {
+    const cookieHeader = req.headers.get('cookie');
+    if (!cookieHeader) return null;
+    
+    const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
+      const [key, value] = cookie.trim().split('=');
+      if (key && value) {
+        acc[key] = value;
+      }
+      return acc;
+    }, {} as Record<string, string>);
+    
+    return cookies['sessionId'] || null;
+  }
+
+  /**
+   * Check if request is authenticated
+   */
+  private isAuthenticated(req: Request): boolean {
+    const sessionId = this.getSessionIdFromCookies(req);
+    if (!sessionId) return false;
+    
+    const session = authService.validateSession(sessionId);
+    return session !== null;
+  }
+
+  /**
+   * Create unauthorized response
+   */
+  private createUnauthorizedResponse(): Response {
+    return new Response(JSON.stringify({
+      success: false,
+      error: 'Authentication required'
+    } as ApiErrorResponse), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 
   /**
@@ -91,6 +140,17 @@ export class ManagementConsole {
   async initialize(): Promise<void> {
     logger.info('Initializing management console...');
 
+    // Initialize authentication service
+    const mainConfig = configService.getMainConfig();
+    if (mainConfig?.management?.adminPassword) {
+      authService.initialize(
+        mainConfig.management.adminPassword,
+        mainConfig.management.sessionTimeout
+      );
+      logger.info('Authentication service initialized');
+    } else {
+      logger.warn('No admin password configured, authentication disabled');
+    }
 
     // Set up process update callback
     this.processManager.setProcessUpdateCallback(() => {
@@ -124,8 +184,145 @@ export class ManagementConsole {
         "/frontend": managementHtml,
         "/frontend/*": managementHtml,
 
+        // Authentication endpoints
+        "/api/auth/login": {
+          POST: async (req: Request) => {
+            try {
+              const body = await req.json() as LoginRequest;
+              const ipAddress = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+              const userAgent = req.headers.get('user-agent') || 'unknown';
+
+              const result = authService.login(body.password, ipAddress, userAgent);
+
+              if (result.success && result.session) {
+                const response = new Response(JSON.stringify({
+                  success: true,
+                  session: {
+                    id: result.session.id,
+                    userId: result.session.userId,
+                    createdAt: new Date(result.session.createdAt).toISOString(),
+                    expiresAt: new Date(result.session.expiresAt).toISOString()
+                  }
+                } as LoginResponse), {
+                  status: 200,
+                  headers: { 'Content-Type': 'application/json' }
+                });
+
+                // Set session cookie
+                response.headers.set('Set-Cookie', `sessionId=${result.session.id}; HttpOnly; Path=/; Max-Age=${Math.floor(result.session.expiresAt / 1000)}; SameSite=Strict`);
+
+                return response;
+              } else {
+                return new Response(JSON.stringify({
+                  success: false,
+                  error: result.error || 'Authentication failed'
+                } as LoginResponse), {
+                  status: 401,
+                  headers: { 'Content-Type': 'application/json' }
+                });
+              }
+            } catch (error) {
+              return new Response(JSON.stringify({
+                success: false,
+                error: 'Internal server error'
+              } as LoginResponse), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+        },
+
+        "/api/auth/logout": {
+          POST: async (req: Request) => {
+            try {
+              const sessionId = this.getSessionIdFromCookies(req);
+              if (sessionId) {
+                authService.logout(sessionId);
+              }
+
+              const response = new Response(JSON.stringify({
+                success: true,
+                message: 'Logged out successfully'
+              } as LogoutResponse), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+
+              // Clear session cookie
+              response.headers.set('Set-Cookie', 'sessionId=; HttpOnly; Path=/; Max-Age=0; SameSite=Strict');
+
+              return response;
+            } catch (error) {
+              return new Response(JSON.stringify({
+                success: false,
+                error: 'Internal server error'
+              } as LogoutResponse), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+        },
+
+        "/api/auth/session": {
+          GET: async (req: Request) => {
+            try {
+              const sessionId = this.getSessionIdFromCookies(req);
+              
+              if (!sessionId) {
+                return new Response(JSON.stringify({
+                  success: true,
+                  authenticated: false
+                } as SessionValidationResponse), {
+                  status: 200,
+                  headers: { 'Content-Type': 'application/json' }
+                });
+              }
+
+              const session = authService.validateSession(sessionId);
+              
+              if (session) {
+                return new Response(JSON.stringify({
+                  success: true,
+                  authenticated: true,
+                  session: {
+                    id: session.id,
+                    userId: session.userId,
+                    createdAt: new Date(session.createdAt).toISOString(),
+                    expiresAt: new Date(session.expiresAt).toISOString()
+                  }
+                } as SessionValidationResponse), {
+                  status: 200,
+                  headers: { 'Content-Type': 'application/json' }
+                });
+              } else {
+                return new Response(JSON.stringify({
+                  success: true,
+                  authenticated: false
+                } as SessionValidationResponse), {
+                  status: 200,
+                  headers: { 'Content-Type': 'application/json' }
+                });
+              }
+            } catch (error) {
+              return new Response(JSON.stringify({
+                success: false,
+                error: 'Internal server error'
+              } as SessionValidationResponse), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+        },
+
         "/api/status": {
           GET: async (req: Request) => {
+            if (!this.isAuthenticated(req)) {
+              return this.createUnauthorizedResponse();
+            }
+            
             const status = this.getStatus();
             return new Response(JSON.stringify({ ...status } as StatusResponse), {
               status: 200,
@@ -136,6 +333,10 @@ export class ManagementConsole {
 
         "/api/config": {
           GET: async (req: Request) => {
+            if (!this.isAuthenticated(req)) {
+              return this.createUnauthorizedResponse();
+            }
+            
             const config = this.getConfig();
             return new Response(JSON.stringify({ ...config } as any), {
               status: 200,
@@ -146,6 +347,9 @@ export class ManagementConsole {
 
         "/api/config/:type": {
           GET: async (req: Request) => {
+            if (!this.isAuthenticated(req)) {
+              return this.createUnauthorizedResponse();
+            }
             const url = new URL(req.url);
             const type = url.pathname.split('/')[3];
 
@@ -222,6 +426,9 @@ export class ManagementConsole {
 
         "/api/config/:type/save": {
           POST: async (req: Request) => {
+            if (!this.isAuthenticated(req)) {
+              return this.createUnauthorizedResponse();
+            }
             const url = new URL(req.url);
             const type = url.pathname.split('/')[3];
 
@@ -290,6 +497,9 @@ export class ManagementConsole {
 
         "/api/config/:type/backup": {
           POST: async (req: Request) => {
+            if (!this.isAuthenticated(req)) {
+              return this.createUnauthorizedResponse();
+            }
             const url = new URL(req.url);
             const type = url.pathname.split('/')[3];
             try {
@@ -473,6 +683,9 @@ export class ManagementConsole {
 
         "/api/config/validate": {
           POST: async (req: Request) => {
+            if (!this.isAuthenticated(req)) {
+              return this.createUnauthorizedResponse();
+            }
             try {
               const body = await req.json() as { content?: string; type?: string };
               const content = body?.content;
@@ -535,6 +748,9 @@ export class ManagementConsole {
 
         "/api/statistics": {
           GET: async (req: Request) => {
+            if (!this.isAuthenticated(req)) {
+              return this.createUnauthorizedResponse();
+            }
             const stats = this.statisticsService.getStatsSummary();
             return new Response(JSON.stringify({ success: true, data: stats } as GetStatisticsResponse), {
               status: 200,
@@ -628,6 +844,9 @@ export class ManagementConsole {
 
         "/api/processes": {
           GET: async (req: Request) => {
+            if (!this.isAuthenticated(req)) {
+              return this.createUnauthorizedResponse();
+            }
             const processes = await this.getProcesses();
             return new Response(JSON.stringify({ success: true, data: processes } as GetProcessesResponse), {
               status: 200,
@@ -638,6 +857,9 @@ export class ManagementConsole {
 
         "/api/processes/reload": {
           POST: async (req: Request) => {
+            if (!this.isAuthenticated(req)) {
+              return this.createUnauthorizedResponse();
+            }
             try {
               await configService.reload();
               await this.processManager.startManagedProcesses();
@@ -1002,6 +1224,9 @@ export class ManagementConsole {
 
     // Shutdown process manager
     await this.processManager.shutdown();
+
+    // Save sessions before shutdown
+    sessionManager.shutdown();
 
     logger.info('Management console stopped successfully');
   }

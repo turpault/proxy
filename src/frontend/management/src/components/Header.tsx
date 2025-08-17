@@ -1,16 +1,23 @@
 import React from 'react';
 import { useWebSocket } from './WebSocketProvider';
 import { useNotifications } from './NotificationProvider';
+import { useAuth } from './AuthProvider';
 import { formatLocalTime } from '../utils';
 
 export const Header: React.FC = () => {
   const { isConnected, status } = useWebSocket();
   const { showNotification } = useNotifications();
+  const { logout } = useAuth();
 
   const handleRefresh = () => {
     showNotification('Refreshing data...', 'info');
     // Trigger a refresh by sending a ping message
     // This will be handled by the WebSocket provider
+  };
+
+  const handleLogout = () => {
+    logout();
+    showNotification('Logged out successfully', 'success');
   };
 
   return (
@@ -32,6 +39,9 @@ export const Header: React.FC = () => {
           </div>
           <button className="refresh-btn" onClick={handleRefresh}>
             Refresh
+          </button>
+          <button className="logout-btn" onClick={handleLogout}>
+            Logout
           </button>
         </div>
       </div>

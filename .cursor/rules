@@ -3,3 +3,4 @@
 * Do no commit generated testing scripts, and remove them once the work is completed
 * To check syntax, run bun tsc --noEmit
 * Validate syntax after each change
+* Assume I'm a software engineer, and be more strict on code quality

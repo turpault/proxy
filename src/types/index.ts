@@ -294,6 +294,8 @@ export interface MainConfig {
 export interface ManagementConfig {
   port: number;
   host?: string;
+  adminPassword?: string;
+  sessionTimeout?: number;
   cors?: {
     enabled?: boolean;
     origin?: string | string[];
