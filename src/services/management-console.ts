@@ -72,7 +72,7 @@ export class ManagementConsole {
   private getSessionIdFromCookies(req: Request): string | null {
     const cookieHeader = req.headers.get('cookie');
     if (!cookieHeader) return null;
-    
+
     const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
       const [key, value] = cookie.trim().split('=');
       if (key && value) {
@@ -80,7 +80,7 @@ export class ManagementConsole {
       }
       return acc;
     }, {} as Record<string, string>);
-    
+
     return cookies['sessionId'] || null;
   }
 
@@ -90,7 +90,7 @@ export class ManagementConsole {
   private isAuthenticated(req: Request): boolean {
     const sessionId = this.getSessionIdFromCookies(req);
     if (!sessionId) return false;
-    
+
     const session = authService.validateSession(sessionId);
     return session !== null;
   }
@@ -269,7 +269,7 @@ export class ManagementConsole {
           GET: async (req: Request) => {
             try {
               const sessionId = this.getSessionIdFromCookies(req);
-              
+
               if (!sessionId) {
                 return new Response(JSON.stringify({
                   success: true,
@@ -281,7 +281,7 @@ export class ManagementConsole {
               }
 
               const session = authService.validateSession(sessionId);
-              
+
               if (session) {
                 return new Response(JSON.stringify({
                   success: true,
@@ -322,7 +322,7 @@ export class ManagementConsole {
             if (!this.isAuthenticated(req)) {
               return this.createUnauthorizedResponse();
             }
-            
+
             const status = this.getStatus();
             return new Response(JSON.stringify({ ...status } as StatusResponse), {
               status: 200,
@@ -336,7 +336,7 @@ export class ManagementConsole {
             if (!this.isAuthenticated(req)) {
               return this.createUnauthorizedResponse();
             }
-            
+
             const config = this.getConfig();
             return new Response(JSON.stringify({ ...config } as any), {
               status: 200,

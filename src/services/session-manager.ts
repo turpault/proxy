@@ -1,7 +1,7 @@
 import { randomBytes, createHash } from 'crypto';
 import { logger } from '../utils/logger';
-import * as fs from 'fs-extra';
 import * as path from 'path';
+import { Database } from 'bun:sqlite';
 
 export interface Session {
   id: string;
@@ -20,14 +20,17 @@ export interface SessionData {
 
 export class SessionManager {
   private static instance: SessionManager;
-  private sessions: Map<string, Session> = new Map();
-  private sessionFile: string;
+  private db: Database;
+  private sessionCache: Map<string, Session> = new Map();
+  private cacheAccessOrder: string[] = []; // For LRU eviction
+  private readonly maxCacheSize: number = 100;
   private cleanupInterval: NodeJS.Timeout | null = null;
   private sessionTimeout: number = 3600000; // 1 hour default
 
   private constructor() {
-    this.sessionFile = path.join(process.cwd(), 'data', 'sessions.json');
-    this.loadSessions();
+    const dbPath = path.join(process.cwd(), 'data', 'sessions.db');
+    this.db = new Database(dbPath);
+    this.initializeDatabase();
     this.startCleanupInterval();
   }
 
@@ -42,38 +45,78 @@ export class SessionManager {
     this.sessionTimeout = timeout;
   }
 
-  private async loadSessions(): Promise<void> {
-    try {
-      await fs.ensureDir(path.dirname(this.sessionFile));
-      
-      if (await fs.pathExists(this.sessionFile)) {
-        const data = await fs.readJson(this.sessionFile) as SessionData;
-        
-        // Only load non-expired sessions
-        const now = Date.now();
-        for (const session of data.sessions) {
-          if (session.expiresAt > now) {
-            this.sessions.set(session.id, session);
-          }
-        }
-        
-        logger.info(`Loaded ${this.sessions.size} active sessions from disk`);
+  private updateCacheAccess(sessionId: string): void {
+    // Remove from current position
+    const index = this.cacheAccessOrder.indexOf(sessionId);
+    if (index > -1) {
+      this.cacheAccessOrder.splice(index, 1);
+    }
+    // Add to end (most recently used)
+    this.cacheAccessOrder.push(sessionId);
+  }
+
+  private evictLRU(): void {
+    if (this.sessionCache.size >= this.maxCacheSize) {
+      const lruSessionId = this.cacheAccessOrder.shift();
+      if (lruSessionId) {
+        this.sessionCache.delete(lruSessionId);
+        logger.debug(`Evicted session ${lruSessionId} from cache (LRU)`);
       }
-    } catch (error) {
-      logger.error('Failed to load sessions from disk:', error);
     }
   }
 
-  private async saveSessions(): Promise<void> {
+  private addToCache(session: Session): void {
+    this.evictLRU();
+    this.sessionCache.set(session.id, session);
+    this.updateCacheAccess(session.id);
+  }
+
+  private removeFromCache(sessionId: string): void {
+    this.sessionCache.delete(sessionId);
+    const index = this.cacheAccessOrder.indexOf(sessionId);
+    if (index > -1) {
+      this.cacheAccessOrder.splice(index, 1);
+    }
+  }
+
+  private getFromCache(sessionId: string): Session | null {
+    const session = this.sessionCache.get(sessionId);
+    if (session) {
+      this.updateCacheAccess(sessionId);
+      return session;
+    }
+    return null;
+  }
+
+  private initializeDatabase(): void {
     try {
-      const data: SessionData = {
-        sessions: Array.from(this.sessions.values()),
-        lastCleanup: Date.now()
-      };
-      
-      await fs.writeJson(this.sessionFile, data, { spaces: 2 });
+      // Create sessions table if it doesn't exist
+      this.db.run(`
+        CREATE TABLE IF NOT EXISTS sessions (
+          id TEXT PRIMARY KEY,
+          userId TEXT NOT NULL,
+          createdAt INTEGER NOT NULL,
+          lastActivity INTEGER NOT NULL,
+          expiresAt INTEGER NOT NULL,
+          ipAddress TEXT NOT NULL,
+          userAgent TEXT NOT NULL
+        )
+      `);
+
+      // Create index for faster queries
+      this.db.run(`
+        CREATE INDEX IF NOT EXISTS idx_sessions_expiresAt 
+        ON sessions(expiresAt)
+      `);
+
+      this.db.run(`
+        CREATE INDEX IF NOT EXISTS idx_sessions_userId 
+        ON sessions(userId)
+      `);
+
+      logger.info('Session database initialized');
     } catch (error) {
-      logger.error('Failed to save sessions to disk:', error);
+      logger.error('Failed to initialize session database:', error);
     }
   }
 
@@ -85,19 +128,27 @@ export class SessionManager {
   }
 
   private cleanupExpiredSessions(): void {
-    const now = Date.now();
-    let cleanedCount = 0;
-
-    for (const [sessionId, session] of this.sessions.entries()) {
-      if (session.expiresAt <= now) {
-        this.sessions.delete(sessionId);
-        cleanedCount++;
+    try {
+      const now = Date.now();
+      
+      // Clean up expired sessions from database
+      const stmt = this.db.prepare('DELETE FROM sessions WHERE expiresAt <= ?');
+      const result = stmt.run(now);
+      
+      // Clean up expired sessions from cache
+      let cacheCleanedCount = 0;
+      for (const [sessionId, session] of this.sessionCache.entries()) {
+        if (session.expiresAt <= now) {
+          this.removeFromCache(sessionId);
+          cacheCleanedCount++;
+        }
       }
-    }
-
-    if (cleanedCount > 0) {
-      logger.info(`Cleaned up ${cleanedCount} expired sessions`);
-      this.saveSessions();
+      
+      if (result.changes > 0 || cacheCleanedCount > 0) {
+        logger.info(`Cleaned up ${result.changes} expired sessions from database, ${cacheCleanedCount} from cache`);
+      }
+    } catch (error) {
+      logger.error('Failed to cleanup expired sessions:', error);
     }
   }
 
@@ -115,81 +166,218 @@ export class SessionManager {
       userAgent
     };
 
-    this.sessions.set(sessionId, session);
-    this.saveSessions();
-    
-    logger.info(`Created session ${sessionId} for user ${userId}`);
-    return session;
+    try {
+      const stmt = this.db.prepare(`
+        INSERT INTO sessions (id, userId, createdAt, lastActivity, expiresAt, ipAddress, userAgent)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+      stmt.run(sessionId, userId, now, now, session.expiresAt, ipAddress, userAgent);
+      
+      // Add to cache
+      this.addToCache(session);
+      
+      logger.info(`Created session ${sessionId} for user ${userId}`);
+      return session;
+    } catch (error) {
+      logger.error('Failed to create session:', error);
+      throw error;
+    }
   }
 
   getSession(sessionId: string): Session | null {
-    const session = this.sessions.get(sessionId);
-    
-    if (!session) {
+    try {
+      // First, check cache
+      const cachedSession = this.getFromCache(sessionId);
+      if (cachedSession) {
+        // Check if cached session is expired
+        if (cachedSession.expiresAt <= Date.now()) {
+          this.removeFromCache(sessionId);
+          this.deleteSession(sessionId);
+          return null;
+        }
+
+        // Update last activity and extend session
+        const now = Date.now();
+        const newExpiresAt = now + this.sessionTimeout;
+        
+        const updatedSession: Session = {
+          ...cachedSession,
+          lastActivity: now,
+          expiresAt: newExpiresAt
+        };
+
+        // Update database
+        const updateStmt = this.db.prepare(`
+          UPDATE sessions 
+          SET lastActivity = ?, expiresAt = ? 
+          WHERE id = ?
+        `);
+        updateStmt.run(now, newExpiresAt, sessionId);
+        
+        // Update cache
+        this.addToCache(updatedSession);
+        
+        return updatedSession;
+      }
+
+      // Cache miss - query database
+      const stmt = this.db.prepare('SELECT * FROM sessions WHERE id = ?');
+      const row = stmt.get(sessionId) as any;
+      
+      if (!row) {
+        return null;
+      }
+
+      // Check if session is expired
+      if (row.expiresAt <= Date.now()) {
+        this.deleteSession(sessionId);
+        return null;
+      }
+
+      // Update last activity and extend session
+      const now = Date.now();
+      const newExpiresAt = now + this.sessionTimeout;
+      
+      const updateStmt = this.db.prepare(`
+        UPDATE sessions 
+        SET lastActivity = ?, expiresAt = ? 
+        WHERE id = ?
+      `);
+      updateStmt.run(now, newExpiresAt, sessionId);
+      
+      const session: Session = {
+        id: row.id,
+        userId: row.userId,
+        createdAt: row.createdAt,
+        lastActivity: now,
+        expiresAt: newExpiresAt,
+        ipAddress: row.ipAddress,
+        userAgent: row.userAgent
+      };
+
+      // Add to cache
+      this.addToCache(session);
+      
+      return session;
+    } catch (error) {
+      logger.error('Failed to get session:', error);
       return null;
     }
-
-    // Check if session is expired
-    if (session.expiresAt <= Date.now()) {
-      this.sessions.delete(sessionId);
-      this.saveSessions();
-      return null;
-    }
-
-    // Update last activity and extend session
-    session.lastActivity = Date.now();
-    session.expiresAt = Date.now() + this.sessionTimeout;
-    
-    return session;
   }
 
   updateSessionActivity(sessionId: string): boolean {
-    const session = this.sessions.get(sessionId);
-    
-    if (!session) {
+    try {
+      const now = Date.now();
+      const newExpiresAt = now + this.sessionTimeout;
+      
+      // Update database
+      const stmt = this.db.prepare(`
+        UPDATE sessions 
+        SET lastActivity = ?, expiresAt = ? 
+        WHERE id = ?
+      `);
+      const result = stmt.run(now, newExpiresAt, sessionId);
+      
+      if (result.changes > 0) {
+        // Update cache if session exists in cache
+        const cachedSession = this.sessionCache.get(sessionId);
+        if (cachedSession) {
+          const updatedSession: Session = {
+            ...cachedSession,
+            lastActivity: now,
+            expiresAt: newExpiresAt
+          };
+          this.addToCache(updatedSession);
+        }
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      logger.error('Failed to update session activity:', error);
       return false;
     }
-
-    session.lastActivity = Date.now();
-    session.expiresAt = Date.now() + this.sessionTimeout;
-    this.saveSessions();
-    
-    return true;
   }
 
   deleteSession(sessionId: string): boolean {
-    const deleted = this.sessions.delete(sessionId);
-    if (deleted) {
-      this.saveSessions();
-      logger.info(`Deleted session ${sessionId}`);
+    try {
+      const stmt = this.db.prepare('DELETE FROM sessions WHERE id = ?');
+      const result = stmt.run(sessionId);
+      
+      if (result.changes > 0) {
+        // Remove from cache
+        this.removeFromCache(sessionId);
+        logger.info(`Deleted session ${sessionId}`);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      logger.error('Failed to delete session:', error);
+      return false;
     }
-    return deleted;
   }
 
   deleteAllSessionsForUser(userId: string): number {
-    let deletedCount = 0;
-    
-    for (const [sessionId, session] of this.sessions.entries()) {
-      if (session.userId === userId) {
-        this.sessions.delete(sessionId);
-        deletedCount++;
+    try {
+      // Delete from database
+      const stmt = this.db.prepare('DELETE FROM sessions WHERE userId = ?');
+      const result = stmt.run(userId);
+      
+      if (result.changes > 0) {
+        // Remove from cache
+        for (const [sessionId, session] of this.sessionCache.entries()) {
+          if (session.userId === userId) {
+            this.removeFromCache(sessionId);
+          }
+        }
+        
+        logger.info(`Deleted ${result.changes} sessions for user ${userId}`);
+        return result.changes;
       }
+      
+      return 0;
+    } catch (error) {
+      logger.error('Failed to delete sessions for user:', error);
+      return 0;
     }
-
-    if (deletedCount > 0) {
-      this.saveSessions();
-      logger.info(`Deleted ${deletedCount} sessions for user ${userId}`);
-    }
-
-    return deletedCount;
   }
 
   getActiveSessions(): Session[] {
-    return Array.from(this.sessions.values());
+    try {
+      const stmt = this.db.prepare('SELECT * FROM sessions WHERE expiresAt > ?');
+      const rows = stmt.all(Date.now()) as any[];
+      
+      return rows.map(row => ({
+        id: row.id,
+        userId: row.userId,
+        createdAt: row.createdAt,
+        lastActivity: row.lastActivity,
+        expiresAt: row.expiresAt,
+        ipAddress: row.ipAddress,
+        userAgent: row.userAgent
+      }));
+    } catch (error) {
+      logger.error('Failed to get active sessions:', error);
+      return [];
+    }
   }
 
   getSessionCount(): number {
-    return this.sessions.size;
+    try {
+      const stmt = this.db.prepare('SELECT COUNT(*) as count FROM sessions WHERE expiresAt > ?');
+      const result = stmt.get(Date.now()) as any;
+      return result?.count || 0;
+    } catch (error) {
+      logger.error('Failed to get session count:', error);
+      return 0;
+    }
+  }
+
+  getCacheStats(): { size: number; maxSize: number; hitRate?: number } {
+    return {
+      size: this.sessionCache.size,
+      maxSize: this.maxCacheSize
+    };
   }
 
   shutdown(): void {
@@ -197,7 +385,9 @@ export class SessionManager {
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = null;
     }
-    this.saveSessions();
+    // Clear cache on shutdown
+    this.sessionCache.clear();
+    this.cacheAccessOrder.length = 0;
     logger.info('Session manager shutdown complete');
   }
 }
