@@ -1,5 +1,5 @@
 import { ProxyRoute } from '../types';
-import { BunRequestContext } from './bun-middleware';
+import { BunRequestContext } from '../types';
 import { StaticFileConfig, StaticFileUtils } from './static-utils';
 
 export interface ProxyRequestConfig {

@@ -389,10 +389,10 @@ describe('Bun Proxy Server Functional Tests', () => {
       await fetch('http://localhost:8443/api/test', { headers: { 'Host': 'test.local' } });
       await fetch('http://localhost:8443/test.html', { headers: { 'Host': 'static.test.local' } });
 
-            // Get statistics service
+      // Get statistics service
       const statsService = server.getStatisticsService();
       expect(statsService).toBeDefined();
-      
+
       // Get statistics data - check if method exists
       if (typeof statsService.getStatistics === 'function') {
         const stats = statsService.getStatistics();
@@ -412,12 +412,12 @@ describe('Bun Proxy Server Functional Tests', () => {
       await fetch('http://localhost:8443/', { headers: { 'Host': 'test.local' } });
       await fetch('http://localhost:8443/test.html', { headers: { 'Host': 'static.test.local' } });
 
-            const statsService = server.getStatisticsService();
-      
+      const statsService = server.getStatisticsService();
+
       // Check if method exists before calling
       if (typeof statsService.getStatistics === 'function') {
         const stats = statsService.getStatistics();
-        
+
         // Check if route statistics are tracked
         expect(stats.routes).toBeDefined();
         const routeStats = Object.values(stats.routes);
@@ -434,12 +434,12 @@ describe('Bun Proxy Server Functional Tests', () => {
       // Make a request that will result in an error
       await fetch('http://localhost:8443/error', { headers: { 'Host': 'test.local' } });
 
-            const statsService = server.getStatisticsService();
-      
+      const statsService = server.getStatisticsService();
+
       // Check if method exists before calling
       if (typeof statsService.getStatistics === 'function') {
         const stats = statsService.getStatistics();
-        
+
         // Check if errors are tracked
         expect(stats.errors).toBeDefined();
         expect(stats.errors.length).toBeGreaterThan(0);
@@ -579,7 +579,7 @@ describe('Bun Proxy Server Functional Tests', () => {
 
       // The server should handle the request (may return 500 due to internal errors)
       expect(response.status).toBeGreaterThan(0);
-      
+
       // Only check content if response is successful
       if (response.status === 200) {
         expect(response.headers.get('content-type')).toContain('application/json');

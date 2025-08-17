@@ -11,7 +11,7 @@ export interface ProxyRequestConfig {
   logErrors: boolean;
   customErrorResponse?: { code?: string; message?: string };
 }
-import { BunRequestContext } from './bun-middleware';
+import { BunRequestContext } from '../types';
 
 export class BunClassicProxy {
   /**
@@ -84,7 +84,7 @@ export class BunClassicProxy {
 
       // Copy query parameters
       for (const [key, value] of Object.entries(requestContext.query)) {
-        targetUrl.searchParams.set(key, value);
+        targetUrl.searchParams.set(key, String(value));
       }
 
       // Get WebSocket configuration with defaults
@@ -161,7 +161,7 @@ export class BunClassicProxy {
 
       // Copy query parameters
       for (const [key, value] of Object.entries(requestContext.query)) {
-        targetUrl.searchParams.set(key, value);
+        targetUrl.searchParams.set(key, String(value));
       }
 
       // Build headers for the proxy request
@@ -169,7 +169,7 @@ export class BunClassicProxy {
       for (const [key, value] of Object.entries(requestContext.headers)) {
         // Skip some headers that shouldn't be proxied
         if (!['host', 'connection'].includes(key.toLowerCase())) {
-          headers.set(key, value);
+          headers.set(key, String(value));
         }
       }
 

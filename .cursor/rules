@@ -1,3 +1,5 @@
 * Minimize code duplication
 * Ensure that features are not lost while refactoring
 * Do no commit generated testing scripts, and remove them once the work is completed
+* To check syntax, run bun tsc --noEmit
+* Validate syntax after each change

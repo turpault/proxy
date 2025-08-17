@@ -489,11 +489,11 @@ export class ManagementConsole {
               }
 
               // Import the YAML validator with all validation functions
-              const { 
-                validateYAML, 
-                validateProcessConfigYAML, 
-                validateProxyConfigYAML, 
-                validateMainConfigYAML 
+              const {
+                validateYAML,
+                validateProcessConfigYAML,
+                validateProxyConfigYAML,
+                validateMainConfigYAML
               } = await import('../utils/yaml-validator');
 
               let validationResult;

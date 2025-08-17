@@ -1,7 +1,7 @@
 import path from 'path';
 import { ProxyRoute } from '../types';
 import { logger } from '../utils/logger';
-import { BunRequestContext } from './bun-middleware';
+import { BunRequestContext } from '../types';
 
 export interface StaticFileConfig {
   staticPath: string;
