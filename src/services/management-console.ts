@@ -259,9 +259,16 @@ export class ManagementConsole {
                     headers: { 'Content-Type': 'application/json' }
                   });
               }
+              if (newConfig.createBackup) {
+                const backupDir = path.join(path.dirname(configPath), 'backup');
+                await fs.ensureDir(backupDir);
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const backupFile = path.join(backupDir, `${type}.backup-${timestamp}.yaml`);
+                await fs.copyFile(configPath, backupFile);
+              }
 
+              const yamlContent = yamlStringify(newConfig.content);
               // Convert to YAML and write to file
-              const yamlContent = yamlStringify(newConfig);
               await import('fs-extra').then(fs => fs.writeFile(configPath, yamlContent));
               logger.info(`Config saved for type: ${type} at ${configPath}`);
 
@@ -481,16 +488,29 @@ export class ManagementConsole {
                 });
               }
 
-              // Import the YAML validator
-              const { validateYAML, validateProcessConfigYAML } = await import('../utils/yaml-validator');
+              // Import the YAML validator with all validation functions
+              const { 
+                validateYAML, 
+                validateProcessConfigYAML, 
+                validateProxyConfigYAML, 
+                validateMainConfigYAML 
+              } = await import('../utils/yaml-validator');
 
               let validationResult;
 
-              // Use specific validation for process configs
-              if (type === 'processes') {
-                validationResult = validateProcessConfigYAML(content);
-              } else {
-                validationResult = validateYAML(content);
+              // Use specific validation based on config type
+              switch (type) {
+                case 'processes':
+                  validationResult = validateProcessConfigYAML(content);
+                  break;
+                case 'proxy':
+                  validationResult = validateProxyConfigYAML(content);
+                  break;
+                case 'main':
+                  validationResult = validateMainConfigYAML(content);
+                  break;
+                default:
+                  validationResult = validateYAML(content);
               }
 
               return new Response(JSON.stringify({

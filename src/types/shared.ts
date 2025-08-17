@@ -90,6 +90,16 @@ export interface ValidationStatus {
   warnings: string[];
 }
 
+// Detailed validation result type for configuration validation
+export interface ValidationResult {
+  isValid: boolean;
+  error?: string;
+  line?: number;
+  column?: number;
+  details?: string;
+  suggestions?: string[];
+}
+
 // ============================================================================
 // STATISTICS
 // ============================================================================
@@ -298,7 +308,7 @@ export interface ValidateConfigRequest {
   type?: 'proxy' | 'processes' | 'main';
 }
 
-export type ValidateConfigResponse = DataResponse<ValidationStatus>;
+export type ValidateConfigResponse = DataResponse<ValidationResult>;
 
 // ============================================================================
 // STATISTICS API

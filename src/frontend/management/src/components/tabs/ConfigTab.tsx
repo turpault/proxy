@@ -289,15 +289,20 @@ export const ConfigTab: React.FC = () => {
               </div>
               {!validationResult.isValid && (
                 <div className="validation-details">
-                  <div className="validation-error">{validationResult.error}</div>
+                  <div className="validation-error">
+                    <strong>Error:</strong> {validationResult.error}
+                  </div>
                   {validationResult.line && (
                     <div className="validation-location">
-                      Line {validationResult.line}
+                      <strong>Location:</strong> Line {validationResult.line}
                       {validationResult.column && `, Column ${validationResult.column}`}
                     </div>
                   )}
                   {validationResult.details && (
-                    <div className="validation-message">{validationResult.details}</div>
+                    <div className="validation-message">
+                      <strong>Details:</strong>
+                      <pre className="error-details">{validationResult.details}</pre>
+                    </div>
                   )}
                   {validationResult.suggestions && validationResult.suggestions.length > 0 && (
                     <div className="validation-suggestions">

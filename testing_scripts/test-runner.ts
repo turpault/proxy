@@ -28,49 +28,49 @@ let globalServer: BunProxyServer;
 // Global test setup
 beforeAll(async () => {
   console.log('🚀 Starting Test Runner...');
-  
+
   // Initialize configuration service
   await configService.initialize();
-  
+
   // Create global server instance for tests that need it
   globalServer = new BunProxyServer(TEST_RUNNER_CONFIG);
   await globalServer.initialize();
-  
+
   console.log('✅ Test Runner initialized');
 });
 
 // Global test cleanup
 afterAll(async () => {
   console.log('🧹 Cleaning up Test Runner...');
-  
+
   if (globalServer) {
     await globalServer.stop();
   }
-  
+
   console.log('✅ Test Runner cleanup complete');
 });
 
 // Test runner main function
 async function runTests() {
   console.log('🧪 Running Functional Tests...');
-  
+
   const startTime = Date.now();
-  
+
   try {
     // Run all test suites
     await test('Functional Tests', async () => {
       // This will run all the imported test suites
       expect(true).toBe(true);
     });
-    
+
     const endTime = Date.now();
     const duration = endTime - startTime;
-    
+
     console.log(`✅ All tests completed in ${duration}ms`);
     console.log('📊 Test Summary:');
     console.log(`   - Duration: ${duration}ms`);
     console.log(`   - Status: PASSED`);
-    
+
   } catch (error) {
     console.error('❌ Test execution failed:', error);
     process.exit(1);

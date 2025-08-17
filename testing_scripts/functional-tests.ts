@@ -100,27 +100,27 @@ async function cleanupTestFiles() {
 // Helper function to start a simple test server
 async function startTestServer() {
   const { Server } = await import('bun');
-  
+
   testServer = Bun.serve({
     port: 8080,
     fetch(req) {
       const url = new URL(req.url);
-      
+
       if (url.pathname === '/') {
         return new Response('Test Server Root', { status: 200 });
       }
-      
+
       if (url.pathname === '/api/test') {
         return new Response(JSON.stringify({ message: 'API Test', timestamp: Date.now() }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' }
         });
       }
-      
+
       if (url.pathname === '/error') {
         return new Response('Test Error', { status: 500 });
       }
-      
+
       if (url.pathname === '/slow') {
         return new Promise(resolve => {
           setTimeout(() => {
@@ -128,7 +128,7 @@ async function startTestServer() {
           }, 2000);
         });
       }
-      
+
       return new Response('Not Found', { status: 404 });
     }
   });
@@ -145,13 +145,13 @@ describe('Bun Proxy Server Functional Tests', () => {
   beforeAll(async () => {
     // Create test static files
     await createTestStaticFiles();
-    
+
     // Start test server
     await startTestServer();
-    
+
     // Initialize configuration service
     await configService.initialize();
-    
+
     // Override configuration for testing
     (configService as any).serverConfig = TEST_CONFIG;
     (configService as any).mainConfig = { processes: TEST_PROCESS_CONFIG };
@@ -184,7 +184,7 @@ describe('Bun Proxy Server Functional Tests', () => {
 
     test('should start server successfully', async () => {
       await server.start();
-      
+
       const status = server.getStatus();
       expect(status).toBeDefined();
       expect(status.proxy).toBeDefined();
@@ -195,7 +195,7 @@ describe('Bun Proxy Server Functional Tests', () => {
     test('should stop server gracefully', async () => {
       await server.start();
       await server.stop();
-      
+
       // Server should be stopped without errors
       expect(true).toBe(true);
     });
@@ -210,7 +210,7 @@ describe('Bun Proxy Server Functional Tests', () => {
       const response = await fetch('http://localhost:8443/', {
         headers: { 'Host': 'test.local' }
       });
-      
+
       expect(response.status).toBe(200);
       const text = await response.text();
       expect(text).toContain('Test Server Root');
@@ -220,7 +220,7 @@ describe('Bun Proxy Server Functional Tests', () => {
       const response = await fetch('http://localhost:8443/api/test', {
         headers: { 'Host': 'test.local' }
       });
-      
+
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(data.message).toBe('API Test');
@@ -231,7 +231,7 @@ describe('Bun Proxy Server Functional Tests', () => {
       const response = await fetch('http://localhost:8443/test.html', {
         headers: { 'Host': 'static.test.local' }
       });
-      
+
       expect(response.status).toBe(200);
       const text = await response.text();
       expect(text).toContain('Test Static File');
@@ -241,7 +241,7 @@ describe('Bun Proxy Server Functional Tests', () => {
       const response = await fetch('http://localhost:8443/test.json', {
         headers: { 'Host': 'static.test.local' }
       });
-      
+
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(data.message).toBe('Test JSON');
@@ -252,7 +252,7 @@ describe('Bun Proxy Server Functional Tests', () => {
         headers: { 'Host': 'redirect.test.local' },
         redirect: 'manual'
       });
-      
+
       expect(response.status).toBe(302);
       expect(response.headers.get('location')).toBe('https://example.com');
     });
@@ -261,7 +261,7 @@ describe('Bun Proxy Server Functional Tests', () => {
       const response = await fetch('http://localhost:8443/unknown', {
         headers: { 'Host': 'test.local' }
       });
-      
+
       expect(response.status).toBe(404);
     });
 
@@ -269,7 +269,7 @@ describe('Bun Proxy Server Functional Tests', () => {
       const response = await fetch('http://localhost:8443/error', {
         headers: { 'Host': 'test.local' }
       });
-      
+
       expect(response.status).toBe(500);
     });
 
@@ -279,7 +279,7 @@ describe('Bun Proxy Server Functional Tests', () => {
         headers: { 'Host': 'test.local' }
       });
       const endTime = Date.now();
-      
+
       expect(response.status).toBe(200);
       expect(endTime - startTime).toBeGreaterThan(1000); // Should take at least 1 second
     });
@@ -288,32 +288,32 @@ describe('Bun Proxy Server Functional Tests', () => {
   describe('Process Management', () => {
     test('should list managed processes', async () => {
       await server.start();
-      
+
       const processes = await server.getProcesses();
       expect(Array.isArray(processes)).toBe(true);
       expect(processes.length).toBeGreaterThan(0);
-      
+
       const testProcess = processes.find((p: any) => p.name === 'Test Process');
       expect(testProcess).toBeDefined();
     });
 
     test('should start and stop processes', async () => {
       await server.start();
-      
+
       // Get process manager instance
       const processManager = (server as any).processManager;
-      
+
       // Start a test process
       await processManager.startProcess('test-process');
-      
+
       // Check if process is running
       const processes = await server.getProcesses();
       const testProcess = processes.find((p: any) => p.name === 'Test Process');
       expect(testProcess?.status).toBe('running');
-      
+
       // Stop the process
       await processManager.stopProcess('test-process');
-      
+
       // Check if process is stopped
       const updatedProcesses = await server.getProcesses();
       const stoppedProcess = updatedProcesses.find((p: any) => p.name === 'Test Process');
@@ -322,14 +322,14 @@ describe('Bun Proxy Server Functional Tests', () => {
 
     test('should get process logs', async () => {
       await server.start();
-      
+
       // Start a process that produces output
       const processManager = (server as any).processManager;
       await processManager.startProcess('test-process');
-      
+
       // Wait a bit for process to complete
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       // Get logs
       const logs = await server.getProcessLogs('test-process', 10);
       expect(Array.isArray(logs)).toBe(true);
@@ -337,7 +337,7 @@ describe('Bun Proxy Server Functional Tests', () => {
 
     test('should handle process configuration updates', async () => {
       await server.start();
-      
+
       const newConfig = {
         ...TEST_PROCESS_CONFIG,
         processes: {
@@ -349,9 +349,9 @@ describe('Bun Proxy Server Functional Tests', () => {
           }
         }
       };
-      
+
       await server.handleProcessConfigUpdate(newConfig);
-      
+
       // Verify configuration was updated
       const processes = await server.getProcesses();
       const testProcess = processes.find((p: any) => p.name === 'Test Process');
@@ -362,16 +362,16 @@ describe('Bun Proxy Server Functional Tests', () => {
   describe('Statistics and Monitoring', () => {
     test('should collect request statistics', async () => {
       await server.start();
-      
+
       // Make some requests to generate statistics
       await fetch('http://localhost:8443/', { headers: { 'Host': 'test.local' } });
       await fetch('http://localhost:8443/api/test', { headers: { 'Host': 'test.local' } });
       await fetch('http://localhost:8443/test.html', { headers: { 'Host': 'static.test.local' } });
-      
+
       // Get statistics service
       const statsService = server.getStatisticsService();
       expect(statsService).toBeDefined();
-      
+
       // Get statistics data
       const stats = statsService.getStatistics();
       expect(stats).toBeDefined();
@@ -381,14 +381,14 @@ describe('Bun Proxy Server Functional Tests', () => {
 
     test('should track route-specific statistics', async () => {
       await server.start();
-      
+
       // Make requests to different routes
       await fetch('http://localhost:8443/', { headers: { 'Host': 'test.local' } });
       await fetch('http://localhost:8443/test.html', { headers: { 'Host': 'static.test.local' } });
-      
+
       const statsService = server.getStatisticsService();
       const stats = statsService.getStatistics();
-      
+
       // Check if route statistics are tracked
       expect(stats.routes).toBeDefined();
       const routeStats = Object.values(stats.routes);
@@ -397,13 +397,13 @@ describe('Bun Proxy Server Functional Tests', () => {
 
     test('should track error statistics', async () => {
       await server.start();
-      
+
       // Make a request that will result in an error
       await fetch('http://localhost:8443/error', { headers: { 'Host': 'test.local' } });
-      
+
       const statsService = server.getStatisticsService();
       const stats = statsService.getStatistics();
-      
+
       // Check if errors are tracked
       expect(stats.errors).toBeDefined();
       expect(stats.errors.length).toBeGreaterThan(0);
@@ -421,13 +421,13 @@ describe('Bun Proxy Server Functional Tests', () => {
 
     test('should validate route configuration', async () => {
       const config = server.getConfig();
-      
+
       // Check that all required route properties are present
       config.routes.forEach((route: any) => {
         expect(route.domain).toBeDefined();
         expect(route.path).toBeDefined();
         expect(route.type).toBeDefined();
-        
+
         if (route.type === 'proxy') {
           expect(route.target).toBeDefined();
         } else if (route.type === 'static') {
@@ -449,30 +449,30 @@ describe('Bun Proxy Server Functional Tests', () => {
   describe('Error Handling', () => {
     test('should handle invalid requests gracefully', async () => {
       await server.start();
-      
+
       // Test with malformed request
       const response = await fetch('http://localhost:8443/', {
         method: 'INVALID_METHOD',
         headers: { 'Host': 'test.local' }
       });
-      
+
       expect(response.status).toBe(405); // Method Not Allowed
     });
 
     test('should handle missing host header', async () => {
       await server.start();
-      
+
       const response = await fetch('http://localhost:8443/');
       expect(response.status).toBe(400); // Bad Request
     });
 
     test('should handle unknown domains', async () => {
       await server.start();
-      
+
       const response = await fetch('http://localhost:8443/', {
         headers: { 'Host': 'unknown.domain' }
       });
-      
+
       expect(response.status).toBe(404); // Not Found
     });
   });
@@ -480,10 +480,10 @@ describe('Bun Proxy Server Functional Tests', () => {
   describe('Performance and Load Testing', () => {
     test('should handle multiple concurrent requests', async () => {
       await server.start();
-      
+
       const concurrentRequests = 10;
       const promises = [];
-      
+
       for (let i = 0; i < concurrentRequests; i++) {
         promises.push(
           fetch('http://localhost:8443/', {
@@ -491,9 +491,9 @@ describe('Bun Proxy Server Functional Tests', () => {
           })
         );
       }
-      
+
       const responses = await Promise.all(promises);
-      
+
       // All requests should succeed
       responses.forEach(response => {
         expect(response.status).toBe(200);
@@ -502,19 +502,19 @@ describe('Bun Proxy Server Functional Tests', () => {
 
     test('should handle rapid successive requests', async () => {
       await server.start();
-      
+
       const startTime = Date.now();
-      
+
       for (let i = 0; i < 50; i++) {
         const response = await fetch('http://localhost:8443/', {
           headers: { 'Host': 'test.local' }
         });
         expect(response.status).toBe(200);
       }
-      
+
       const endTime = Date.now();
       const totalTime = endTime - startTime;
-      
+
       // Should complete 50 requests in reasonable time (less than 10 seconds)
       expect(totalTime).toBeLessThan(10000);
     });
@@ -523,7 +523,7 @@ describe('Bun Proxy Server Functional Tests', () => {
   describe('Integration Tests', () => {
     test('should handle full request lifecycle', async () => {
       await server.start();
-      
+
       // Test complete request flow
       const response = await fetch('http://localhost:8443/api/test', {
         method: 'GET',
@@ -533,10 +533,10 @@ describe('Bun Proxy Server Functional Tests', () => {
           'Accept': 'application/json'
         }
       });
-      
+
       expect(response.status).toBe(200);
       expect(response.headers.get('content-type')).toContain('application/json');
-      
+
       const data = await response.json();
       expect(data.message).toBe('API Test');
       expect(data.timestamp).toBeDefined();
@@ -544,7 +544,7 @@ describe('Bun Proxy Server Functional Tests', () => {
 
     test('should maintain session consistency', async () => {
       await server.start();
-      
+
       // Make multiple requests to same endpoint
       const responses = [];
       for (let i = 0; i < 5; i++) {
@@ -553,12 +553,12 @@ describe('Bun Proxy Server Functional Tests', () => {
         });
         responses.push(response);
       }
-      
+
       // All responses should be consistent
       responses.forEach(response => {
         expect(response.status).toBe(200);
       });
-      
+
       // All responses should have JSON content
       for (const response of responses) {
         const data = await response.json();
@@ -597,7 +597,7 @@ describe('Logger Tests', () => {
 
   test('should handle different log levels', () => {
     const testMessage = 'Test message';
-    
+
     expect(() => logger.debug(testMessage)).not.toThrow();
     expect(() => logger.info(testMessage)).not.toThrow();
     expect(() => logger.warn(testMessage)).not.toThrow();
@@ -609,11 +609,11 @@ describe('Logger Tests', () => {
 describe('Test Utilities', () => {
   test('should create and cleanup test files', async () => {
     await createTestStaticFiles();
-    
+
     const fs = await import('fs-extra');
     const exists = await fs.pathExists('./testing_scripts/test-static/test.html');
     expect(exists).toBe(true);
-    
+
     await cleanupTestFiles();
     const existsAfter = await fs.pathExists('./testing_scripts/test-static');
     expect(existsAfter).toBe(false);
@@ -621,13 +621,13 @@ describe('Test Utilities', () => {
 
   test('should start and stop test server', async () => {
     await startTestServer();
-    
+
     // Test that server is running
     const response = await fetch('http://localhost:8080/');
     expect(response.status).toBe(200);
-    
+
     await stopTestServer();
-    
+
     // Server should be stopped
     try {
       await fetch('http://localhost:8080/');

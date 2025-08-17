@@ -350,7 +350,7 @@ export class BunRoutes {
           const imageExists = await imageFile.exists();
 
           if (imageExists) {
-            return new Response(imageFile.stream(), {
+            response = new Response(imageFile.stream(), {
               status: 404,
               headers: {
                 'Content-Type': 'image/jpeg',
@@ -359,12 +359,12 @@ export class BunRoutes {
             });
           } else {
             logger.warn(`404.jpg not found at ${imagePath}, returning plain 404`);
-            return new Response('Not Found', { status: 404 });
+            response = new Response('Not Found', { status: 404 });
           }
 
         } catch (error) {
           logger.error('Error loading 404.jpg:', error);
-          return new Response('Not Found', { status: 404 });
+          response = new Response('Not Found', { status: 404 });
         }
       }
     } catch (error) {

@@ -1071,15 +1071,25 @@ body {
 }
 
 .validation-error {
-  font-weight: 500;
-  margin-bottom: 0.5rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
   color: #e53e3e;
+  font-size: 0.9rem;
+  padding: 0.5rem;
+  background: rgba(229, 62, 62, 0.1);
+  border-radius: 4px;
+  border-left: 3px solid #e53e3e;
 }
 
 .validation-location {
   color: #718096;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.5rem;
+  background: rgba(113, 128, 150, 0.1);
+  border-radius: 3px;
+  display: inline-block;
 }
 
 .validation-message {
@@ -1091,6 +1101,22 @@ body {
   background: rgba(0, 0, 0, 0.05);
   padding: 0.5rem;
   border-radius: 4px;
+}
+
+.error-details {
+  background: #fef5e7;
+  border: 1px solid #fed7aa;
+  border-radius: 4px;
+  padding: 0.75rem;
+  margin-top: 0.5rem;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: #c05621;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  max-height: 200px;
+  overflow-y: auto;
 }
 
 .validation-suggestions {
