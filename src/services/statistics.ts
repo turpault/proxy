@@ -171,7 +171,7 @@ export class StatisticsService {
     try {
       const dbPath = path.join(this.dataDir, 'statistics.db');
       this.db = new Database(dbPath);
-      
+
       // Create tables if they don't exist
       this.db.run(`
         CREATE TABLE IF NOT EXISTS request_stats (
@@ -284,7 +284,7 @@ export class StatisticsService {
         // Insert current stats
         for (const [ip, stat] of this.stats.entries()) {
           const serialized = this.serializeStats(stat);
-          
+
           // Insert main stats
           this.db.run(`
             INSERT INTO request_stats (
@@ -347,7 +347,7 @@ export class StatisticsService {
 
       // Load main stats
       const statsRows = this.db.query('SELECT * FROM request_stats').all() as any[];
-      
+
       this.stats.clear();
 
       for (const row of statsRows) {

@@ -130,11 +130,11 @@ export class SessionManager {
   private cleanupExpiredSessions(): void {
     try {
       const now = Date.now();
-      
+
       // Clean up expired sessions from database
       const stmt = this.db.prepare('DELETE FROM sessions WHERE expiresAt <= ?');
       const result = stmt.run(now);
-      
+
       // Clean up expired sessions from cache
       let cacheCleanedCount = 0;
       for (const [sessionId, session] of this.sessionCache.entries()) {
@@ -143,7 +143,7 @@ export class SessionManager {
           cacheCleanedCount++;
         }
       }
-      
+
       if (result.changes > 0 || cacheCleanedCount > 0) {
         logger.info(`Cleaned up ${result.changes} expired sessions from database, ${cacheCleanedCount} from cache`);
       }
@@ -155,7 +155,7 @@ export class SessionManager {
   createSession(userId: string, ipAddress: string, userAgent: string): Session {
     const sessionId = randomBytes(32).toString('hex');
     const now = Date.now();
-    
+
     const session: Session = {
       id: sessionId,
       userId,
@@ -172,10 +172,10 @@ export class SessionManager {
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `);
       stmt.run(sessionId, userId, now, now, session.expiresAt, ipAddress, userAgent);
-      
+
       // Add to cache
       this.addToCache(session);
-      
+
       logger.info(`Created session ${sessionId} for user ${userId}`);
       return session;
     } catch (error) {
@@ -199,7 +199,7 @@ export class SessionManager {
         // Update last activity and extend session
         const now = Date.now();
         const newExpiresAt = now + this.sessionTimeout;
-        
+
         const updatedSession: Session = {
           ...cachedSession,
           lastActivity: now,
@@ -213,17 +213,17 @@ export class SessionManager {
           WHERE id = ?
         `);
         updateStmt.run(now, newExpiresAt, sessionId);
-        
+
         // Update cache
         this.addToCache(updatedSession);
-        
+
         return updatedSession;
       }
 
       // Cache miss - query database
       const stmt = this.db.prepare('SELECT * FROM sessions WHERE id = ?');
       const row = stmt.get(sessionId) as any;
-      
+
       if (!row) {
         return null;
       }
@@ -237,14 +237,14 @@ export class SessionManager {
       // Update last activity and extend session
       const now = Date.now();
       const newExpiresAt = now + this.sessionTimeout;
-      
+
       const updateStmt = this.db.prepare(`
         UPDATE sessions 
         SET lastActivity = ?, expiresAt = ? 
         WHERE id = ?
       `);
       updateStmt.run(now, newExpiresAt, sessionId);
-      
+
       const session: Session = {
         id: row.id,
         userId: row.userId,
@@ -257,7 +257,7 @@ export class SessionManager {
 
       // Add to cache
       this.addToCache(session);
-      
+
       return session;
     } catch (error) {
       logger.error('Failed to get session:', error);
@@ -269,7 +269,7 @@ export class SessionManager {
     try {
       const now = Date.now();
       const newExpiresAt = now + this.sessionTimeout;
-      
+
       // Update database
       const stmt = this.db.prepare(`
         UPDATE sessions 
@@ -277,7 +277,7 @@ export class SessionManager {
         WHERE id = ?
       `);
       const result = stmt.run(now, newExpiresAt, sessionId);
-      
+
       if (result.changes > 0) {
         // Update cache if session exists in cache
         const cachedSession = this.sessionCache.get(sessionId);
@@ -291,7 +291,7 @@ export class SessionManager {
         }
         return true;
       }
-      
+
       return false;
     } catch (error) {
       logger.error('Failed to update session activity:', error);
@@ -303,7 +303,7 @@ export class SessionManager {
     try {
       const stmt = this.db.prepare('DELETE FROM sessions WHERE id = ?');
       const result = stmt.run(sessionId);
-      
+
       if (result.changes > 0) {
         // Remove from cache
         this.removeFromCache(sessionId);
@@ -322,7 +322,7 @@ export class SessionManager {
       // Delete from database
       const stmt = this.db.prepare('DELETE FROM sessions WHERE userId = ?');
       const result = stmt.run(userId);
-      
+
       if (result.changes > 0) {
         // Remove from cache
         for (const [sessionId, session] of this.sessionCache.entries()) {
@@ -330,11 +330,11 @@ export class SessionManager {
             this.removeFromCache(sessionId);
           }
         }
-        
+
         logger.info(`Deleted ${result.changes} sessions for user ${userId}`);
         return result.changes;
       }
-      
+
       return 0;
     } catch (error) {
       logger.error('Failed to delete sessions for user:', error);
@@ -346,7 +346,7 @@ export class SessionManager {
     try {
       const stmt = this.db.prepare('SELECT * FROM sessions WHERE expiresAt > ?');
       const rows = stmt.all(Date.now()) as any[];
-      
+
       return rows.map(row => ({
         id: row.id,
         userId: row.userId,

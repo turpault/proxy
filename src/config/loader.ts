@@ -159,6 +159,8 @@ export const mainConfigSchema = Joi.object({
   management: Joi.object({
     port: Joi.number().required(),
     host: Joi.string().default('0.0.0.0'),
+    adminPassword: Joi.string().optional(),
+    sessionTimeout: Joi.number().default(3600000), // 1 hour in milliseconds
     cors: Joi.object({
       enabled: Joi.boolean().default(true),
       origin: Joi.alternatives().try(Joi.string(), Joi.array().items(Joi.string())).optional(),
