@@ -1,10 +1,39 @@
-# Environment Variable Support
+# Environment Variables
 
-The process manager provides comprehensive environment variable support for managed processes, including substitution, validation, and security features.
+The Advanced Reverse Proxy Server provides comprehensive environment variable support for configuration, process management, and runtime customization.
 
-## Basic Environment Variables
+## 🔧 Configuration Environment Variables
 
-### Simple Environment Variable Assignment
+### Main Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MAIN_CONFIG_FILE` | Path to main configuration file | `./config/main.yaml` |
+| `CONFIG_FILE` | Path to legacy configuration file | `./config/proxy.yaml` |
+| `DISABLE_CONFIG_WATCH` | Disable configuration file watching | `false` |
+
+### Management Console
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MANAGEMENT_PORT` | Management console port | `4481` |
+| `MANAGEMENT_HOST` | Management console host | `0.0.0.0` |
+
+### Directory Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DATA_DIR` | Base data directory | `./data` |
+| `LOGS_DIR` | Log files directory | `./logs` |
+| `CERTIFICATES_DIR` | SSL certificates directory | `./certificates` |
+| `TEMP_DIR` | Temporary files directory | `./data/temp` |
+| `STATS_DIR` | Statistics data directory | `./data/statistics` |
+| `CACHE_DIR` | Cache files directory | `./data/cache` |
+| `BACKUP_DIR` | Configuration backups directory | `./config/backup` |
+
+## 🔄 Process Environment Variables
+
+### Basic Environment Variable Assignment
 
 ```yaml
 processes:
