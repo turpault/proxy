@@ -5,15 +5,8 @@ import { logger } from '../src/utils/logger';
 
 // Test configuration
 const TEST_CONFIG = {
-  server: {
-    port: 8443,
-    host: 'localhost',
-    ssl: {
-      enabled: true,
-      cert: './certificates/test-cert.pem',
-      key: './certificates/test-key.pem'
-    }
-  },
+  port: 8443,
+  httpsPort: 8443,
   routes: [
     {
       name: 'test-proxy',
@@ -21,14 +14,14 @@ const TEST_CONFIG = {
       target: 'http://localhost:8080',
       ssl: true,
       path: '/',
-      type: 'proxy'
+      type: 'proxy' as const
     },
     {
       name: 'test-static',
       domain: 'static.test.local',
       ssl: true,
       path: '/',
-      type: 'static',
+      type: 'static' as const,
       staticPath: './test-static'
     },
     {
@@ -36,25 +29,55 @@ const TEST_CONFIG = {
       domain: 'redirect.test.local',
       ssl: true,
       path: '/',
-      type: 'redirect',
+      type: 'redirect' as const,
       redirectTo: 'https://example.com'
     }
   ],
+  letsEncrypt: {
+    email: 'test@example.com',
+    staging: true,
+    certDir: './certificates'
+  },
   security: {
-    rateLimit: {
-      enabled: true,
-      windowMs: 60000,
-      maxRequests: 100
-    },
-    geolocation: {
-      enabled: true,
-      allowedCountries: ['US', 'CA'],
-      blockedCountries: ['XX']
-    }
+    rateLimitWindowMs: 60000,
+    rateLimitMaxRequests: 100
   }
 };
 
 const TEST_PROCESS_CONFIG = {
+  management: {
+    port: 4481,
+    host: 'localhost',
+    cors: {
+      enabled: true,
+      origin: ['http://localhost:3000'],
+      credentials: true
+    }
+  },
+  config: {
+    proxy: './config/proxy.yaml',
+    processes: './config/processes.yaml'
+  },
+  settings: {
+    dataDir: './data',
+    logsDir: './logs',
+    certificatesDir: './certificates',
+    tempDir: './data/temp',
+    statsDir: './data/statistics',
+    cacheDir: './data/cache',
+    backupDir: './config/backup',
+    statistics: {
+      enabled: true,
+      backupInterval: 86400000,
+      retentionDays: 30
+    },
+    cache: {
+      enabled: true,
+      maxAge: 86400000,
+      maxSize: '100MB',
+      cleanupInterval: 3600000
+    }
+  },
   processes: {
     'test-process': {
       name: 'Test Process',
@@ -99,8 +122,6 @@ async function cleanupTestFiles() {
 
 // Helper function to start a simple test server
 async function startTestServer() {
-  const { Server } = await import('bun');
-
   testServer = Bun.serve({
     port: 8080,
     fetch(req) {
@@ -122,7 +143,7 @@ async function startTestServer() {
       }
 
       if (url.pathname === '/slow') {
-        return new Promise(resolve => {
+        return new Promise<Response>(resolve => {
           setTimeout(() => {
             resolve(new Response('Slow Response', { status: 200 }));
           }, 2000);
@@ -165,7 +186,7 @@ describe('Bun Proxy Server Functional Tests', () => {
 
   beforeEach(async () => {
     // Create new server instance for each test
-    server = new BunProxyServer(TEST_CONFIG, { processes: TEST_PROCESS_CONFIG });
+    server = new BunProxyServer(TEST_CONFIG, TEST_PROCESS_CONFIG);
     await server.initialize();
   });
 
@@ -441,8 +462,8 @@ describe('Bun Proxy Server Functional Tests', () => {
     test('should handle security configuration', async () => {
       const config = server.getConfig();
       expect(config.security).toBeDefined();
-      expect(config.security.rateLimit).toBeDefined();
-      expect(config.security.geolocation).toBeDefined();
+      expect(config.security?.rateLimitWindowMs).toBeDefined();
+      expect(config.security?.rateLimitMaxRequests).toBeDefined();
     });
   });
 
