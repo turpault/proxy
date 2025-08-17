@@ -437,12 +437,19 @@ export class ManagementConsole {
               const newConfig = await req.json() as ConfigSaveRequest;
               let configPath: string;
 
+
               switch (type) {
                 case 'proxy':
                   const mainConfigSaveProxy = configService.getMainConfig();
                   if (!mainConfigSaveProxy) {
                     return new Response(JSON.stringify({ success: false, error: 'Main configuration not available' } as ApiErrorResponse), {
                       status: 500,
+                      headers: { 'Content-Type': 'application/json' }
+                    });
+                  }
+                  if (!validateProxyConfigYAML(newConfig.content).isValid) {
+                    return new Response(JSON.stringify({ success: false, error: 'Invalid proxy configuration' } as ApiErrorResponse), {
+                      status: 400,
                       headers: { 'Content-Type': 'application/json' }
                     });
                   }
@@ -456,9 +463,21 @@ export class ManagementConsole {
                       headers: { 'Content-Type': 'application/json' }
                     });
                   }
+                  if (!validateProcessConfigYAML(newConfig.content).isValid) {
+                    return new Response(JSON.stringify({ success: false, error: 'Invalid process configuration' } as ApiErrorResponse), {
+                      status: 400,
+                      headers: { 'Content-Type': 'application/json' }
+                    });
+                  }
                   configPath = mainConfigSaveProcesses.config.processes;
                   break;
                 case 'main':
+                  if (!validateMainConfigYAML(newConfig.content).isValid) {
+                    return new Response(JSON.stringify({ success: false, error: 'Invalid main configuration' } as ApiErrorResponse), {
+                      status: 400,
+                      headers: { 'Content-Type': 'application/json' }
+                    });
+                  }
                   configPath = configService.getMainConfigPath();
                   break;
                 default:
@@ -476,15 +495,8 @@ export class ManagementConsole {
               }
 
               const yamlContent = yamlStringify(newConfig.content);
-              // Validate the YAML content
-              const validationResult = validateYAML(yamlContent);
-              if (!validationResult.isValid) {
-                return new Response(JSON.stringify({ success: false, error: 'Invalid YAML content' } as ApiErrorResponse), {
-                  status: 400,
-                  headers: { 'Content-Type': 'application/json' }
-                });
-              }
-              
+
+
 
               // Convert to YAML and write to file
               await fs.writeFile(configPath, yamlContent);

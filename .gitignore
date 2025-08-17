@@ -138,3 +138,4 @@ config/main.yaml
 data/cache/
 config/backup/
 data/statistics/
+data/*.db
