@@ -28,7 +28,7 @@ export class SessionManager {
   private sessionTimeout: number = 3600000; // 1 hour default
 
   private constructor() {
-    const dbPath = path.join(process.cwd(), 'data', 'sessions.db');
+    const dbPath = path.join(process.cwd(), 'data', 'sessions.sqlite');
     this.db = new Database(dbPath);
     this.initializeDatabase();
     this.startCleanupInterval();

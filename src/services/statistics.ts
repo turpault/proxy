@@ -169,7 +169,7 @@ export class StatisticsService {
    */
   private initializeDatabase(): void {
     try {
-      const dbPath = path.join(this.dataDir, 'statistics.db');
+      const dbPath = path.join(this.dataDir, 'statistics.sqlite');
       this.db = new Database(dbPath);
 
       // Create tables if they don't exist
@@ -833,7 +833,7 @@ export class StatisticsService {
 
     // Try to get database file info
     try {
-      const dbFile = path.join(this.dataDir, 'statistics.db');
+      const dbFile = path.join(this.dataDir, 'statistics.sqlite');
       if (fs.existsSync(dbFile)) {
         const stats = fs.statSync(dbFile);
         summary.lastSaved = stats.mtime.toISOString();
