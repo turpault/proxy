@@ -1,5 +1,6 @@
 import * as fs from 'fs-extra';
 import * as path from 'path';
+import { Database } from 'bun:sqlite';
 import { logger } from '../utils/logger';
 import { GeolocationInfo } from './geolocation';
 import { configService } from './config-service';
@@ -133,6 +134,7 @@ export class StatisticsService {
   private dataDir: string;
   private isShuttingDown = false;
   private saveInterval: NodeJS.Timeout | null = null;
+  private db!: Database; // SQLite database instance
 
   constructor() {
     // Get directories from configService
@@ -142,6 +144,7 @@ export class StatisticsService {
 
     this.ensureReportDirectory();
     this.ensureDataDirectory();
+    this.initializeDatabase();
     this.loadPersistedStats();
     this.startPeriodicReporting();
     this.startPeriodicSaving();
@@ -159,6 +162,59 @@ export class StatisticsService {
       StatisticsService.instance = new StatisticsService();
     }
     return StatisticsService.instance;
+  }
+
+  /**
+   * Initialize SQLite database
+   */
+  private initializeDatabase(): void {
+    try {
+      const dbPath = path.join(this.dataDir, 'statistics.db');
+      this.db = new Database(dbPath);
+      
+      // Create tables if they don't exist
+      this.db.run(`
+        CREATE TABLE IF NOT EXISTS request_stats (
+          ip TEXT PRIMARY KEY,
+          geolocation_json TEXT,
+          count INTEGER DEFAULT 0,
+          first_seen TEXT NOT NULL,
+          last_seen TEXT NOT NULL,
+          user_agents_json TEXT,
+          routes_json TEXT,
+          methods_json TEXT,
+          response_times_json TEXT,
+          request_types_json TEXT,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now'))
+        )
+      `);
+
+      this.db.run(`
+        CREATE TABLE IF NOT EXISTS route_details (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          ip TEXT NOT NULL,
+          domain TEXT NOT NULL,
+          target TEXT NOT NULL,
+          method TEXT NOT NULL,
+          response_time REAL DEFAULT 0,
+          timestamp TEXT NOT NULL,
+          request_type TEXT DEFAULT 'proxy',
+          created_at TEXT DEFAULT (datetime('now')),
+          FOREIGN KEY (ip) REFERENCES request_stats(ip) ON DELETE CASCADE
+        )
+      `);
+
+      // Create indexes for better performance
+      this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_details_ip ON route_details(ip)`);
+      this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_details_timestamp ON route_details(timestamp)`);
+      this.db.run(`CREATE INDEX IF NOT EXISTS idx_request_stats_last_seen ON request_stats(last_seen)`);
+
+      logger.info(`SQLite database initialized: ${dbPath}`);
+    } catch (error) {
+      logger.error('Failed to initialize SQLite database:', error);
+      throw error;
+    }
   }
 
   /**
@@ -208,50 +264,128 @@ export class StatisticsService {
   }
 
   /**
-   * Save current statistics to disk
+   * Save current statistics to SQLite database
    */
   private async saveStats(): Promise<void> {
     try {
-      const statsData: SerializableRequestStats[] = Array.from(this.stats.values()).map(stat =>
-        this.serializeStats(stat)
-      );
+      if (!this.db) {
+        logger.error('Database not initialized');
+        return;
+      }
 
-      const dataFile = path.join(this.dataDir, 'current-stats.json');
-      await fs.writeJson(dataFile, {
-        timestamp: new Date().toISOString(),
-        stats: statsData,
-        totalEntries: statsData.length
-      }, { spaces: 2 });
+      // Begin transaction for better performance
+      this.db.run('BEGIN TRANSACTION');
 
-      logger.debug(`Statistics saved: ${statsData.length} entries`);
+      try {
+        // Clear existing data
+        this.db.run('DELETE FROM route_details');
+        this.db.run('DELETE FROM request_stats');
+
+        // Insert current stats
+        for (const [ip, stat] of this.stats.entries()) {
+          const serialized = this.serializeStats(stat);
+          
+          // Insert main stats
+          this.db.run(`
+            INSERT INTO request_stats (
+              ip, geolocation_json, count, first_seen, last_seen,
+              user_agents_json, routes_json, methods_json, response_times_json, request_types_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `, [
+            ip,
+            JSON.stringify(serialized.geolocation),
+            serialized.count,
+            serialized.firstSeen,
+            serialized.lastSeen,
+            JSON.stringify(serialized.userAgents),
+            JSON.stringify(serialized.routes),
+            JSON.stringify(serialized.methods),
+            JSON.stringify(serialized.responseTimes),
+            JSON.stringify(serialized.requestTypes)
+          ]);
+
+          // Insert route details
+          for (const detail of serialized.routeDetails) {
+            this.db.run(`
+              INSERT INTO route_details (
+                ip, domain, target, method, response_time, timestamp, request_type
+              ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            `, [
+              ip,
+              detail.domain,
+              detail.target,
+              detail.method,
+              detail.responseTime,
+              detail.timestamp,
+              detail.requestType
+            ]);
+          }
+        }
+
+        // Commit transaction
+        this.db.run('COMMIT');
+        logger.debug(`Statistics saved to SQLite: ${this.stats.size} entries`);
+      } catch (error) {
+        // Rollback on error
+        this.db.run('ROLLBACK');
+        throw error;
+      }
     } catch (error) {
-      logger.error('Failed to save statistics:', error);
+      logger.error('Failed to save statistics to SQLite:', error);
     }
   }
 
   /**
-   * Load persisted statistics from disk
+   * Load persisted statistics from SQLite database
    */
   private async loadPersistedStats(): Promise<void> {
     try {
-      const dataFile = path.join(this.dataDir, 'current-stats.json');
-
-      if (await fs.pathExists(dataFile)) {
-        const data = await fs.readJson(dataFile);
-
-        if (data.stats && Array.isArray(data.stats)) {
-          this.stats.clear();
-
-          data.stats.forEach((serializedStat: SerializableRequestStats) => {
-            const stat = this.deserializeStats(serializedStat);
-            this.stats.set(stat.ip, stat);
-          });
-
-          logger.info(`Statistics loaded: ${data.stats.length} entries from ${data.timestamp}`);
-        }
+      if (!this.db) {
+        logger.error('Database not initialized');
+        return;
       }
+
+      // Load main stats
+      const statsRows = this.db.query('SELECT * FROM request_stats').all() as any[];
+      
+      this.stats.clear();
+
+      for (const row of statsRows) {
+        // Load route details for this IP
+        const routeDetailsRows = this.db.query(
+          'SELECT * FROM route_details WHERE ip = ? ORDER BY timestamp'
+        ).all(row.ip) as any[];
+
+        const routeDetails = routeDetailsRows.map((detailRow: any) => ({
+          domain: detailRow.domain,
+          target: detailRow.target,
+          method: detailRow.method,
+          responseTime: detailRow.response_time,
+          timestamp: new Date(detailRow.timestamp),
+          requestType: detailRow.request_type
+        }));
+
+        // Reconstruct RequestStats object
+        const stat: RequestStats = {
+          ip: row.ip,
+          geolocation: row.geolocation_json ? JSON.parse(row.geolocation_json) : null,
+          count: row.count,
+          firstSeen: new Date(row.first_seen),
+          lastSeen: new Date(row.last_seen),
+          userAgents: new Set(JSON.parse(row.user_agents_json || '[]')),
+          routes: new Set(JSON.parse(row.routes_json || '[]')),
+          methods: new Set(JSON.parse(row.methods_json || '[]')),
+          responseTimes: JSON.parse(row.response_times_json || '[]'),
+          requestTypes: new Set(JSON.parse(row.request_types_json || '[]')),
+          routeDetails
+        };
+
+        this.stats.set(row.ip, stat);
+      }
+
+      logger.info(`Statistics loaded from SQLite: ${this.stats.size} entries`);
     } catch (error) {
-      logger.error('Failed to load persisted statistics:', error);
+      logger.error('Failed to load persisted statistics from SQLite:', error);
     }
   }
 
@@ -284,20 +418,29 @@ export class StatisticsService {
    */
   private async cleanupOldStats(): Promise<void> {
     try {
-      const now = new Date();
-      const cutoffDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000); // 90 days ago
-
-      let cleanedCount = 0;
-      for (const [ip, stat] of this.stats.entries()) {
-        if (stat.lastSeen < cutoffDate) {
-          this.stats.delete(ip);
-          cleanedCount++;
-        }
+      if (!this.db) {
+        logger.error('Database not initialized');
+        return;
       }
 
-      if (cleanedCount > 0) {
-        logger.info(`Cleaned up ${cleanedCount} old statistics entries`);
-        await this.saveStats();
+      const cutoffDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000); // 90 days ago
+      const cutoffISO = cutoffDate.toISOString();
+
+      // Delete old route details first (due to foreign key constraint)
+      const deletedDetails = this.db.query(
+        'DELETE FROM route_details WHERE timestamp < ?'
+      ).run(cutoffISO).changes;
+
+      // Delete old main stats
+      const deletedStats = this.db.query(
+        'DELETE FROM request_stats WHERE last_seen < ?'
+      ).run(cutoffISO).changes;
+
+      // Reload stats from database to sync memory
+      await this.loadPersistedStats();
+
+      if (deletedStats > 0 || deletedDetails > 0) {
+        logger.info(`Cleaned up ${deletedStats} old statistics entries and ${deletedDetails} route details`);
       }
     } catch (error) {
       logger.error('Failed to cleanup old statistics:', error);
@@ -688,11 +831,11 @@ export class StatisticsService {
       cacheSize: this.stats.size,
     };
 
-    // Try to get file info
+    // Try to get database file info
     try {
-      const dataFile = path.join(this.dataDir, 'current-stats.json');
-      if (fs.existsSync(dataFile)) {
-        const stats = fs.statSync(dataFile);
+      const dbFile = path.join(this.dataDir, 'statistics.db');
+      if (fs.existsSync(dbFile)) {
+        const stats = fs.statSync(dbFile);
         summary.lastSaved = stats.mtime.toISOString();
         summary.dataFileSize = stats.size;
       }
@@ -724,6 +867,11 @@ export class StatisticsService {
 
     // Generate final report
     await this.generateAndSaveReport();
+
+    // Close database connection
+    if (this.db) {
+      this.db.close();
+    }
 
     logger.info('Statistics service shutdown complete');
   }
