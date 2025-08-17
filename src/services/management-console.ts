@@ -9,8 +9,8 @@ import { configService } from './config-service';
 import { ProcessManager } from './process-manager';
 import { ProxyCertificates } from './proxy-certificates';
 import { getStatisticsService, StatisticsService } from './statistics';
-import { authService } from './auth-service';
-import { sessionManager } from './session-manager';
+import { authService } from './local-admin-auth-service';
+import { sessionManager, SessionManager } from './session-manager';
 import { stringify as yamlStringify } from 'yaml';
 import * as fs from 'fs-extra';
 import {
@@ -496,8 +496,7 @@ export class ManagementConsole {
 
               const yamlContent = yamlStringify(newConfig.content);
 
-
-
+              debugger;
               // Convert to YAML and write to file
               await fs.writeFile(configPath, yamlContent);
               logger.info(`Config saved for type: ${type} at ${configPath}`);
@@ -1243,7 +1242,7 @@ export class ManagementConsole {
     await this.processManager.shutdown();
 
     // Save sessions before shutdown
-    sessionManager.shutdown();
+    SessionManager.shutdownAll();
 
     logger.info('Management console stopped successfully');
   }

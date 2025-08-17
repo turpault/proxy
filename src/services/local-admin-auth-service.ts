@@ -16,18 +16,18 @@ export interface LogoutRequest {
   sessionId: string;
 }
 
-export class AuthService {
-  private static instance: AuthService;
+export class LocalAdminAuthService {
+  private static instance: LocalAdminAuthService;
   private adminPassword: string = '';
   private sessionTimeout: number = 3600000; // 1 hour default
 
-  private constructor() {}
+  private constructor() { }
 
-  static getInstance(): AuthService {
-    if (!AuthService.instance) {
-      AuthService.instance = new AuthService();
+  static getInstance(): LocalAdminAuthService {
+    if (!LocalAdminAuthService.instance) {
+      LocalAdminAuthService.instance = new LocalAdminAuthService();
     }
-    return AuthService.instance;
+    return LocalAdminAuthService.instance;
   }
 
   initialize(adminPassword: string, sessionTimeout?: number): void {
@@ -68,9 +68,9 @@ export class AuthService {
 
       // Create a new session
       const session = sessionManager.createSession('admin', ipAddress, userAgent);
-      
+
       logger.info(`Successful login from ${ipAddress}`);
-      
+
       return {
         success: true,
         session
@@ -129,4 +129,4 @@ export class AuthService {
 }
 
 // Export a singleton instance
-export const authService = AuthService.getInstance();
+export const authService = LocalAdminAuthService.getInstance();

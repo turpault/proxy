@@ -1,0 +1,154 @@
+# Domain-Specific Sessions Example Configuration
+# This example demonstrates how to use route-specific session management
+
+port: 80
+httpsPort: 443
+managementPort: 4481
+
+# Let's Encrypt configuration
+letsEncrypt:
+  email: "admin@example.com"
+  staging: false
+  certDir: "./certificates"
+
+# Routes configuration with domain-specific sessions
+routes:
+  # Example 1: Management console (uses "_management_" domain)
+  # The management console automatically uses the "_management_" session domain
+  - domain: "admin.example.com"
+    type: "static"
+    path: "/admin"
+    staticPath: "/var/www/admin-panel"
+    ssl: true
+    requireAuth: true
+    # No OAuth2 config needed - uses management session manager
+
+  # Example 2: Route with default session domain (uses route domain)
+  - domain: "app1.example.com"
+    type: "static"
+    path: "/app1"
+    staticPath: "/var/www/app1/build"
+    spaFallback: true
+    ssl: true
+    requireAuth: true
+    oauth2:
+      enabled: true
+      provider: "google"
+      clientId: "${GOOGLE_CLIENT_ID}"
+      clientSecret: "${GOOGLE_CLIENT_SECRET}"
+      authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth"
+      tokenEndpoint: "https://oauth2.googleapis.com/token"
+      callbackUrl: "https://app1.example.com/app1/oauth/callback"
+      scopes: ["openid", "profile", "email"]
+      # No sessionDomain specified - uses "app1.example.com" as session domain
+    publicPaths:
+      - "/oauth/callback"
+      - "/oauth/session"
+      - "/oauth/logout"
+      - "/login"
+      - "/static"
+
+  # Example 3: Route with custom session domain
+  - domain: "app2.example.com"
+    type: "proxy"
+    path: "/app2"
+    target: "http://localhost:3001"
+    ssl: true
+    requireAuth: true
+    oauth2:
+      enabled: true
+      provider: "github"
+      clientId: "${GITHUB_CLIENT_ID}"
+      clientSecret: "${GITHUB_CLIENT_SECRET}"
+      authorizationEndpoint: "https://github.com/login/oauth/authorize"
+      tokenEndpoint: "https://github.com/login/oauth/access_token"
+      callbackUrl: "https://app2.example.com/app2/oauth/callback"
+      scopes: ["read:user", "user:email"]
+      sessionDomain: "custom-session-domain"  # Custom session domain
+    publicPaths:
+      - "/oauth/callback"
+      - "/oauth/session"
+      - "/oauth/logout"
+      - "/health"
+
+  # Example 4: Multiple routes sharing the same session domain
+  - domain: "api.example.com"
+    type: "proxy"
+    path: "/api/v1"
+    target: "http://localhost:3002"
+    ssl: true
+    requireAuth: true
+    oauth2:
+      enabled: true
+      provider: "microsoft"
+      clientId: "${MS_CLIENT_ID}"
+      clientSecret: "${MS_CLIENT_SECRET}"
+      authorizationEndpoint: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
+      tokenEndpoint: "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+      callbackUrl: "https://api.example.com/api/v1/oauth/callback"
+      scopes: ["openid", "profile", "email"]
+      sessionDomain: "shared-api-sessions"  # Shared session domain
+    publicPaths:
+      - "/oauth/callback"
+      - "/oauth/session"
+      - "/health"
+      - "/docs"
+
+  - domain: "api.example.com"
+    type: "proxy"
+    path: "/api/v2"
+    target: "http://localhost:3003"
+    ssl: true
+    requireAuth: true
+    oauth2:
+      enabled: true
+      provider: "microsoft"
+      clientId: "${MS_CLIENT_ID}"
+      clientSecret: "${MS_CLIENT_SECRET}"
+      authorizationEndpoint: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
+      tokenEndpoint: "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+      callbackUrl: "https://api.example.com/api/v2/oauth/callback"
+      scopes: ["openid", "profile", "email"]
+      sessionDomain: "shared-api-sessions"  # Same session domain as v1
+    publicPaths:
+      - "/oauth/callback"
+      - "/oauth/session"
+      - "/health"
+      - "/docs"
+
+# Security configuration
+security:
+  rateLimitWindowMs: 900000  # 15 minutes
+  rateLimitMaxRequests: 100
+
+# Logging configuration
+logging:
+  level: "info"
+  file: "./logs/domain-sessions-proxy.log"
+
+# Session Management Notes:
+#
+# 1. Management Console:
+#    - Always uses "_management_" session domain
+#    - Sessions are isolated from all other routes
+#    - Access via SessionManager.getManagementInstance()
+#
+# 2. Route Sessions:
+#    - Default: Uses route domain as session domain
+#    - Custom: Use sessionDomain in OAuth2 config
+#    - Access via SessionManager.getInstance(domain)
+#
+# 3. Session Isolation:
+#    - Each domain has its own session storage
+#    - Sessions cannot be accessed across domains
+#    - Perfect for multi-tenant applications
+#
+# 4. Shared Sessions:
+#    - Multiple routes can share sessions using same sessionDomain
+#    - Useful for microservices with shared authentication
+#
+# 5. Benefits:
+#    - Better security isolation
+#    - Independent session timeouts per domain
+#    - Easier session management and cleanup
+#    - Support for complex multi-domain architectures

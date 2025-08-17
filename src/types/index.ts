@@ -236,6 +236,8 @@ export interface OAuth2Config {
   subscriptionKeyHeader?: string; // Required if subscriptionKey is provided
   // Custom endpoint paths
   callbackRedirectEndpoint?: string; // Endpoint to redirect after successful callback (default: /)
+  // Session management
+  sessionDomain?: string; // Custom session domain (defaults to route domain)
 }
 
 export interface OAuth2TokenResponse {

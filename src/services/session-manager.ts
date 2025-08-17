@@ -6,6 +6,7 @@ import { Database } from 'bun:sqlite';
 export interface Session {
   id: string;
   userId: string;
+  domain: string;
   createdAt: number;
   lastActivity: number;
   expiresAt: number;
@@ -19,26 +20,34 @@ export interface SessionData {
 }
 
 export class SessionManager {
-  private static instance: SessionManager;
+  private static instances: Map<string, SessionManager> = new Map();
   private db: Database;
   private sessionCache: Map<string, Session> = new Map();
   private cacheAccessOrder: string[] = []; // For LRU eviction
   private readonly maxCacheSize: number = 100;
   private cleanupInterval: NodeJS.Timeout | null = null;
   private sessionTimeout: number = 3600000; // 1 hour default
+  private domain: string;
 
-  private constructor() {
+  private constructor(domain: string = '_default_') {
+    this.domain = domain;
     const dbPath = path.join(process.cwd(), 'data', 'sessions.sqlite');
     this.db = new Database(dbPath);
     this.initializeDatabase();
     this.startCleanupInterval();
   }
 
-  static getInstance(): SessionManager {
-    if (!SessionManager.instance) {
-      SessionManager.instance = new SessionManager();
+  static getInstance(domain?: string): SessionManager {
+    const domainKey = domain || '_default_';
+    if (!SessionManager.instances.has(domainKey)) {
+      SessionManager.instances.set(domainKey, new SessionManager(domainKey));
     }
-    return SessionManager.instance;
+    return SessionManager.instances.get(domainKey)!;
+  }
+
+  // Get the management console instance specifically
+  static getManagementInstance(): SessionManager {
+    return SessionManager.getInstance('_management_');
   }
 
   setSessionTimeout(timeout: number): void {
@@ -60,7 +69,7 @@ export class SessionManager {
       const lruSessionId = this.cacheAccessOrder.shift();
       if (lruSessionId) {
         this.sessionCache.delete(lruSessionId);
-        logger.debug(`Evicted session ${lruSessionId} from cache (LRU)`);
+        logger.debug(`Evicted session ${lruSessionId} from cache (LRU) for domain ${this.domain}`);
       }
     }
   }
@@ -90,20 +99,40 @@ export class SessionManager {
 
   private initializeDatabase(): void {
     try {
-      // Create sessions table if it doesn't exist
-      this.db.run(`
-        CREATE TABLE IF NOT EXISTS sessions (
-          id TEXT PRIMARY KEY,
-          userId TEXT NOT NULL,
-          createdAt INTEGER NOT NULL,
-          lastActivity INTEGER NOT NULL,
-          expiresAt INTEGER NOT NULL,
-          ipAddress TEXT NOT NULL,
-          userAgent TEXT NOT NULL
-        )
-      `);
+      // Check if table exists and if it has the domain column
+      const checkTable = this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'");
+      const tableExists = checkTable.get() as any;
+      
+      if (!tableExists) {
+        // Create new table with domain column
+        this.db.run(`
+          CREATE TABLE sessions (
+            id TEXT PRIMARY KEY,
+            userId TEXT NOT NULL,
+            domain TEXT NOT NULL,
+            createdAt INTEGER NOT NULL,
+            lastActivity INTEGER NOT NULL,
+            expiresAt INTEGER NOT NULL,
+            ipAddress TEXT NOT NULL,
+            userAgent TEXT NOT NULL
+          )
+        `);
+        logger.info('Created new sessions table with domain column');
+      } else {
+        // Table exists, check if it has domain column
+        const checkColumn = this.db.prepare("PRAGMA table_info(sessions)");
+        const columns = checkColumn.all() as any[];
+        const hasDomainColumn = columns.some(col => col.name === 'domain');
+        
+        if (!hasDomainColumn) {
+          this.db.run('ALTER TABLE sessions ADD COLUMN domain TEXT DEFAULT "_default_"');
+          logger.info('Added domain column to existing sessions table');
+        } else {
+          logger.debug('Domain column already exists in sessions table');
+        }
+      }
 
-      // Create index for faster queries
+      // Create indexes for faster queries
       this.db.run(`
         CREATE INDEX IF NOT EXISTS idx_sessions_expiresAt 
         ON sessions(expiresAt)
@@ -114,7 +143,12 @@ export class SessionManager {
         ON sessions(userId)
       `);
 
-      logger.info('Session database initialized');
+      this.db.run(`
+        CREATE INDEX IF NOT EXISTS idx_sessions_domain 
+        ON sessions(domain)
+      `);
+
+      logger.info(`Session database initialized for domain: ${this.domain}`);
     } catch (error) {
       logger.error('Failed to initialize session database:', error);
     }
@@ -131,9 +165,9 @@ export class SessionManager {
     try {
       const now = Date.now();
 
-      // Clean up expired sessions from database
-      const stmt = this.db.prepare('DELETE FROM sessions WHERE expiresAt <= ?');
-      const result = stmt.run(now);
+      // Clean up expired sessions from database for this domain
+      const stmt = this.db.prepare('DELETE FROM sessions WHERE expiresAt <= ? AND domain = ?');
+      const result = stmt.run(now, this.domain);
 
       // Clean up expired sessions from cache
       let cacheCleanedCount = 0;
@@ -145,7 +179,7 @@ export class SessionManager {
       }
 
       if (result.changes > 0 || cacheCleanedCount > 0) {
-        logger.info(`Cleaned up ${result.changes} expired sessions from database, ${cacheCleanedCount} from cache`);
+        logger.info(`Cleaned up ${result.changes} expired sessions from database, ${cacheCleanedCount} from cache for domain ${this.domain}`);
       }
     } catch (error) {
       logger.error('Failed to cleanup expired sessions:', error);
@@ -159,6 +193,7 @@ export class SessionManager {
     const session: Session = {
       id: sessionId,
       userId,
+      domain: this.domain,
       createdAt: now,
       lastActivity: now,
       expiresAt: now + this.sessionTimeout,
@@ -168,15 +203,15 @@ export class SessionManager {
 
     try {
       const stmt = this.db.prepare(`
-        INSERT INTO sessions (id, userId, createdAt, lastActivity, expiresAt, ipAddress, userAgent)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO sessions (id, userId, domain, createdAt, lastActivity, expiresAt, ipAddress, userAgent)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
-      stmt.run(sessionId, userId, now, now, session.expiresAt, ipAddress, userAgent);
+      stmt.run(sessionId, userId, this.domain, now, now, session.expiresAt, ipAddress, userAgent);
 
       // Add to cache
       this.addToCache(session);
 
-      logger.info(`Created session ${sessionId} for user ${userId}`);
+      logger.info(`Created session ${sessionId} for user ${userId} in domain ${this.domain}`);
       return session;
     } catch (error) {
       logger.error('Failed to create session:', error);
@@ -210,9 +245,9 @@ export class SessionManager {
         const updateStmt = this.db.prepare(`
           UPDATE sessions 
           SET lastActivity = ?, expiresAt = ? 
-          WHERE id = ?
+          WHERE id = ? AND domain = ?
         `);
-        updateStmt.run(now, newExpiresAt, sessionId);
+        updateStmt.run(now, newExpiresAt, sessionId, this.domain);
 
         // Update cache
         this.addToCache(updatedSession);
@@ -221,8 +256,8 @@ export class SessionManager {
       }
 
       // Cache miss - query database
-      const stmt = this.db.prepare('SELECT * FROM sessions WHERE id = ?');
-      const row = stmt.get(sessionId) as any;
+      const stmt = this.db.prepare('SELECT * FROM sessions WHERE id = ? AND domain = ?');
+      const row = stmt.get(sessionId, this.domain) as any;
 
       if (!row) {
         return null;
@@ -241,13 +276,14 @@ export class SessionManager {
       const updateStmt = this.db.prepare(`
         UPDATE sessions 
         SET lastActivity = ?, expiresAt = ? 
-        WHERE id = ?
+        WHERE id = ? AND domain = ?
       `);
-      updateStmt.run(now, newExpiresAt, sessionId);
+      updateStmt.run(now, newExpiresAt, sessionId, this.domain);
 
       const session: Session = {
         id: row.id,
         userId: row.userId,
+        domain: row.domain,
         createdAt: row.createdAt,
         lastActivity: now,
         expiresAt: newExpiresAt,
@@ -274,9 +310,9 @@ export class SessionManager {
       const stmt = this.db.prepare(`
         UPDATE sessions 
         SET lastActivity = ?, expiresAt = ? 
-        WHERE id = ?
+        WHERE id = ? AND domain = ?
       `);
-      const result = stmt.run(now, newExpiresAt, sessionId);
+      const result = stmt.run(now, newExpiresAt, sessionId, this.domain);
 
       if (result.changes > 0) {
         // Update cache if session exists in cache
@@ -301,13 +337,13 @@ export class SessionManager {
 
   deleteSession(sessionId: string): boolean {
     try {
-      const stmt = this.db.prepare('DELETE FROM sessions WHERE id = ?');
-      const result = stmt.run(sessionId);
+      const stmt = this.db.prepare('DELETE FROM sessions WHERE id = ? AND domain = ?');
+      const result = stmt.run(sessionId, this.domain);
 
       if (result.changes > 0) {
         // Remove from cache
         this.removeFromCache(sessionId);
-        logger.info(`Deleted session ${sessionId}`);
+        logger.info(`Deleted session ${sessionId} from domain ${this.domain}`);
         return true;
       }
       return false;
@@ -320,8 +356,8 @@ export class SessionManager {
   deleteAllSessionsForUser(userId: string): number {
     try {
       // Delete from database
-      const stmt = this.db.prepare('DELETE FROM sessions WHERE userId = ?');
-      const result = stmt.run(userId);
+      const stmt = this.db.prepare('DELETE FROM sessions WHERE userId = ? AND domain = ?');
+      const result = stmt.run(userId, this.domain);
 
       if (result.changes > 0) {
         // Remove from cache
@@ -331,7 +367,7 @@ export class SessionManager {
           }
         }
 
-        logger.info(`Deleted ${result.changes} sessions for user ${userId}`);
+        logger.info(`Deleted ${result.changes} sessions for user ${userId} in domain ${this.domain}`);
         return result.changes;
       }
 
@@ -344,12 +380,13 @@ export class SessionManager {
 
   getActiveSessions(): Session[] {
     try {
-      const stmt = this.db.prepare('SELECT * FROM sessions WHERE expiresAt > ?');
-      const rows = stmt.all(Date.now()) as any[];
+      const stmt = this.db.prepare('SELECT * FROM sessions WHERE expiresAt > ? AND domain = ?');
+      const rows = stmt.all(Date.now(), this.domain) as any[];
 
       return rows.map(row => ({
         id: row.id,
         userId: row.userId,
+        domain: row.domain,
         createdAt: row.createdAt,
         lastActivity: row.lastActivity,
         expiresAt: row.expiresAt,
@@ -364,8 +401,8 @@ export class SessionManager {
 
   getSessionCount(): number {
     try {
-      const stmt = this.db.prepare('SELECT COUNT(*) as count FROM sessions WHERE expiresAt > ?');
-      const result = stmt.get(Date.now()) as any;
+      const stmt = this.db.prepare('SELECT COUNT(*) as count FROM sessions WHERE expiresAt > ? AND domain = ?');
+      const result = stmt.get(Date.now(), this.domain) as any;
       return result?.count || 0;
     } catch (error) {
       logger.error('Failed to get session count:', error);
@@ -388,9 +425,18 @@ export class SessionManager {
     // Clear cache on shutdown
     this.sessionCache.clear();
     this.cacheAccessOrder.length = 0;
-    logger.info('Session manager shutdown complete');
+    logger.info(`Session manager shutdown complete for domain: ${this.domain}`);
+  }
+
+  // Static method to shutdown all instances
+  static shutdownAll(): void {
+    for (const [domain, instance] of SessionManager.instances) {
+      instance.shutdown();
+    }
+    SessionManager.instances.clear();
+    logger.info('All session manager instances shutdown complete');
   }
 }
 
-// Export a singleton instance
-export const sessionManager = SessionManager.getInstance();
+// Export the default instance for backward compatibility
+export const sessionManager = SessionManager.getManagementInstance();
