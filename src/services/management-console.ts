@@ -48,6 +48,7 @@ import {
   LogoutResponse,
   SessionValidationResponse
 } from '../types/shared';
+import { validateYAML, validateProcessConfigYAML, validateProxyConfigYAML, validateMainConfigYAML } from '../utils/yaml-validator';
 
 export class ManagementConsole {
   private managementServer: Server | null = null;
@@ -475,8 +476,18 @@ export class ManagementConsole {
               }
 
               const yamlContent = yamlStringify(newConfig.content);
+              // Validate the YAML content
+              const validationResult = validateYAML(yamlContent);
+              if (!validationResult.isValid) {
+                return new Response(JSON.stringify({ success: false, error: 'Invalid YAML content' } as ApiErrorResponse), {
+                  status: 400,
+                  headers: { 'Content-Type': 'application/json' }
+                });
+              }
+              
+
               // Convert to YAML and write to file
-              await import('fs-extra').then(fs => fs.writeFile(configPath, yamlContent));
+              await fs.writeFile(configPath, yamlContent);
               logger.info(`Config saved for type: ${type} at ${configPath}`);
 
               // Reload config after saving
@@ -701,13 +712,7 @@ export class ManagementConsole {
                 });
               }
 
-              // Import the YAML validator with all validation functions
-              const {
-                validateYAML,
-                validateProcessConfigYAML,
-                validateProxyConfigYAML,
-                validateMainConfigYAML
-              } = await import('../utils/yaml-validator');
+              // Use the imported YAML validator functions
 
               let validationResult;
 

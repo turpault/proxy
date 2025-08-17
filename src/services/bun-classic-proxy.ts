@@ -1,5 +1,5 @@
 import { logger } from '../utils/logger';
-import { ProxyRoute } from '../types';
+import { ProxyRoute, BunRequestContext } from '../types';
 
 export interface ProxyRequestConfig {
   route: ProxyRoute;
@@ -11,7 +11,6 @@ export interface ProxyRequestConfig {
   logErrors: boolean;
   customErrorResponse?: { code?: string; message?: string };
 }
-import { BunRequestContext } from '../types';
 
 export class BunClassicProxy {
   /**

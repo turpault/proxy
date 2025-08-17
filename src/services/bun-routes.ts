@@ -3,6 +3,11 @@ import { logger } from '../utils/logger';
 import { BunClassicProxy } from './bun-classic-proxy';
 import { BunCorsProxy } from './bun-cors-proxy';
 import { BunStaticProxy } from './bun-static-proxy';
+import { Server, sleep, file } from 'bun';
+import path from 'path';
+import { BunMiddleware } from './bun-middleware';
+import { geolocationService } from './geolocation';
+import { StatisticsService } from './statistics';
 
 export interface ProxyRequestConfig {
   route: ProxyRoute;
@@ -14,12 +19,6 @@ export interface ProxyRequestConfig {
   logErrors: boolean;
   customErrorResponse?: { code?: string; message?: string };
 }
-
-import { Server, sleep, file } from 'bun';
-import path from 'path';
-import { BunMiddleware } from './bun-middleware';
-import { geolocationService } from './geolocation';
-import { StatisticsService } from './statistics';
 
 export class BunRoutes {
   private statisticsService: StatisticsService;

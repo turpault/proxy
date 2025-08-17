@@ -5,7 +5,6 @@ import { watch } from 'fs';
 import { logger } from '../utils/logger';
 import { ProcessConfig, ProcessManagementConfig, ProxyConfig } from '../types';
 import { configService } from './config-service';
-
 import { ProcessScheduler } from './process-scheduler';
 
 /**
