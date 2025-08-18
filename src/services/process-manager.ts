@@ -77,7 +77,8 @@ export class ProcessManager {
     });
 
     this.scheduler.setProcessStopCallback(async (id: string) => {
-      await this.stopProcess(id);
+      // For scheduler-requested stops, detach by default to respect long-running processes
+      await this.detachProcess(id);
     });
 
     this.scheduler.setProcessStatusChangeCallback((id: string, isRunning: boolean) => {
@@ -628,12 +629,114 @@ export class ProcessManager {
   }
 
   /**
-   * Stop a managed process (detach from monitoring without killing)
+   * Stop a managed process
+   * @param id Process ID
+   * @param killProcess Whether to actually kill the process (default: true) or just detach from monitoring (false)
    */
-  async stopProcess(id: string): Promise<void> {
+  async stopProcess(id: string, killProcess: boolean = true): Promise<void> {
     const managedProcess = this.processes.get(id);
     if (!managedProcess) {
       logger.debug(`Process ${id} not found, nothing to stop`);
+      return;
+    }
+
+    if (killProcess) {
+      logger.info(`Stopping process ${id} (killing the actual process)`);
+      
+      // Try to kill the actual process using PID from file
+      try {
+        if (await fs.pathExists(managedProcess.pidFilePath)) {
+          const pidContent = await fs.readFile(managedProcess.pidFilePath, 'utf8');
+          const pid = parseInt(pidContent.trim(), 10);
+          
+          if (!isNaN(pid) && this.isPidRunning(pid)) {
+            logger.info(`Killing process ${id} with PID ${pid}`);
+            
+            // Try graceful termination first
+            try {
+              process.kill(pid, 'SIGTERM');
+              
+              // Wait a bit for graceful shutdown
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              
+              // Check if process is still running
+              if (this.isPidRunning(pid)) {
+                logger.warn(`Process ${id} did not terminate gracefully, forcing kill with SIGKILL`);
+                process.kill(pid, 'SIGKILL');
+                
+                // Wait a bit more
+                await new Promise(resolve => setTimeout(resolve, 1000));
+              }
+            } catch (error: any) {
+              if (error.code === 'ESRCH') {
+                logger.debug(`Process ${id} with PID ${pid} was already terminated`);
+              } else {
+                logger.warn(`Failed to kill process ${id} with PID ${pid}: ${error.message}`);
+              }
+            }
+          }
+        }
+        
+        // Also try to kill the child process directly if we have a reference
+        if (managedProcess.process && managedProcess.process.pid) {
+          try {
+            managedProcess.process.kill('SIGTERM');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            if (this.isPidRunning(managedProcess.process.pid)) {
+              managedProcess.process.kill('SIGKILL');
+            }
+          } catch (error: any) {
+            if (error.code !== 'ESRCH') {
+              logger.debug(`Failed to kill child process reference for ${id}: ${error.message}`);
+            }
+          }
+        }
+        
+        // Remove PID file after killing
+        await this.removePidFile(managedProcess.pidFilePath);
+        
+      } catch (error) {
+        logger.error(`Error while killing process ${id}:`, error);
+      }
+    } else {
+      logger.info(`Detaching from process ${id} (process will continue running)`);
+    }
+
+    // Stop health check
+    this.stopHealthCheck(id);
+
+    // Clear process monitor if it exists
+    if (managedProcess.processMonitor) {
+      clearInterval(managedProcess.processMonitor);
+    }
+
+    // If this is a reconnected process, we only need to stop our tail process
+    if (managedProcess.isReconnected && managedProcess.process) {
+      managedProcess.process.kill('SIGTERM'); // Kill the tail process, not the actual managed process
+    }
+
+    // If not killing the process, preserve PID file for reconnection
+    if (!killProcess) {
+      // Do NOT remove PID file - preserve it for reconnection
+    }
+
+    managedProcess.isRunning = false;
+    managedProcess.isStopped = true;
+
+    // Notify listeners of process update
+    this.notifyProcessUpdate();
+
+    logger.info(`Process ${managedProcess.config.name || `proxy-${id}`} stopped successfully`);
+  }
+
+  /**
+   * Detach from a managed process without killing it
+   */
+  async detachProcess(id: string): Promise<void> {
+    const managedProcess = this.processes.get(id);
+    if (!managedProcess) {
+      logger.debug(`Process ${id} not found, nothing to detach`);
       return;
     }
 
@@ -652,7 +755,6 @@ export class ProcessManager {
       managedProcess.process.kill('SIGTERM'); // Kill the tail process, not the actual managed process
     }
 
-    // Do NOT kill the actual managed process - it should continue running
     // Do NOT remove PID file - preserve it for reconnection
 
     managedProcess.isRunning = false;
@@ -661,7 +763,7 @@ export class ProcessManager {
     // Notify listeners of process update
     this.notifyProcessUpdate();
 
-    logger.info(`Process ${managedProcess.config.name || `proxy-${id}`} stopped successfully`);
+    logger.info(`Process ${managedProcess.config.name || `proxy-${id}`} detached successfully`);
   }
 
   /**
@@ -1374,7 +1476,7 @@ export class ProcessManager {
 
     // Detach from all processes without killing them
     const shutdownPromises = Array.from(this.processes.keys()).map(id =>
-      this.stopProcess(id)
+      this.stopProcess(id, false)
     );
 
     await Promise.all(shutdownPromises);

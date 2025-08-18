@@ -945,6 +945,26 @@ export class ManagementConsole {
           }
         },
 
+        "/api/processes/:id/detach": {
+          POST: async (req: Request) => {
+            const url = new URL(req.url);
+            const processId = url.pathname.split('/')[3];
+
+            try {
+              await this.processManager.detachProcess(processId);
+              return new Response(JSON.stringify({ success: true, message: `Process ${processId} detached` }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({ success: false, error: 'Failed to detach process', details: error instanceof Error ? error.message : 'Unknown error' }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+        },
+
         "/api/processes/:id/restart": {
           POST: async (req: Request) => {
             const url = new URL(req.url);

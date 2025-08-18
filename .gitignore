@@ -139,3 +139,4 @@ data/cache/
 config/backup/
 data/statistics/
 data/*.sqlite
+testing_scripts/

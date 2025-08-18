@@ -102,7 +102,7 @@ export class SessionManager {
       // Check if table exists and if it has the domain column
       const checkTable = this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'");
       const tableExists = checkTable.get() as any;
-      
+
       if (!tableExists) {
         // Create new table with domain column
         this.db.run(`
@@ -123,7 +123,7 @@ export class SessionManager {
         const checkColumn = this.db.prepare("PRAGMA table_info(sessions)");
         const columns = checkColumn.all() as any[];
         const hasDomainColumn = columns.some(col => col.name === 'domain');
-        
+
         if (!hasDomainColumn) {
           this.db.run('ALTER TABLE sessions ADD COLUMN domain TEXT DEFAULT "_default_"');
           logger.info('Added domain column to existing sessions table');
@@ -188,6 +188,10 @@ export class SessionManager {
 
   createSession(userId: string, ipAddress: string, userAgent: string): Session {
     const sessionId = randomBytes(32).toString('hex');
+    return this.createSessionWithId(sessionId, userId, ipAddress, userAgent);
+  }
+
+  createSessionWithId(sessionId: string, userId: string, ipAddress: string, userAgent: string): Session {
     const now = Date.now();
 
     const session: Session = {

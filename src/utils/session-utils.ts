@@ -16,7 +16,7 @@ export function getSessionManagerForRoute(route: ProxyRoute, domain?: string): S
   }
 
   // Otherwise use the route domain name
-  const sessionDomain = domain || route.domain;
+  const sessionDomain = domain || route.name || route.domain;
   logger.debug(`Using route domain as session domain: ${sessionDomain} for route ${route.name || route.domain}`);
   return SessionManager.getInstance(sessionDomain);
 }

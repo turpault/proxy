@@ -1,10 +1,11 @@
 
 import * as crypto from 'crypto';
-import { OAuth2Config, OAuth2TokenResponse, OAuth2Session, BunRequestContext } from '../types';
+import { OAuth2Config, OAuth2TokenResponse, OAuth2Session, BunRequestContext, ProxyRoute } from '../types';
 import { logger } from '../utils/logger';
+import { SessionManager } from './session-manager';
+import { getSessionManagerForRoute } from '../utils/session-utils';
 
 export class OAuth2Service {
-  private sessions: Map<string, OAuth2Session> = new Map();
   private states: Map<string, { config: OAuth2Config; timestamp: number }> = new Map();
   private codeVerifiers: Map<string, string> = new Map();
 
@@ -131,7 +132,8 @@ export class OAuth2Service {
     code: string,
     state: string,
     sessionId: string,
-    config: OAuth2Config
+    config: OAuth2Config,
+    route: ProxyRoute
   ): Promise<{ success: boolean; error?: string; redirectUrl?: string }> {
     try {
       logger.info(`[OAUTH2 - Handle Callback] ${code} - ${state} - ${sessionId} - ${config.provider}`);
@@ -200,8 +202,11 @@ export class OAuth2Service {
 
       const tokens: OAuth2TokenResponse = await tokenResponse.json();
 
-      // Create session
-      const session: OAuth2Session = {
+      // Get the appropriate session manager for this route
+      const sessionManager = getSessionManagerForRoute(route);
+
+      // Create OAuth2 session data
+      const oauth2SessionData: OAuth2Session = {
         accessToken: tokens.access_token,
         tokenType: tokens.token_type,
         scope: tokens.scope,
@@ -209,13 +214,30 @@ export class OAuth2Service {
         expiresAt: tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000) : undefined,
       };
 
-      // Store session
-      this.sessions.set(sessionId, session);
+      // Store OAuth2 session data in the session manager
+      // We'll store it as JSON in the userAgent field to preserve the OAuth2 data
+      const sessionData = JSON.stringify(oauth2SessionData);
+      
+      // Create or update the session in the session manager
+      const session = sessionManager.getSession(sessionId);
+      if (session) {
+        // Update existing session with OAuth2 data
+        sessionManager.updateSessionActivity(sessionId);
+        // Note: We can't easily update the userAgent field, so we'll need to recreate the session
+        sessionManager.deleteSession(sessionId);
+        const newSession = sessionManager.createSessionWithId(sessionId, sessionId, session.ipAddress, sessionData);
+        logger.debug(`Updated OAuth2 session ${sessionId} with new data`);
+      } else {
+        // Create new session with OAuth2 data
+        const newSession = sessionManager.createSessionWithId(sessionId, sessionId, '127.0.0.1', sessionData);
+        logger.debug(`Created new OAuth2 session ${newSession.id} for user ${sessionId}`);
+      }
 
       logger.info(`OAuth2 session created successfully`, {
         provider: stateConfig.provider,
         sessionId,
-        expiresAt: session.expiresAt?.toISOString(),
+        expiresAt: oauth2SessionData.expiresAt?.toISOString(),
+        domain: route.domain,
       });
 
       return { success: true, redirectUrl: stateConfig.callbackRedirectEndpoint || '/' };
@@ -230,31 +252,53 @@ export class OAuth2Service {
   }
 
   // Check if session is authenticated
-  isAuthenticated(sessionId: string): boolean {
-    const session = this.sessions.get(sessionId);
+  isAuthenticated(sessionId: string, route: ProxyRoute): boolean {
+    const sessionManager = getSessionManagerForRoute(route);
+    const session = sessionManager.getSession(sessionId);
+    
     if (!session) return false;
 
-    // Check if token is expired
-    if (session.expiresAt && session.expiresAt < new Date()) {
-      this.sessions.delete(sessionId);
+    // Check if the session has OAuth2 data
+    try {
+      const oauth2Data = JSON.parse(session.userAgent) as OAuth2Session;
+      
+      // Check if token is expired
+      if (oauth2Data.expiresAt && oauth2Data.expiresAt < new Date()) {
+        sessionManager.deleteSession(sessionId);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      // If userAgent is not valid JSON, it's not an OAuth2 session
       return false;
     }
-
-    return true;
   }
 
   // Get session data
-  getSession(sessionId: string): OAuth2Session | null {
-    return this.sessions.get(sessionId) || null;
+  getSession(sessionId: string, route: ProxyRoute): OAuth2Session | null {
+    const sessionManager = getSessionManagerForRoute(route);
+    const session = sessionManager.getSession(sessionId);
+    
+    if (!session) return null;
+
+    try {
+      const oauth2Data = JSON.parse(session.userAgent) as OAuth2Session;
+      return oauth2Data;
+    } catch (error) {
+      // If userAgent is not valid JSON, it's not an OAuth2 session
+      return null;
+    }
   }
 
   // Refresh access token
   async refreshToken(
     sessionId: string,
-    config: OAuth2Config
+    config: OAuth2Config,
+    route: ProxyRoute
   ): Promise<boolean> {
-    const session = this.sessions.get(sessionId);
-    if (!session?.refreshToken) {
+    const oauth2Session = this.getSession(sessionId, route);
+    if (!oauth2Session?.refreshToken) {
       return false;
     }
 
@@ -263,7 +307,7 @@ export class OAuth2Service {
         grant_type: 'refresh_token',
         client_id: config.clientId,
         client_secret: config.clientSecret,
-        refresh_token: session.refreshToken,
+        refresh_token: oauth2Session.refreshToken,
       };
 
       const headers: Record<string, string> = {
@@ -298,16 +342,26 @@ export class OAuth2Service {
         accessToken: tokens.access_token,
         tokenType: tokens.token_type,
         scope: tokens.scope,
-        refreshToken: tokens.refresh_token || session.refreshToken,
+        refreshToken: tokens.refresh_token || oauth2Session.refreshToken,
         expiresAt: tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000) : undefined,
       };
 
-      this.sessions.set(sessionId, updatedSession);
+      // Update the session in the session manager
+      const sessionManager = getSessionManagerForRoute(route);
+      const session = sessionManager.getSession(sessionId);
+      if (session) {
+        const sessionData = JSON.stringify(updatedSession);
+        sessionManager.updateSessionActivity(sessionId);
+        // Note: We can't easily update the userAgent field, so we'll need to recreate the session
+        sessionManager.deleteSession(sessionId);
+        sessionManager.createSessionWithId(sessionId, sessionId, session.ipAddress, sessionData);
+      }
 
       logger.info(`OAuth2 token refreshed successfully`, {
         provider: config.provider,
         sessionId,
         expiresAt: updatedSession.expiresAt?.toISOString(),
+        domain: route.domain,
       });
 
       return true;
@@ -319,15 +373,17 @@ export class OAuth2Service {
       });
 
       // Remove invalid session
-      this.sessions.delete(sessionId);
+      const sessionManager = getSessionManagerForRoute(route);
+      sessionManager.deleteSession(sessionId);
       return false;
     }
   }
 
   // Logout and clear session
-  logout(sessionId: string): void {
-    this.sessions.delete(sessionId);
-    logger.info('OAuth2 session logged out', { sessionId });
+  logout(sessionId: string, route: ProxyRoute): void {
+    const sessionManager = getSessionManagerForRoute(route);
+    sessionManager.deleteSession(sessionId);
+    logger.info('OAuth2 session logged out', { sessionId, domain: route.domain });
   }
 
   // Clean up expired states
@@ -359,7 +415,7 @@ export class OAuth2Service {
   }
 
   // Create Bun-native middleware function
-  createBunMiddleware(config: OAuth2Config, publicPaths: string[] = [], baseRoutePath: string = ''): (requestContext: BunRequestContext) => Promise<Response | null> {
+  createBunMiddleware(config: OAuth2Config, publicPaths: string[] = [], baseRoutePath: string = '', route: ProxyRoute): (requestContext: BunRequestContext) => Promise<Response | null> {
     // Validate configuration when middleware is created
     this.validateConfig(config);
     const relativePath = baseRoutePath + (config.relativePath || '/oauth');
@@ -386,15 +442,15 @@ export class OAuth2Service {
       }
 
       // Add debug logging
-      logger.info(`[OAUTH2] ${requestContext.method} ${requestContext.originalUrl} - path: ${requestContext.pathname} - cookie: ${cookieName} - isAuthenticated: ${this.isAuthenticated(sessionId)}`);
+      logger.info(`[OAUTH2] ${requestContext.method} ${requestContext.originalUrl} - path: ${requestContext.pathname} - cookie: ${cookieName} - isAuthenticated: ${this.isAuthenticated(sessionId, route)}`);
 
       // Handle session endpoint
       if (requestContext.pathname === sessionEndpoint) {
         // Get session ID from cookie
         const sessionId = cookies[cookieName];
 
-        if (sessionId && this.isAuthenticated(sessionId)) {
-          const session = this.getSession(sessionId);
+        if (sessionId && this.isAuthenticated(sessionId, route)) {
+          const session = this.getSession(sessionId, route);
           const now = new Date();
           const isExpired = session?.expiresAt && session.expiresAt < now;
 
@@ -433,7 +489,7 @@ export class OAuth2Service {
       if (requestContext.pathname === logoutEndpoint) {
         const sessionId = cookies[cookieName];
         if (sessionId) {
-          this.logout(sessionId);
+          this.logout(sessionId, route);
         }
 
         const response = new Response(JSON.stringify({
@@ -458,7 +514,7 @@ export class OAuth2Service {
         }
 
         // Check if already authenticated
-        if (this.isAuthenticated(sessionId)) {
+        if (this.isAuthenticated(sessionId, route)) {
           // If already authenticated, redirect to the callback redirect endpoint or root
           const redirectEndpoint = config.callbackRedirectEndpoint || '/';
           const response = new Response(null, { status: 302 });
@@ -466,7 +522,7 @@ export class OAuth2Service {
           response.headers.set('Set-Cookie', `${cookieName}=${sessionId}; HttpOnly; Path=/; Max-Age=${24 * 60 * 60}`);
           return response;
         }
-        logger.info(`[OAUTH2 - Not Authenticated] ${requestContext.method} ${requestContext.originalUrl} - path: ${requestContext.pathname} - cookie: ${cookieName} - sessionId: ${sessionId} - isAuthenticated: ${this.isAuthenticated(sessionId)}`);
+        logger.info(`[OAUTH2 - Not Authenticated] ${requestContext.method} ${requestContext.originalUrl} - path: ${requestContext.pathname} - cookie: ${cookieName} - sessionId: ${sessionId} - isAuthenticated: ${this.isAuthenticated(sessionId, route)}`);
 
         // Redirect to OAuth2 authorization
         const { url } = this.buildAuthorizationUrl(config);
@@ -509,7 +565,8 @@ export class OAuth2Service {
             requestContext.query.code as string,
             requestContext.query.state as string,
             sessionId,
-            config
+            config,
+            route
           );
 
           if (result.success) {
@@ -538,7 +595,6 @@ export class OAuth2Service {
         }
       }
 
-
       // Skip authentication for other public paths
       const isPublicPath = publicPaths.some(path =>
         requestContext.pathname.startsWith(path) || requestContext.pathname === path
@@ -548,14 +604,12 @@ export class OAuth2Service {
         return null; // Continue to next handler
       }
 
-
       // Check if authenticated
-      if (this.isAuthenticated(sessionId)) {
+      if (this.isAuthenticated(sessionId, route)) {
         // Add session data to request context
-        (requestContext as any).oauth2Session = this.getSession(sessionId);
+        (requestContext as any).oauth2Session = this.getSession(sessionId, route);
         return null; // Continue to next handler
       }
-
 
       // Not authenticated and not a public path - redirect to login
       const response = new Response(null, { status: 302 });

@@ -108,7 +108,8 @@ export class BunMiddleware {
         const oauth2Middleware = this.oauth2Service.createBunMiddleware(
           route.oauth2,
           route.publicPaths || [],
-          route.path || ''
+          route.path || '',
+          route
         );
 
         // Store the middleware for future use

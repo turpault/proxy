@@ -339,6 +339,7 @@ export type GetProcessesResponse = DataResponse<Process[]>;
 export type ReloadProcessesResponse = SuccessResponse;
 export type StartProcessResponse = SuccessResponse;
 export type StopProcessResponse = SuccessResponse;
+export type DetachProcessResponse = SuccessResponse;
 export type RestartProcessResponse = SuccessResponse;
 
 export type GetProcessLogsRequest = {
