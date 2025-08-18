@@ -570,8 +570,8 @@ export class ProcessManager {
           managedProcess.process.kill(); // Kill the tail process
         }
 
-        // Trigger restart if configured
-        if (config.restartOnExit !== false && !this.isShuttingDown) {
+        // Trigger restart if configured and not manually stopped
+        if (config.restartOnExit !== false && !this.isShuttingDown && !managedProcess.isStopped) {
           logger.info(`Auto-restarting dead process ${id}`);
           this.restartProcess(id, target).catch(error => {
             logger.error(`Failed to auto-restart process ${id}`, error);
@@ -639,30 +639,30 @@ export class ProcessManager {
       return;
     }
 
-        logger.info(`Killing process ${id} (terminating the actual process)`);
- 
+    logger.info(`Killing process ${id} (terminating the actual process)`);
+
     // Try to kill the actual process using PID from file
     try {
       if (await fs.pathExists(managedProcess.pidFilePath)) {
         const pidContent = await fs.readFile(managedProcess.pidFilePath, 'utf8');
         const pid = parseInt(pidContent.trim(), 10);
- 
+
         if (!isNaN(pid)) {
           if (this.isPidRunning(pid)) {
             logger.info(`Killing process ${id} with PID ${pid}`);
- 
+
             // Try graceful termination first
             try {
               process.kill(pid, 'SIGTERM');
- 
+
               // Wait a bit for graceful shutdown
               await new Promise(resolve => setTimeout(resolve, 2000));
- 
+
               // Check if process is still running
               if (this.isPidRunning(pid)) {
                 logger.warn(`Process ${id} did not terminate gracefully, forcing kill with SIGKILL`);
                 process.kill(pid, 'SIGKILL');
- 
+
                 // Wait a bit more
                 await new Promise(resolve => setTimeout(resolve, 1000));
               }
@@ -673,19 +673,19 @@ export class ProcessManager {
                 logger.warn(`Failed to kill process ${id} with PID ${pid}: ${error.message}`);
               }
             }
-                    } else {
+          } else {
             logger.info(`Process ${id} with PID ${pid} is not running, marking as stopped`);
           }
         }
       }
- 
+
       // Also try to kill the child process directly if we have a reference
       if (managedProcess.process && managedProcess.process.pid) {
         if (this.isPidRunning(managedProcess.process.pid)) {
           try {
             managedProcess.process.kill('SIGTERM');
             await new Promise(resolve => setTimeout(resolve, 1000));
- 
+
             if (this.isPidRunning(managedProcess.process.pid)) {
               managedProcess.process.kill('SIGKILL');
             }
@@ -698,7 +698,7 @@ export class ProcessManager {
           logger.debug(`Child process reference for ${id} with PID ${managedProcess.process.pid} is not running`);
         }
       }
- 
+
       // Remove PID file after killing or if process was already stopped
       await this.removePidFile(managedProcess.pidFilePath);
 
@@ -773,6 +773,12 @@ export class ProcessManager {
     const managedProcess = this.processes.get(id);
     if (!managedProcess) {
       logger.warn(`Cannot restart process ${id}: not found`);
+      return;
+    }
+
+    // Don't restart if the process was manually stopped by management console
+    if (managedProcess.isStopped) {
+      logger.info(`Skipping restart for process ${id}: process was manually stopped`);
       return;
     }
 
@@ -1053,8 +1059,8 @@ export class ProcessManager {
           logger.warn(`Process ${processName} exited unexpectedly, PID file preserved for potential reconnection`, exitInfo);
         }
 
-        // Auto-restart if configured
-        if (config.restartOnExit !== false && !this.isShuttingDown) {
+        // Auto-restart if configured and not manually stopped
+        if (config.restartOnExit !== false && !this.isShuttingDown && !managedProcess.isStopped) {
           logger.info(`Auto-restarting process ${processName}`);
           setTimeout(() => {
             this.restartProcess(id, target).catch(error => {
@@ -1320,8 +1326,8 @@ export class ProcessManager {
         if (managedProcess.healthCheckFailures >= maxRetries) {
           logger.error(`Process ${processName} failed health check ${maxRetries} times, killing child process`);
           await this.killChildProcess(id);
-          // Optionally restart if configured
-          if (managedProcess.config.restartOnExit !== false) {
+          // Optionally restart if configured and not manually stopped
+          if (managedProcess.config.restartOnExit !== false && !managedProcess.isStopped) {
             logger.info(`Restarting process ${processName} after health check failure`);
             this.restartProcess(id, target).catch(restartError => {
               logger.error(`Failed to restart unhealthy process ${processName}`, restartError);
