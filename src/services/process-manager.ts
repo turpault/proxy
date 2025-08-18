@@ -38,7 +38,8 @@ export interface ManagedProcess {
   logFilePath: string; // Track the log file path for this process
   isReconnected: boolean; // Whether this process was reconnected to an existing one
   processMonitor?: NodeJS.Timeout; // Change to NodeJS.Timeout
-  isStopped: boolean; // Whether this process has been manually stopped
+  isStopped: boolean; // Whether this process has been manually stopped by user action
+  isTerminated: boolean; // Whether this process has terminated (crashed, exited, etc.)
   isRemoved: boolean; // Whether this process has been removed from configuration
 }
 
@@ -62,6 +63,7 @@ export class ProcessManager {
   private isShuttingDown = false;
   private fileWatcher: fs.FSWatcher | null = null;
   private reinitializeTimeout: NodeJS.Timeout | null = null;
+  private stoppedStatusFile: string; // File to persist stopped status
 
   private onProcessUpdate: (() => void) | null = null;
   private onLogUpdate: ((processId: string, newLogs: string[]) => void) | null = null;
@@ -70,6 +72,10 @@ export class ProcessManager {
   constructor() {
     // Initialize the process scheduler
     this.scheduler = new ProcessScheduler();
+
+    // Set up stopped status file path
+    const dataDir = configService.getSetting<string>('dataDir') || './data';
+    this.stoppedStatusFile = path.resolve(dataDir, 'stopped-processes.json');
 
     // Set up scheduler callbacks
     this.scheduler.setProcessStartCallback(async (id: string, config: ProcessConfig) => {
@@ -104,6 +110,82 @@ export class ProcessManager {
     const processConfig = configService.getProcessConfig();
     if (processConfig) {
       this.initializeSchedules(processConfig);
+    }
+  }
+
+  /**
+   * Save stopped status to persistent storage
+   */
+  private async saveStoppedStatus(): Promise<void> {
+    try {
+      const stoppedProcesses = Array.from(this.processes.entries())
+        .filter(([_, process]) => process.isStopped)
+        .map(([id, _]) => id);
+
+      const data = {
+        stoppedProcesses,
+        timestamp: new Date().toISOString()
+      };
+
+      // Ensure directory exists
+      await fs.ensureDir(path.dirname(this.stoppedStatusFile));
+      
+      // Write to file
+      await fs.writeJson(this.stoppedStatusFile, data, { spaces: 2 });
+      
+      logger.debug(`Saved stopped status for ${stoppedProcesses.length} processes`);
+    } catch (error) {
+      logger.error('Failed to save stopped status', error);
+    }
+  }
+
+  /**
+   * Load stopped status from persistent storage
+   */
+  private async loadStoppedStatus(): Promise<Set<string>> {
+    try {
+      if (!await fs.pathExists(this.stoppedStatusFile)) {
+        logger.debug('No stopped status file found, starting fresh');
+        return new Set();
+      }
+
+      const data = await fs.readJson(this.stoppedStatusFile);
+      const stoppedProcesses = new Set((data.stoppedProcesses || []) as string[]);
+      
+      logger.info(`Loaded stopped status for ${stoppedProcesses.size} processes`);
+      return stoppedProcesses;
+    } catch (error) {
+      logger.error('Failed to load stopped status', error);
+      return new Set();
+    }
+  }
+
+  /**
+   * Check if a process should be considered stopped based on persistent storage
+   */
+  private async isProcessPersistentlyStopped(processId: string): Promise<boolean> {
+    const stoppedProcesses = await this.loadStoppedStatus();
+    return stoppedProcesses.has(processId);
+  }
+
+  /**
+   * Clear stopped status for a process (when it's started or restarted)
+   */
+  private async clearStoppedStatus(processId: string): Promise<void> {
+    const stoppedProcesses = await this.loadStoppedStatus();
+    if (stoppedProcesses.has(processId)) {
+      stoppedProcesses.delete(processId);
+      
+      // Save updated status
+      const data = {
+        stoppedProcesses: Array.from(stoppedProcesses),
+        timestamp: new Date().toISOString()
+      };
+
+      await fs.ensureDir(path.dirname(this.stoppedStatusFile));
+      await fs.writeJson(this.stoppedStatusFile, data, { spaces: 2 });
+      
+      logger.debug(`Cleared stopped status for process ${processId}`);
     }
   }
 
@@ -524,6 +606,9 @@ export class ProcessManager {
     // Check if process is already running and try to reconnect
     const existingProcess = await this.checkAndReconnectProcess(id, pidFilePath, logFilePath);
 
+    // Check if this process was previously stopped by user action
+    const wasPersistentlyStopped = await this.isProcessPersistentlyStopped(id);
+
     const managedProcess: ManagedProcess = {
       id,
       config,
@@ -537,7 +622,8 @@ export class ProcessManager {
       pidFilePath,
       logFilePath,
       isReconnected: false,
-      isStopped: false,
+      isStopped: wasPersistentlyStopped && !existingProcess, // Only stopped if persistently stopped AND not reconnected
+      isTerminated: false,
       isRemoved: false,
     };
 
@@ -550,8 +636,12 @@ export class ProcessManager {
       // Reconnect to existing process
       managedProcess.isRunning = true;
       managedProcess.isReconnected = true;
-      managedProcess.isStopped = false;
+      managedProcess.isStopped = false; // Reconnected processes are never stopped
+      managedProcess.isTerminated = false;
       managedProcess.startTime = new Date();
+
+      // Clear stopped status when reconnected
+      await this.clearStoppedStatus(id);
 
       // Update scheduler status
       this.scheduler.updateProcessStatus(id, true);
@@ -564,6 +654,7 @@ export class ProcessManager {
 
         // Handle process death
         managedProcess.isRunning = false;
+        managedProcess.isTerminated = true; // Mark as terminated when process dies
         this.scheduler.updateProcessStatus(id, false);
 
         if (managedProcess.process) {
@@ -626,6 +717,25 @@ export class ProcessManager {
         throw error;
       }
     }
+  }
+  /**
+   * Stops the process and prevents it from restarting
+   * @param id 
+   * @returns 
+   */
+  async stopProcess(id: string): Promise<void> {
+    const managedProcess = this.processes.get(id);
+    if (!managedProcess) {
+      logger.debug(`Process ${id} not found, nothing to stop`);
+      return;
+    }
+    managedProcess.isStopped = true;
+    managedProcess.isTerminated = false; // Reset termination state when manually stopped
+    
+    // Save stopped status persistently
+    await this.saveStoppedStatus();
+    
+    await this.killProcess(id);
   }
 
   /**
@@ -723,6 +833,7 @@ export class ProcessManager {
 
     managedProcess.isRunning = false;
     managedProcess.isStopped = true;
+    managedProcess.isTerminated = false; // Reset termination state when manually killed
 
     // Notify listeners of process update
     this.notifyProcessUpdate();
@@ -759,6 +870,7 @@ export class ProcessManager {
 
     managedProcess.isRunning = false;
     managedProcess.isStopped = true;
+    managedProcess.isTerminated = false; // Reset termination state when manually detached
 
     // Notify listeners of process update
     this.notifyProcessUpdate();
@@ -806,6 +918,7 @@ export class ProcessManager {
     // Reset reconnection state
     managedProcess.isReconnected = false;
     managedProcess.isStopped = false;
+    managedProcess.isTerminated = false;
 
     // Wait for restart delay
     const restartDelay = managedProcess.config.restartDelay || 1000;
@@ -818,6 +931,10 @@ export class ProcessManager {
       // Reconnected to existing process
       managedProcess.isRunning = true;
       managedProcess.isReconnected = true;
+      managedProcess.isTerminated = false;
+
+      // Clear stopped status when reconnected during restart
+      await this.clearStoppedStatus(id);
 
       logger.info(`Reconnected to existing process ${id} during restart`, {
         pid: existingProcess.pid,
@@ -832,23 +949,26 @@ export class ProcessManager {
       if (managedProcess.config.healthCheck?.enabled) {
         this.startHealthCheck(id, target);
       }
-    } else {
-      // Start new process
-      try {
-        await this.spawnProcess(managedProcess, target);
+          } else {
+        // Start new process
+        try {
+          await this.spawnProcess(managedProcess, target);
 
-        // Notify listeners of process update
-        this.notifyProcessUpdate();
+          // Clear stopped status when new process is started
+          await this.clearStoppedStatus(id);
 
-        logger.info(`Process ${id} restarted successfully`, {
-          pid: managedProcess.process?.pid,
-          restartCount: managedProcess.restartCount,
-          target,
-        });
-      } catch (error) {
-        logger.error(`Failed to restart process ${id}`, error);
+          // Notify listeners of process update
+          this.notifyProcessUpdate();
+
+          logger.info(`Process ${id} restarted successfully`, {
+            pid: managedProcess.process?.pid,
+            restartCount: managedProcess.restartCount,
+            target,
+          });
+        } catch (error) {
+          logger.error(`Failed to restart process ${id}`, error);
+        }
       }
-    }
   }
 
   /**
@@ -976,7 +1096,11 @@ export class ProcessManager {
         managedProcess.process = childProcess;
         managedProcess.isRunning = true;
         managedProcess.isStopped = false;
+        managedProcess.isTerminated = false;
         managedProcess.startTime = new Date();
+
+        // Clear stopped status when process is successfully started
+        await this.clearStoppedStatus(id);
 
         // Write PID file
         if (childProcess.pid) {
@@ -1028,6 +1152,7 @@ export class ProcessManager {
       // Handle process exit
       childProcess.on('exit', async (code, signal) => {
         managedProcess.isRunning = false;
+        managedProcess.isTerminated = true; // Mark as terminated when process exits
 
         // Only remove PID file if cleanup is enabled AND the process exited normally
         // This preserves PID files for unexpected exits to allow reconnection
@@ -1074,6 +1199,7 @@ export class ProcessManager {
       childProcess.on('error', (error) => {
         logger.error(`Process ${processName} error`, error);
         managedProcess.isRunning = false;
+        managedProcess.isTerminated = true; // Mark as terminated when process errors
         reject(error);
       });
     });
@@ -1390,6 +1516,7 @@ export class ProcessManager {
     healthCheckFailures: number;
     lastHealthCheckTime: Date | null;
     isStopped: boolean;
+    isTerminated: boolean;
     isRemoved: boolean;
   }> {
     return Array.from(this.processes.values()).map(proc => {
@@ -1417,7 +1544,10 @@ export class ProcessManager {
           actualIsRunning = false;
         }
       } else if (proc.isStopped) {
-        // If explicitly stopped, mark as not running
+        // If explicitly stopped by user, mark as not running
+        actualIsRunning = false;
+      } else if (proc.isTerminated) {
+        // If terminated (crashed/exited), mark as not running
         actualIsRunning = false;
       }
 
@@ -1436,6 +1566,7 @@ export class ProcessManager {
         healthCheckFailures: proc.healthCheckFailures,
         lastHealthCheckTime: proc.lastHealthCheckTime,
         isStopped: proc.isStopped,
+        isTerminated: proc.isTerminated,
         isRemoved: proc.isRemoved,
       };
     });

@@ -236,6 +236,7 @@ export interface Process {
   healthCheckFailures?: number;
   lastHealthCheckTime?: string | null;
   isStopped?: boolean;
+  isTerminated?: boolean;
   isRemoved?: boolean;
 }
 
