@@ -647,53 +647,61 @@ export class ProcessManager {
         const pidContent = await fs.readFile(managedProcess.pidFilePath, 'utf8');
         const pid = parseInt(pidContent.trim(), 10);
  
-        if (!isNaN(pid) && this.isPidRunning(pid)) {
-          logger.info(`Killing process ${id} with PID ${pid}`);
+        if (!isNaN(pid)) {
+          if (this.isPidRunning(pid)) {
+            logger.info(`Killing process ${id} with PID ${pid}`);
  
-          // Try graceful termination first
-          try {
-            process.kill(pid, 'SIGTERM');
+            // Try graceful termination first
+            try {
+              process.kill(pid, 'SIGTERM');
  
-            // Wait a bit for graceful shutdown
-            await new Promise(resolve => setTimeout(resolve, 2000));
+              // Wait a bit for graceful shutdown
+              await new Promise(resolve => setTimeout(resolve, 2000));
  
-            // Check if process is still running
-            if (this.isPidRunning(pid)) {
-              logger.warn(`Process ${id} did not terminate gracefully, forcing kill with SIGKILL`);
-              process.kill(pid, 'SIGKILL');
+              // Check if process is still running
+              if (this.isPidRunning(pid)) {
+                logger.warn(`Process ${id} did not terminate gracefully, forcing kill with SIGKILL`);
+                process.kill(pid, 'SIGKILL');
  
-              // Wait a bit more
-              await new Promise(resolve => setTimeout(resolve, 1000));
+                // Wait a bit more
+                await new Promise(resolve => setTimeout(resolve, 1000));
+              }
+            } catch (error: any) {
+              if (error.code === 'ESRCH') {
+                logger.debug(`Process ${id} with PID ${pid} was already terminated`);
+              } else {
+                logger.warn(`Failed to kill process ${id} with PID ${pid}: ${error.message}`);
+              }
             }
-          } catch (error: any) {
-            if (error.code === 'ESRCH') {
-              logger.debug(`Process ${id} with PID ${pid} was already terminated`);
-            } else {
-              logger.warn(`Failed to kill process ${id} with PID ${pid}: ${error.message}`);
-            }
+                    } else {
+            logger.info(`Process ${id} with PID ${pid} is not running, marking as stopped`);
           }
         }
       }
  
       // Also try to kill the child process directly if we have a reference
       if (managedProcess.process && managedProcess.process.pid) {
-        try {
-          managedProcess.process.kill('SIGTERM');
-          await new Promise(resolve => setTimeout(resolve, 1000));
+        if (this.isPidRunning(managedProcess.process.pid)) {
+          try {
+            managedProcess.process.kill('SIGTERM');
+            await new Promise(resolve => setTimeout(resolve, 1000));
  
-          if (this.isPidRunning(managedProcess.process.pid)) {
-            managedProcess.process.kill('SIGKILL');
+            if (this.isPidRunning(managedProcess.process.pid)) {
+              managedProcess.process.kill('SIGKILL');
+            }
+          } catch (error: any) {
+            if (error.code !== 'ESRCH') {
+              logger.debug(`Failed to kill child process reference for ${id}: ${error.message}`);
+            }
           }
-        } catch (error: any) {
-          if (error.code !== 'ESRCH') {
-            logger.debug(`Failed to kill child process reference for ${id}: ${error.message}`);
-          }
+        } else {
+          logger.debug(`Child process reference for ${id} with PID ${managedProcess.process.pid} is not running`);
         }
       }
  
-      // Remove PID file after killing
+      // Remove PID file after killing or if process was already stopped
       await this.removePidFile(managedProcess.pidFilePath);
- 
+
     } catch (error) {
       logger.error(`Error while killing process ${id}:`, error);
     }
