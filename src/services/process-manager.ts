@@ -513,8 +513,8 @@ export class ProcessManager {
     }
 
     if (this.processes.has(id)) {
-      logger.warn(`Process ${id} already exists, stopping existing process first`);
-      await this.stopProcess(id);
+      logger.warn(`Process ${id} already exists, killing existing process first`);
+      await this.killProcess(id);
     }
 
     // Generate PID and log file paths
@@ -629,78 +629,73 @@ export class ProcessManager {
   }
 
   /**
-   * Stop a managed process
+   * Kill a managed process (terminates the actual process)
    * @param id Process ID
-   * @param killProcess Whether to actually kill the process (default: true) or just detach from monitoring (false)
    */
-  async stopProcess(id: string, killProcess: boolean = true): Promise<void> {
+  async killProcess(id: string): Promise<void> {
     const managedProcess = this.processes.get(id);
     if (!managedProcess) {
       logger.debug(`Process ${id} not found, nothing to stop`);
       return;
     }
 
-    if (killProcess) {
-      logger.info(`Stopping process ${id} (killing the actual process)`);
-      
-      // Try to kill the actual process using PID from file
-      try {
-        if (await fs.pathExists(managedProcess.pidFilePath)) {
-          const pidContent = await fs.readFile(managedProcess.pidFilePath, 'utf8');
-          const pid = parseInt(pidContent.trim(), 10);
-          
-          if (!isNaN(pid) && this.isPidRunning(pid)) {
-            logger.info(`Killing process ${id} with PID ${pid}`);
-            
-            // Try graceful termination first
-            try {
-              process.kill(pid, 'SIGTERM');
-              
-              // Wait a bit for graceful shutdown
-              await new Promise(resolve => setTimeout(resolve, 2000));
-              
-              // Check if process is still running
-              if (this.isPidRunning(pid)) {
-                logger.warn(`Process ${id} did not terminate gracefully, forcing kill with SIGKILL`);
-                process.kill(pid, 'SIGKILL');
-                
-                // Wait a bit more
-                await new Promise(resolve => setTimeout(resolve, 1000));
-              }
-            } catch (error: any) {
-              if (error.code === 'ESRCH') {
-                logger.debug(`Process ${id} with PID ${pid} was already terminated`);
-              } else {
-                logger.warn(`Failed to kill process ${id} with PID ${pid}: ${error.message}`);
-              }
-            }
-          }
-        }
-        
-        // Also try to kill the child process directly if we have a reference
-        if (managedProcess.process && managedProcess.process.pid) {
+        logger.info(`Killing process ${id} (terminating the actual process)`);
+ 
+    // Try to kill the actual process using PID from file
+    try {
+      if (await fs.pathExists(managedProcess.pidFilePath)) {
+        const pidContent = await fs.readFile(managedProcess.pidFilePath, 'utf8');
+        const pid = parseInt(pidContent.trim(), 10);
+ 
+        if (!isNaN(pid) && this.isPidRunning(pid)) {
+          logger.info(`Killing process ${id} with PID ${pid}`);
+ 
+          // Try graceful termination first
           try {
-            managedProcess.process.kill('SIGTERM');
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            if (this.isPidRunning(managedProcess.process.pid)) {
-              managedProcess.process.kill('SIGKILL');
+            process.kill(pid, 'SIGTERM');
+ 
+            // Wait a bit for graceful shutdown
+            await new Promise(resolve => setTimeout(resolve, 2000));
+ 
+            // Check if process is still running
+            if (this.isPidRunning(pid)) {
+              logger.warn(`Process ${id} did not terminate gracefully, forcing kill with SIGKILL`);
+              process.kill(pid, 'SIGKILL');
+ 
+              // Wait a bit more
+              await new Promise(resolve => setTimeout(resolve, 1000));
             }
           } catch (error: any) {
-            if (error.code !== 'ESRCH') {
-              logger.debug(`Failed to kill child process reference for ${id}: ${error.message}`);
+            if (error.code === 'ESRCH') {
+              logger.debug(`Process ${id} with PID ${pid} was already terminated`);
+            } else {
+              logger.warn(`Failed to kill process ${id} with PID ${pid}: ${error.message}`);
             }
           }
         }
-        
-        // Remove PID file after killing
-        await this.removePidFile(managedProcess.pidFilePath);
-        
-      } catch (error) {
-        logger.error(`Error while killing process ${id}:`, error);
       }
-    } else {
-      logger.info(`Detaching from process ${id} (process will continue running)`);
+ 
+      // Also try to kill the child process directly if we have a reference
+      if (managedProcess.process && managedProcess.process.pid) {
+        try {
+          managedProcess.process.kill('SIGTERM');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+ 
+          if (this.isPidRunning(managedProcess.process.pid)) {
+            managedProcess.process.kill('SIGKILL');
+          }
+        } catch (error: any) {
+          if (error.code !== 'ESRCH') {
+            logger.debug(`Failed to kill child process reference for ${id}: ${error.message}`);
+          }
+        }
+      }
+ 
+      // Remove PID file after killing
+      await this.removePidFile(managedProcess.pidFilePath);
+ 
+    } catch (error) {
+      logger.error(`Error while killing process ${id}:`, error);
     }
 
     // Stop health check
@@ -716,10 +711,7 @@ export class ProcessManager {
       managedProcess.process.kill('SIGTERM'); // Kill the tail process, not the actual managed process
     }
 
-    // If not killing the process, preserve PID file for reconnection
-    if (!killProcess) {
-      // Do NOT remove PID file - preserve it for reconnection
-    }
+    // Always remove PID file when killing
 
     managedProcess.isRunning = false;
     managedProcess.isStopped = true;
@@ -727,7 +719,7 @@ export class ProcessManager {
     // Notify listeners of process update
     this.notifyProcessUpdate();
 
-    logger.info(`Process ${managedProcess.config.name || `proxy-${id}`} stopped successfully`);
+    logger.info(`Process ${managedProcess.config.name || `proxy-${id}`} killed successfully`);
   }
 
   /**
@@ -1476,7 +1468,7 @@ export class ProcessManager {
 
     // Detach from all processes without killing them
     const shutdownPromises = Array.from(this.processes.keys()).map(id =>
-      this.stopProcess(id, false)
+      this.detachProcess(id)
     );
 
     await Promise.all(shutdownPromises);
@@ -1591,12 +1583,12 @@ export class ProcessManager {
     // Stop removed processes
     for (const processId of Array.from(currentProcessIds)) {
       if (!newProcessIds.has(processId)) {
-        logger.info(`Stopping removed process: ${processId}`);
+        logger.info(`Killing removed process: ${processId}`);
         try {
-          await this.stopProcess(processId);
+          await this.killProcess(processId);
           this.markProcessAsRemoved(processId);
         } catch (error) {
-          logger.error(`Failed to stop removed process: ${processId}`, error);
+          logger.error(`Failed to kill removed process: ${processId}`, error);
         }
       }
     }
@@ -1608,7 +1600,7 @@ export class ProcessManager {
         if (currentProcess && this.hasProcessConfigChanged(currentProcess.config, newProcessConfig)) {
           logger.info(`Configuration changed for process: ${processId}, restarting`);
           try {
-            await this.stopProcess(processId);
+            await this.killProcess(processId);
             const target = targetResolver ? targetResolver(processId, newProcessConfig) : `http://localhost:3000`;
             await this.startProcess(processId, newProcessConfig, target);
           } catch (error) {

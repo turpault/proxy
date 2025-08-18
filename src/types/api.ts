@@ -23,7 +23,7 @@ import {
   GetProcessesResponse,
   ReloadProcessesResponse,
   StartProcessResponse,
-  StopProcessResponse,
+  KillProcessResponse,
   DetachProcessResponse,
   RestartProcessResponse,
   GetProcessLogsRequest,
@@ -115,7 +115,7 @@ export interface ApiEndpointTypes {
   };
   'POST /api/processes/:id/stop': {
     request: EmptyRequest;
-    response: StopProcessResponse;
+    response: KillProcessResponse;
   };
   'POST /api/processes/:id/detach': {
     request: EmptyRequest;

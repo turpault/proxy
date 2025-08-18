@@ -338,7 +338,7 @@ export type GenerateReportResponse = DataResponse<{
 export type GetProcessesResponse = DataResponse<Process[]>;
 export type ReloadProcessesResponse = SuccessResponse;
 export type StartProcessResponse = SuccessResponse;
-export type StopProcessResponse = SuccessResponse;
+export type KillProcessResponse = SuccessResponse;
 export type DetachProcessResponse = SuccessResponse;
 export type RestartProcessResponse = SuccessResponse;
 

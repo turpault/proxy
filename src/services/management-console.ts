@@ -28,7 +28,7 @@ import {
   GetProcessesResponse,
   ReloadProcessesResponse,
   StartProcessResponse,
-  StopProcessResponse,
+  KillProcessResponse,
   RestartProcessResponse,
   GetProcessLogsResponse,
   GetProcessConfigResponse,
@@ -931,13 +931,13 @@ export class ManagementConsole {
             const processId = url.pathname.split('/')[3];
 
             try {
-              await this.processManager.stopProcess(processId);
-              return new Response(JSON.stringify({ success: true, message: `Process ${processId} stopped` } as StopProcessResponse), {
+              await this.processManager.killProcess(processId);
+              return new Response(JSON.stringify({ success: true, message: `Process ${processId} killed` } as KillProcessResponse), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
               });
             } catch (error) {
-              return new Response(JSON.stringify({ success: false, error: 'Failed to stop process', details: error instanceof Error ? error.message : 'Unknown error' } as ApiErrorResponse), {
+              return new Response(JSON.stringify({ success: false, error: 'Failed to kill process', details: error instanceof Error ? error.message : 'Unknown error' } as ApiErrorResponse), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' }
               });
