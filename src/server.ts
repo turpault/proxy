@@ -1,18 +1,12 @@
 import { ProxyConfig, MainConfig } from './types';
 import { logger } from './utils/logger';
-import { configService } from './services/config-service';
 import { ProxyServer } from './services/proxy-server';
 import { ManagementConsole } from './services/management-console';
-import { ProcessManager } from './services/process-manager';
-import { StatisticsService } from './services/statistics';
-import { SessionManager } from './services/session-manager';
-import { GeolocationService } from './services/geolocation';
-import { oauth2Service } from './services/oauth2';
+import { initializeServiceContainer, shutdownServiceContainer, getServiceContainer } from './services/service-container';
 
 export class BunProxyServer {
   private proxyServer: ProxyServer;
   private managementConsole: ManagementConsole;
-  private processManager: ProcessManager;
   private config: ProxyConfig;
   private mainConfig?: MainConfig;
 
@@ -20,27 +14,27 @@ export class BunProxyServer {
     this.config = config;
     this.mainConfig = mainConfig;
 
-    // Initialize StatisticsService singleton
-    StatisticsService.initialize();
+    // Initialize service container
+    const serviceContainer = initializeServiceContainer(config, mainConfig);
 
-    // Create process manager instance
-    this.processManager = new ProcessManager();
-
-    // Initialize the two separate services
-    this.proxyServer = new ProxyServer(config);
-    this.managementConsole = new ManagementConsole(config, this.processManager);
+    // Initialize the two separate services with dependency injection
+    this.proxyServer = new ProxyServer(config, serviceContainer);
+    this.managementConsole = new ManagementConsole(config, serviceContainer);
   }
 
   async initialize(): Promise<void> {
     logger.info('Initializing Bun proxy server...');
 
+    // Initialize service container
+    const serviceContainer = getServiceContainer();
+    await serviceContainer.initialize();
+
     // Initialize all services
-    await this.processManager.initialize();
     await this.proxyServer.initialize();
     await this.managementConsole.initialize();
 
     // Start managed processes
-    await this.processManager.startManagedProcesses();
+    await serviceContainer.processManager.startManagedProcesses();
 
     logger.info('Bun proxy server initialization complete');
   }
@@ -66,20 +60,8 @@ export class BunProxyServer {
     await this.proxyServer.stop();
     await this.managementConsole.stop();
 
-    // Shutdown all session managers
-    SessionManager.shutdownAll();
-
-    // Shutdown statistics service
-    await StatisticsService.getInstance().shutdown();
-
-    // Stop configuration monitoring
-    configService.stopConfigMonitoring();
-
-    // Clear geolocation cache
-    GeolocationService.getInstance().clearCache();
-
-    // Shutdown OAuth2 service
-    oauth2Service.shutdown();
+    // Shutdown service container (handles all service shutdown)
+    await shutdownServiceContainer();
 
     logger.info('Bun proxy server stopped successfully');
   }
@@ -101,6 +83,7 @@ export class BunProxyServer {
   }
 
   async getProcesses(): Promise<any[]> {
+    const serviceContainer = getServiceContainer();
     return this.managementConsole.getProcesses();
   }
 

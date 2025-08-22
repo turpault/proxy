@@ -7,6 +7,7 @@ import { cacheService, setCacheExpiration } from './cache';
 import { configService } from './config-service';
 import { ProxyCertificates } from './proxy-certificates';
 import { getStatisticsService, StatisticsService } from './statistics';
+import { ServiceContainer } from './service-container';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import { SessionManager } from './session-manager';
@@ -36,16 +37,18 @@ export class ProxyServer {
   private proxyCertificates: ProxyCertificates;
   private statisticsService: StatisticsService;
 
-  constructor(config: ProxyConfig) {
+  constructor(config: ProxyConfig, serviceContainer: ServiceContainer) {
     this.config = config;
 
-    // Initialize statistics service with configuration
-    const tempDir = configService.getSetting<string>('tempDir') || path.join(process.cwd(), 'data', 'temp');
-    this.statisticsService = getStatisticsService();
+    // Get services from container
+    this.statisticsService = serviceContainer.statisticsService;
+    this.proxyCertificates = serviceContainer.proxyCertificates;
 
-    this.proxyMiddleware = new BunMiddleware(this.config, this.statisticsService);
+    // Initialize middleware and routes with service container
+    this.proxyMiddleware = new BunMiddleware(this.config, serviceContainer);
+    
+    const tempDir = configService.getSetting<string>('tempDir') || path.join(process.cwd(), 'data', 'temp');
     this.proxyRoutes = new BunRoutes(tempDir, this.statisticsService);
-    this.proxyCertificates = ProxyCertificates.getInstance(config);
 
     // Set cache expiration from main config if available
     const cacheMaxAge = configService.getSetting('cache.maxAge');

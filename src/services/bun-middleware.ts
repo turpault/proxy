@@ -3,13 +3,18 @@ import { logger } from '../utils/logger';
 import { GeolocationInfo } from './geolocation';
 import { OAuth2Service } from './oauth2';
 import { StatisticsService } from './statistics';
+import { ServiceContainer } from './service-container';
 
 
 export class BunMiddleware {
   private oauth2Service: OAuth2Service;
+  private statisticsService: StatisticsService;
+  private geolocationService: any;
 
-  constructor(config: ProxyConfig, statisticsService?: StatisticsService) {
-    this.oauth2Service = new OAuth2Service();
+  constructor(config: ProxyConfig, serviceContainer: ServiceContainer) {
+    this.oauth2Service = serviceContainer.oauth2Service;
+    this.statisticsService = serviceContainer.statisticsService;
+    this.geolocationService = serviceContainer.geolocationService;
   }
 
   async processRequest(requestContext: BunRequestContext, route: ProxyRoute): Promise<Response | null> {

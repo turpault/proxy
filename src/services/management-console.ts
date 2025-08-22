@@ -47,6 +47,7 @@ import { ProcessManager } from './process-manager';
 import { ProxyCertificates } from './proxy-certificates';
 import { SessionManager } from './session-manager';
 import { getStatisticsService, StatisticsService } from './statistics';
+import { ServiceContainer } from './service-container';
 
 export class ManagementConsole {
   private managementServer: Server | null = null;
@@ -57,12 +58,12 @@ export class ManagementConsole {
   private processManager: ProcessManager;
   private lastLogTimestampMs: Map<string, number> = new Map();
 
-  constructor(config: ProxyConfig, processManager: ProcessManager) {
+  constructor(config: ProxyConfig, serviceContainer: ServiceContainer) {
     this.config = config;
-    this.processManager = processManager;
+    this.processManager = serviceContainer.processManager;
 
-    // Get the statistics service singleton
-    this.statisticsService = getStatisticsService();
+    // Get services from container
+    this.statisticsService = serviceContainer.statisticsService;
   }
 
   /**

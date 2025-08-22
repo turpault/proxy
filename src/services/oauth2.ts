@@ -707,11 +707,11 @@ export class OAuth2Service {
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = null;
     }
-    
+
     // Clear all states and code verifiers
     this.states.clear();
     this.codeVerifiers.clear();
-    
+
     logger.info('OAuth2 service shutdown complete');
   }
 }
