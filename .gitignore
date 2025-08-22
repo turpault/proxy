@@ -140,4 +140,4 @@ config/backup/
 data/statistics/
 data/*.sqlite
 testing_scripts/
-data/stopped-processes.json
+data/*.json
