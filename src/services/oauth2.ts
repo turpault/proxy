@@ -211,13 +211,13 @@ export class OAuth2Service {
         tokenType: tokens.token_type,
         scope: tokens.scope,
         refreshToken: tokens.refresh_token,
-        expiresAt: tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000) : undefined,
+        expiresAt: tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000).toISOString() : undefined,
       };
 
       // Store OAuth2 session data in the session manager
       // We'll store it as JSON in the userAgent field to preserve the OAuth2 data
       const sessionData = JSON.stringify(oauth2SessionData);
-      
+
       // Create or update the session in the session manager
       const session = sessionManager.getSession(sessionId);
       if (session) {
@@ -240,7 +240,7 @@ export class OAuth2Service {
       logger.info(`OAuth2 session created successfully`, {
         provider: stateConfig.provider,
         sessionId,
-        expiresAt: oauth2SessionData.expiresAt?.toISOString(),
+        expiresAt: oauth2SessionData.expiresAt,
         domain: route.domain,
       });
 
@@ -260,7 +260,7 @@ export class OAuth2Service {
     try {
       const sessionManager = getSessionManagerForRoute(route);
       const session = sessionManager.getSession(sessionId);
-      
+
       if (!session) {
         logger.debug(`[OAUTH2] No session found for ${sessionId} in domain ${route.domain}`);
         return false;
@@ -269,9 +269,9 @@ export class OAuth2Service {
       // Check if the session has OAuth2 data
       try {
         const oauth2Data = JSON.parse(session.userAgent) as OAuth2Session;
-        
+
         // Check if token is expired
-        if (oauth2Data.expiresAt && oauth2Data.expiresAt < new Date()) {
+        if (oauth2Data.expiresAt && new Date(oauth2Data.expiresAt) < new Date()) {
           logger.debug(`[OAUTH2] Session ${sessionId} expired, deleting`);
           sessionManager.deleteSession(sessionId);
           return false;
@@ -295,7 +295,7 @@ export class OAuth2Service {
     try {
       const sessionManager = getSessionManagerForRoute(route);
       const session = sessionManager.getSession(sessionId);
-      
+
       if (!session) {
         logger.debug(`[OAUTH2] No session found for ${sessionId} in domain ${route.domain}`);
         return null;
@@ -368,7 +368,7 @@ export class OAuth2Service {
         tokenType: tokens.token_type,
         scope: tokens.scope,
         refreshToken: tokens.refresh_token || oauth2Session.refreshToken,
-        expiresAt: tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000) : undefined,
+        expiresAt: tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000).toISOString() : undefined,
       };
 
       // Update the session in the session manager
@@ -385,7 +385,7 @@ export class OAuth2Service {
       logger.info(`OAuth2 token refreshed successfully`, {
         provider: config.provider,
         sessionId,
-        expiresAt: updatedSession.expiresAt?.toISOString(),
+        expiresAt: updatedSession.expiresAt,
         domain: route.domain,
       });
 
@@ -488,8 +488,9 @@ export class OAuth2Service {
 
             if (sessionId && this.isAuthenticated(sessionId, route)) {
               const session = this.getSession(sessionId, route);
-              const now = new Date();
-              const isExpired = session?.expiresAt && session.expiresAt < now;
+                           const now = new Date();
+             const isExpired = session?.expiresAt && new Date(session.expiresAt) < now;
+              debugger;
 
               return new Response(JSON.stringify({
                 authenticated: true,
@@ -497,9 +498,9 @@ export class OAuth2Service {
                   accessToken: session?.accessToken,
                   tokenType: session?.tokenType,
                   scope: session?.scope,
-                  expiresAt: session?.expiresAt?.toISOString(),
-                  isExpired: isExpired,
-                  expiresIn: session?.expiresAt ? Math.max(0, session.expiresAt.getTime() - now.getTime()) : null,
+                                   expiresAt: session?.expiresAt,
+                 isExpired: isExpired,
+                 expiresIn: session?.expiresAt ? Math.max(0, new Date(session.expiresAt).getTime() - now.getTime()) : null,
                   sessionId: sessionId
                 },
                 provider: config.provider,
@@ -672,23 +673,23 @@ export class OAuth2Service {
           });
         }
       };
-         } catch (error) {
-       logger.error('Middleware creation failed', {
-         error: error instanceof Error ? error.message : 'Unknown error',
-         provider: config.provider,
-         baseRoutePath,
-         publicPaths
-       });
-       return async (requestContext: BunRequestContext) => {
-         return new Response(JSON.stringify({
-           success: false,
-           error: error instanceof Error ? error.message : 'Unknown error'
-         }), {
-           status: 500,
-           headers: { 'Content-Type': 'application/json' }
-         });
-       };
-     }
+    } catch (error) {
+      logger.error('Middleware creation failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        provider: config.provider,
+        baseRoutePath,
+        publicPaths
+      });
+      return async (requestContext: BunRequestContext) => {
+        return new Response(JSON.stringify({
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      };
+    }
   }
 
   // Legacy method for backward compatibility (returns null for Bun)

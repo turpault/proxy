@@ -251,7 +251,7 @@ export interface OAuth2TokenResponse {
 export interface OAuth2Session {
   accessToken: string;
   refreshToken?: string;
-  expiresAt?: Date;
+  expiresAt?: string; // ISO string for serialization
   tokenType: string;
   scope?: string;
   user?: any;
