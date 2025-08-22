@@ -8,10 +8,11 @@ import { getSessionManagerForRoute } from '../utils/session-utils';
 export class OAuth2Service {
   private states: Map<string, { config: OAuth2Config; timestamp: number }> = new Map();
   private codeVerifiers: Map<string, string> = new Map();
+  private cleanupInterval: NodeJS.Timeout | null = null;
 
   constructor() {
     // Clean up expired states every 10 minutes
-    setInterval(() => this.cleanupExpiredStates(), 10 * 60 * 1000);
+    this.cleanupInterval = setInterval(() => this.cleanupExpiredStates(), 10 * 60 * 1000);
   }
 
   // Generate unique cookie name for a route
@@ -697,4 +698,23 @@ export class OAuth2Service {
     logger.warn('OAuth2 createMiddleware() is deprecated for Bun. Use createBunMiddleware() instead.');
     return null;
   }
-} 
+
+  /**
+   * Shutdown the OAuth2 service
+   */
+  shutdown(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+    
+    // Clear all states and code verifiers
+    this.states.clear();
+    this.codeVerifiers.clear();
+    
+    logger.info('OAuth2 service shutdown complete');
+  }
+}
+
+// Export singleton instance
+export const oauth2Service = new OAuth2Service(); 

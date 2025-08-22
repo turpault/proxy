@@ -6,7 +6,7 @@ import { BunRoutes } from './bun-routes';
 import { cacheService, setCacheExpiration } from './cache';
 import { configService } from './config-service';
 import { ProxyCertificates } from './proxy-certificates';
-import { getStatisticsService } from './statistics';
+import { getStatisticsService, StatisticsService } from './statistics';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import { SessionManager } from './session-manager';
@@ -34,7 +34,7 @@ export class ProxyServer {
   private proxyRoutes: BunRoutes;
   private proxyMiddleware: BunMiddleware;
   private proxyCertificates: ProxyCertificates;
-  private statisticsService: any;
+  private statisticsService: StatisticsService;
 
   constructor(config: ProxyConfig) {
     this.config = config;

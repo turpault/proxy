@@ -6,6 +6,8 @@ import { ManagementConsole } from './services/management-console';
 import { ProcessManager } from './services/process-manager';
 import { StatisticsService } from './services/statistics';
 import { SessionManager } from './services/session-manager';
+import { GeolocationService } from './services/geolocation';
+import { oauth2Service } from './services/oauth2';
 
 export class BunProxyServer {
   private proxyServer: ProxyServer;
@@ -69,6 +71,15 @@ export class BunProxyServer {
 
     // Shutdown statistics service
     await StatisticsService.getInstance().shutdown();
+
+    // Stop configuration monitoring
+    configService.stopConfigMonitoring();
+
+    // Clear geolocation cache
+    GeolocationService.getInstance().clearCache();
+
+    // Shutdown OAuth2 service
+    oauth2Service.shutdown();
 
     logger.info('Bun proxy server stopped successfully');
   }

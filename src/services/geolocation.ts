@@ -124,6 +124,11 @@ export class GeolocationService {
       maxSize: this.CACHE_SIZE,
     };
   }
+
+  public clearCache(): void {
+    this.cache.clear();
+    logger.debug('Geolocation cache cleared');
+  }
 }
 
 export const geolocationService = GeolocationService.getInstance(); 
