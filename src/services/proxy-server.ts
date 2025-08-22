@@ -371,8 +371,6 @@ export class ProxyServer {
     // Shutdown cache service (no shutdown method, just cleanup)
     await cacheService.cleanup();
 
-    // Save sessions before shutdown
-    SessionManager.shutdownAll();
 
     logger.info('Proxy server stopped successfully');
   }

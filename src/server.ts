@@ -67,6 +67,9 @@ export class BunProxyServer {
     // Shutdown all session managers
     SessionManager.shutdownAll();
 
+    // Shutdown statistics service
+    await StatisticsService.getInstance().shutdown();
+
     logger.info('Bun proxy server stopped successfully');
   }
 
