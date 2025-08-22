@@ -857,6 +857,175 @@ export class ManagementConsole {
           }
         },
 
+        "/api/statistics/per-route": {
+          GET: async (req: Request) => {
+            try {
+              if (!this.isAuthenticated(req)) {
+                return this.createUnauthorizedResponse();
+              }
+              const url = new URL(req.url);
+              const period = url.searchParams.get('period') || '24h';
+              const limit = parseInt(url.searchParams.get('limit') || '50');
+              
+              const perRouteStats = this.statisticsService.getPerRouteStats(period, limit);
+              
+              return new Response(JSON.stringify({ success: true, data: perRouteStats }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({
+                success: false,
+                error: 'Failed to get per-route statistics',
+                details: error instanceof Error ? error.message : 'Unknown error'
+              } as ApiErrorResponse), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+        },
+
+        "/api/statistics/unmatched": {
+          GET: async (req: Request) => {
+            try {
+              if (!this.isAuthenticated(req)) {
+                return this.createUnauthorizedResponse();
+              }
+              const url = new URL(req.url);
+              const period = url.searchParams.get('period') || '24h';
+              const limit = parseInt(url.searchParams.get('limit') || '50');
+              
+              const unmatchedStats = this.statisticsService.getUnmatchedRouteStats(period, limit);
+              
+              return new Response(JSON.stringify({ success: true, data: unmatchedStats }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({
+                success: false,
+                error: 'Failed to get unmatched route statistics',
+                details: error instanceof Error ? error.message : 'Unknown error'
+              } as ApiErrorResponse), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+        },
+
+        "/api/statistics/domains": {
+          GET: async (req: Request) => {
+            try {
+              if (!this.isAuthenticated(req)) {
+                return this.createUnauthorizedResponse();
+              }
+              const url = new URL(req.url);
+              const period = url.searchParams.get('period') || '24h';
+              
+              const domainStats = this.statisticsService.getDomainStats(period);
+              
+              return new Response(JSON.stringify({ success: true, data: domainStats }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({
+                success: false,
+                error: 'Failed to get domain statistics',
+                details: error instanceof Error ? error.message : 'Unknown error'
+              } as ApiErrorResponse), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+        },
+
+        "/api/statistics/route-history": {
+          GET: async (req: Request) => {
+            try {
+              if (!this.isAuthenticated(req)) {
+                return this.createUnauthorizedResponse();
+              }
+              const url = new URL(req.url);
+              const routeName = url.searchParams.get('routeName');
+              const domain = url.searchParams.get('domain');
+              const path = url.searchParams.get('path');
+              const period = url.searchParams.get('period') || '24h';
+              const limit = parseInt(url.searchParams.get('limit') || '100');
+              
+              if (!routeName || !domain || !path) {
+                return new Response(JSON.stringify({
+                  success: false,
+                  error: 'Missing required parameters: routeName, domain, path'
+                } as ApiErrorResponse), {
+                  status: 400,
+                  headers: { 'Content-Type': 'application/json' }
+                });
+              }
+              
+              const routeHistory = this.statisticsService.getRouteRequestHistory(routeName, domain, path, period, limit);
+              
+              return new Response(JSON.stringify({ success: true, data: routeHistory }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({
+                success: false,
+                error: 'Failed to get route history',
+                details: error instanceof Error ? error.message : 'Unknown error'
+              } as ApiErrorResponse), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+        },
+
+        "/api/statistics/unmatched-history": {
+          GET: async (req: Request) => {
+            try {
+              if (!this.isAuthenticated(req)) {
+                return this.createUnauthorizedResponse();
+              }
+              const url = new URL(req.url);
+              const domain = url.searchParams.get('domain');
+              const path = url.searchParams.get('path');
+              const period = url.searchParams.get('period') || '24h';
+              const limit = parseInt(url.searchParams.get('limit') || '100');
+              
+              if (!domain || !path) {
+                return new Response(JSON.stringify({
+                  success: false,
+                  error: 'Missing required parameters: domain, path'
+                } as ApiErrorResponse), {
+                  status: 400,
+                  headers: { 'Content-Type': 'application/json' }
+                });
+              }
+              
+              const unmatchedHistory = this.statisticsService.getUnmatchedRequestHistory(domain, path, period, limit);
+              
+              return new Response(JSON.stringify({ success: true, data: unmatchedHistory }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({
+                success: false,
+                error: 'Failed to get unmatched request history',
+                details: error instanceof Error ? error.message : 'Unknown error'
+              } as ApiErrorResponse), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+        },
+
         "/api/processes": {
           GET: async (req: Request) => {
             if (!this.isAuthenticated(req)) {

@@ -44,9 +44,9 @@ export class ProxyServer {
     this.statisticsService = serviceContainer.statisticsService;
     this.proxyCertificates = serviceContainer.proxyCertificates;
 
-        // Initialize middleware and routes with service container
+    // Initialize middleware and routes with service container
     this.proxyMiddleware = new BunMiddleware(this.config, serviceContainer);
-    
+
     const tempDir = configService.getSetting<string>('tempDir') || path.join(process.cwd(), 'data', 'temp');
     this.proxyRoutes = new BunRoutes(tempDir, serviceContainer);
 
@@ -282,6 +282,9 @@ export class ProxyServer {
 
     // Set up routes (for complex routes that need the full routing system)
     this.proxyRoutes.setupRoutes(this.config);
+
+    // Sync route configurations to statistics database
+    this.statisticsService.syncRouteConfigs(this.config.routes);
 
     // Set up cache cleanup
     this.setupCacheCleanup();

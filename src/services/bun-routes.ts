@@ -8,6 +8,7 @@ import path from 'path';
 import { BunMiddleware } from './bun-middleware';
 import { StatisticsService } from './statistics';
 import { ServiceContainer } from './service-container';
+import { GeolocationService } from './geolocation';
 
 export interface ProxyRequestConfig {
   route: ProxyRoute;
@@ -22,7 +23,7 @@ export interface ProxyRequestConfig {
 
 export class BunRoutes {
   private statisticsService: StatisticsService;
-  private geolocationService: any;
+  private geolocationService: GeolocationService;
   private tempDir: string;
   private routeHandlers: Array<{
     route: ProxyRoute;
@@ -301,7 +302,7 @@ export class BunRoutes {
 
     const requestContext: BunRequestContext = {
       method: req.method,
-      geolocation: geolocationService.getGeolocation(ip),
+      geolocation: this.geolocationService.getGeolocation(ip),
       userAgent: headers['user-agent'] || 'Unknown',
       url: req.url,
       pathname: url.pathname,

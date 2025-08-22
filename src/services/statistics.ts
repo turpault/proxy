@@ -200,15 +200,97 @@ export class StatisticsService {
           response_time REAL DEFAULT 0,
           timestamp TEXT NOT NULL,
           request_type TEXT DEFAULT 'proxy',
+          status_code INTEGER DEFAULT 200,
+          user_agent TEXT,
+          path TEXT,
+          query_string TEXT,
+          headers_json TEXT,
           created_at TEXT DEFAULT (datetime('now')),
           FOREIGN KEY (ip) REFERENCES request_stats(ip) ON DELETE CASCADE
+        )
+      `);
+
+      // New table for individual requests (for detailed tracking)
+      this.db.run(`
+        CREATE TABLE IF NOT EXISTS individual_requests (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          ip TEXT NOT NULL,
+          domain TEXT NOT NULL,
+          path TEXT NOT NULL,
+          method TEXT NOT NULL,
+          status_code INTEGER DEFAULT 200,
+          response_time REAL DEFAULT 0,
+          timestamp TEXT NOT NULL,
+          user_agent TEXT,
+          request_type TEXT DEFAULT 'proxy',
+          route_name TEXT,
+          target_url TEXT,
+          query_string TEXT,
+          headers_json TEXT,
+          geolocation_json TEXT,
+          created_at TEXT DEFAULT (datetime('now'))
+        )
+      `);
+
+      // New table for route configurations (for matching)
+      this.db.run(`
+        CREATE TABLE IF NOT EXISTS route_configs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT,
+          domain TEXT NOT NULL,
+          path TEXT NOT NULL,
+          target TEXT,
+          type TEXT DEFAULT 'proxy',
+          ssl BOOLEAN DEFAULT 0,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now')),
+          UNIQUE(domain, path)
+        )
+      `);
+
+      // New table for unmatched requests
+      this.db.run(`
+        CREATE TABLE IF NOT EXISTS unmatched_requests (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          ip TEXT NOT NULL,
+          domain TEXT NOT NULL,
+          path TEXT NOT NULL,
+          method TEXT NOT NULL,
+          status_code INTEGER DEFAULT 404,
+          response_time REAL DEFAULT 0,
+          timestamp TEXT NOT NULL,
+          user_agent TEXT,
+          query_string TEXT,
+          headers_json TEXT,
+          geolocation_json TEXT,
+          created_at TEXT DEFAULT (datetime('now'))
         )
       `);
 
       // Create indexes for better performance
       this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_details_ip ON route_details(ip)`);
       this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_details_timestamp ON route_details(timestamp)`);
+      this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_details_domain ON route_details(domain)`);
+      this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_details_target ON route_details(target)`);
       this.db.run(`CREATE INDEX IF NOT EXISTS idx_request_stats_last_seen ON request_stats(last_seen)`);
+      
+      // Indexes for individual requests
+      this.db.run(`CREATE INDEX IF NOT EXISTS idx_individual_requests_ip ON individual_requests(ip)`);
+      this.db.run(`CREATE INDEX IF NOT EXISTS idx_individual_requests_timestamp ON individual_requests(timestamp)`);
+      this.db.run(`CREATE INDEX IF NOT EXISTS idx_individual_requests_domain ON individual_requests(domain)`);
+      this.db.run(`CREATE INDEX IF NOT EXISTS idx_individual_requests_path ON individual_requests(path)`);
+      this.db.run(`CREATE INDEX IF NOT EXISTS idx_individual_requests_method ON individual_requests(method)`);
+      this.db.run(`CREATE INDEX IF NOT EXISTS idx_individual_requests_status ON individual_requests(status_code)`);
+      
+      // Indexes for unmatched requests
+      this.db.run(`CREATE INDEX IF NOT EXISTS idx_unmatched_requests_ip ON unmatched_requests(ip)`);
+      this.db.run(`CREATE INDEX IF NOT EXISTS idx_unmatched_requests_timestamp ON unmatched_requests(timestamp)`);
+      this.db.run(`CREATE INDEX IF NOT EXISTS idx_unmatched_requests_domain ON unmatched_requests(domain)`);
+      this.db.run(`CREATE INDEX IF NOT EXISTS idx_unmatched_requests_path ON unmatched_requests(path)`);
+      
+      // Indexes for route configs
+      this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_configs_domain ON route_configs(domain)`);
+      this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_configs_path ON route_configs(path)`);
 
       logger.info(`SQLite database initialized: ${dbPath}`);
     } catch (error) {
@@ -426,12 +508,19 @@ export class StatisticsService {
       const cutoffDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000); // 90 days ago
       const cutoffISO = cutoffDate.toISOString();
 
-      // Delete old route details first (due to foreign key constraint)
-      const deletedDetails = this.db.query(
+      // Delete old data from all tables
+      const deletedIndividualRequests = this.db.query(
+        'DELETE FROM individual_requests WHERE timestamp < ?'
+      ).run(cutoffISO).changes;
+
+      const deletedUnmatchedRequests = this.db.query(
+        'DELETE FROM unmatched_requests WHERE timestamp < ?'
+      ).run(cutoffISO).changes;
+
+      const deletedRouteDetails = this.db.query(
         'DELETE FROM route_details WHERE timestamp < ?'
       ).run(cutoffISO).changes;
 
-      // Delete old main stats
       const deletedStats = this.db.query(
         'DELETE FROM request_stats WHERE last_seen < ?'
       ).run(cutoffISO).changes;
@@ -439,11 +528,43 @@ export class StatisticsService {
       // Reload stats from database to sync memory
       await this.loadPersistedStats();
 
-      if (deletedStats > 0 || deletedDetails > 0) {
-        logger.info(`Cleaned up ${deletedStats} old statistics entries and ${deletedDetails} route details`);
+      const totalDeleted = deletedStats + deletedRouteDetails + deletedIndividualRequests + deletedUnmatchedRequests;
+      if (totalDeleted > 0) {
+        logger.info(`Cleaned up ${deletedStats} old statistics entries, ${deletedRouteDetails} route details, ${deletedIndividualRequests} individual requests, and ${deletedUnmatchedRequests} unmatched requests`);
       }
     } catch (error) {
       logger.error('Failed to cleanup old statistics:', error);
+    }
+  }
+
+  /**
+   * Sync route configurations to database
+   */
+  public syncRouteConfigs(routes: ProxyRoute[]): void {
+    try {
+      if (!this.db) return;
+
+      // Clear existing route configs
+      this.db.run('DELETE FROM route_configs');
+
+      // Insert current route configs
+      for (const route of routes) {
+        this.db.run(`
+          INSERT INTO route_configs (name, domain, path, target, type, ssl)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `, [
+          route.name || null,
+          route.domain,
+          route.path || '/',
+          route.target || null,
+          route.type || 'proxy',
+          route.ssl ? 1 : 0
+        ]);
+      }
+
+      logger.info(`Synced ${routes.length} route configurations to database`);
+    } catch (error) {
+      logger.error('Failed to sync route configurations:', error);
     }
   }
 
@@ -460,6 +581,13 @@ export class StatisticsService {
 
     const now = new Date();
     const existing = this.stats.get(requestContext.ip);
+
+    // Extract additional request information
+    const url = new URL(requestContext.url);
+    const path = url.pathname;
+    const queryStr = url.search;
+    const statusCode = response?.status || 200;
+    const headers = requestContext.headers;
 
     if (existing) {
       // Update existing stats
@@ -514,6 +642,101 @@ export class StatisticsService {
           requestType: route.type || 'proxy',
         }] : [],
       });
+    }
+
+    // Store detailed request information in database
+    this.storeDetailedRequest(requestContext, route, responseTime, response, path, queryStr, statusCode, headers);
+  }
+
+  /**
+   * Store detailed request information in database
+   */
+  private storeDetailedRequest(
+    requestContext: BunRequestContext,
+    route: ProxyRoute | null,
+    responseTime: number | undefined,
+    response: Response | undefined,
+    path: string,
+    queryString: string,
+    statusCode: number,
+    headers: Record<string, string>
+  ): void {
+    try {
+      if (!this.db) return;
+
+      const now = new Date().toISOString();
+      const url = new URL(requestContext.url);
+      const domain = url.hostname;
+
+      // Store in individual_requests table
+      this.db.run(`
+        INSERT INTO individual_requests (
+          ip, domain, path, method, status_code, response_time, timestamp,
+          user_agent, request_type, route_name, target_url, query_string, headers_json, geolocation_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        requestContext.ip,
+        domain,
+        path,
+        requestContext.method,
+        statusCode,
+        responseTime || 0,
+        now,
+        requestContext.userAgent,
+        route?.type || 'proxy',
+        route?.name || null,
+        route?.target || null,
+        queryString,
+        JSON.stringify(headers),
+        JSON.stringify(requestContext.geolocation)
+      ]);
+
+      // If no route matched, store in unmatched_requests table
+      if (!route) {
+        this.db.run(`
+          INSERT INTO unmatched_requests (
+            ip, domain, path, method, status_code, response_time, timestamp,
+            user_agent, query_string, headers_json, geolocation_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          requestContext.ip,
+          domain,
+          path,
+          requestContext.method,
+          statusCode,
+          responseTime || 0,
+          now,
+          requestContext.userAgent,
+          queryString,
+          JSON.stringify(headers),
+          JSON.stringify(requestContext.geolocation)
+        ]);
+      }
+
+      // Update route_details table with enhanced information
+      if (route) {
+        this.db.run(`
+          INSERT INTO route_details (
+            ip, domain, target, method, response_time, timestamp, request_type,
+            status_code, user_agent, path, query_string, headers_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          requestContext.ip,
+          route.domain,
+          route.target || 'unknown',
+          requestContext.method,
+          responseTime || 0,
+          now,
+          route.type || 'proxy',
+          statusCode,
+          requestContext.userAgent,
+          path,
+          queryString,
+          JSON.stringify(headers)
+        ]);
+      }
+    } catch (error) {
+      logger.error('Failed to store detailed request in database:', error);
     }
   }
 
@@ -844,6 +1067,527 @@ export class StatisticsService {
     }
 
     return summary;
+  }
+
+  /**
+   * Get per-route statistics using SQLite queries
+   */
+  public getPerRouteStats(period: string = '24h', limit: number = 50): Array<{
+    routeName: string | null;
+    domain: string;
+    path: string;
+    target: string | null;
+    requestType: string;
+    totalRequests: number;
+    avgResponseTime: number;
+    uniqueIPs: number;
+    uniqueCountries: number;
+    topCountries: Array<{ country: string; count: number; percentage: number }>;
+    methods: string[];
+    statusCodes: Array<{ code: number; count: number; percentage: number }>;
+    topPaths: Array<{ path: string; count: number; percentage: number }>;
+  }> {
+    try {
+      if (!this.db) return [];
+
+      const startDate = this.getStartDateForPeriod(period);
+      const startISO = startDate.toISOString();
+
+      // Get route statistics
+      const routeStats = this.db.query(`
+        SELECT 
+          route_name,
+          domain,
+          path,
+          target_url,
+          request_type,
+          COUNT(*) as total_requests,
+          AVG(response_time) as avg_response_time,
+          COUNT(DISTINCT ip) as unique_ips,
+          COUNT(DISTINCT json_extract(geolocation_json, '$.country')) as unique_countries
+        FROM individual_requests 
+        WHERE timestamp >= ? AND route_name IS NOT NULL
+        GROUP BY route_name, domain, path, target_url, request_type
+        ORDER BY total_requests DESC
+        LIMIT ?
+      `).all(startISO, limit) as any[];
+
+      return routeStats.map(route => {
+        // Get top countries for this route
+        const topCountries = this.db.query(`
+          SELECT 
+            json_extract(geolocation_json, '$.country') as country,
+            COUNT(*) as count
+          FROM individual_requests 
+          WHERE timestamp >= ? AND route_name = ? AND domain = ? AND path = ?
+          GROUP BY country
+          ORDER BY count DESC
+          LIMIT 5
+        `).all(startISO, route.route_name, route.domain, route.path) as any[];
+
+        // Get methods for this route
+        const methods = this.db.query(`
+          SELECT DISTINCT method
+          FROM individual_requests 
+          WHERE timestamp >= ? AND route_name = ? AND domain = ? AND path = ?
+        `).all(startISO, route.route_name, route.domain, route.path) as any[];
+
+        // Get status codes for this route
+        const statusCodes = this.db.query(`
+          SELECT 
+            status_code as code,
+            COUNT(*) as count
+          FROM individual_requests 
+          WHERE timestamp >= ? AND route_name = ? AND domain = ? AND path = ?
+          GROUP BY status_code
+          ORDER BY count DESC
+        `).all(startISO, route.route_name, route.domain, route.path) as any[];
+
+        // Get top paths for this route
+        const topPaths = this.db.query(`
+          SELECT 
+            path,
+            COUNT(*) as count
+          FROM individual_requests 
+          WHERE timestamp >= ? AND route_name = ? AND domain = ?
+          GROUP BY path
+          ORDER BY count DESC
+          LIMIT 10
+        `).all(startISO, route.route_name, route.domain) as any[];
+
+        const totalRequests = route.total_requests;
+
+        return {
+          routeName: route.route_name,
+          domain: route.domain,
+          path: route.path,
+          target: route.target_url,
+          requestType: route.request_type,
+          totalRequests,
+          avgResponseTime: route.avg_response_time || 0,
+          uniqueIPs: route.unique_ips,
+          uniqueCountries: route.unique_countries,
+          topCountries: topCountries.map(c => ({
+            country: c.country || 'Unknown',
+            count: c.count,
+            percentage: (c.count / totalRequests) * 100
+          })),
+          methods: methods.map(m => m.method),
+          statusCodes: statusCodes.map(s => ({
+            code: s.code,
+            count: s.count,
+            percentage: (s.count / totalRequests) * 100
+          })),
+          topPaths: topPaths.map(p => ({
+            path: p.path,
+            count: p.count,
+            percentage: (p.count / totalRequests) * 100
+          }))
+        };
+      });
+    } catch (error) {
+      logger.error('Failed to get per-route statistics:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get unmatched route statistics using SQLite queries
+   */
+  public getUnmatchedRouteStats(period: string = '24h', limit: number = 50): Array<{
+    domain: string;
+    path: string;
+    totalRequests: number;
+    avgResponseTime: number;
+    uniqueIPs: number;
+    uniqueCountries: number;
+    topCountries: Array<{ country: string; count: number; percentage: number }>;
+    methods: string[];
+    statusCodes: Array<{ code: number; count: number; percentage: number }>;
+    topUserAgents: Array<{ userAgent: string; count: number; percentage: number }>;
+    recentRequests: Array<{
+      timestamp: string;
+      ip: string;
+      method: string;
+      statusCode: number;
+      userAgent: string;
+      country: string;
+    }>;
+  }> {
+    try {
+      if (!this.db) return [];
+
+      const startDate = this.getStartDateForPeriod(period);
+      const startISO = startDate.toISOString();
+
+      // Get unmatched route statistics
+      const unmatchedStats = this.db.query(`
+        SELECT 
+          domain,
+          path,
+          COUNT(*) as total_requests,
+          AVG(response_time) as avg_response_time,
+          COUNT(DISTINCT ip) as unique_ips,
+          COUNT(DISTINCT json_extract(geolocation_json, '$.country')) as unique_countries
+        FROM unmatched_requests 
+        WHERE timestamp >= ?
+        GROUP BY domain, path
+        ORDER BY total_requests DESC
+        LIMIT ?
+      `).all(startISO, limit) as any[];
+
+      return unmatchedStats.map(route => {
+        // Get top countries for this unmatched route
+        const topCountries = this.db.query(`
+          SELECT 
+            json_extract(geolocation_json, '$.country') as country,
+            COUNT(*) as count
+          FROM unmatched_requests 
+          WHERE timestamp >= ? AND domain = ? AND path = ?
+          GROUP BY country
+          ORDER BY count DESC
+          LIMIT 5
+        `).all(startISO, route.domain, route.path) as any[];
+
+        // Get methods for this unmatched route
+        const methods = this.db.query(`
+          SELECT DISTINCT method
+          FROM unmatched_requests 
+          WHERE timestamp >= ? AND domain = ? AND path = ?
+        `).all(startISO, route.domain, route.path) as any[];
+
+        // Get status codes for this unmatched route
+        const statusCodes = this.db.query(`
+          SELECT 
+            status_code as code,
+            COUNT(*) as count
+          FROM unmatched_requests 
+          WHERE timestamp >= ? AND domain = ? AND path = ?
+          GROUP BY status_code
+          ORDER BY count DESC
+        `).all(startISO, route.domain, route.path) as any[];
+
+        // Get top user agents for this unmatched route
+        const topUserAgents = this.db.query(`
+          SELECT 
+            user_agent,
+            COUNT(*) as count
+          FROM unmatched_requests 
+          WHERE timestamp >= ? AND domain = ? AND path = ?
+          GROUP BY user_agent
+          ORDER BY count DESC
+          LIMIT 10
+        `).all(startISO, route.domain, route.path) as any[];
+
+        // Get recent requests for this unmatched route
+        const recentRequests = this.db.query(`
+          SELECT 
+            timestamp,
+            ip,
+            method,
+            status_code,
+            user_agent,
+            json_extract(geolocation_json, '$.country') as country
+          FROM unmatched_requests 
+          WHERE timestamp >= ? AND domain = ? AND path = ?
+          ORDER BY timestamp DESC
+          LIMIT 20
+        `).all(startISO, route.domain, route.path) as any[];
+
+        const totalRequests = route.total_requests;
+
+        return {
+          domain: route.domain,
+          path: route.path,
+          totalRequests,
+          avgResponseTime: route.avg_response_time || 0,
+          uniqueIPs: route.unique_ips,
+          uniqueCountries: route.unique_countries,
+          topCountries: topCountries.map(c => ({
+            country: c.country || 'Unknown',
+            count: c.count,
+            percentage: (c.count / totalRequests) * 100
+          })),
+          methods: methods.map(m => m.method),
+          statusCodes: statusCodes.map(s => ({
+            code: s.code,
+            count: s.count,
+            percentage: (s.count / totalRequests) * 100
+          })),
+          topUserAgents: topUserAgents.map(ua => ({
+            userAgent: ua.user_agent || 'Unknown',
+            count: ua.count,
+            percentage: (ua.count / totalRequests) * 100
+          })),
+          recentRequests: recentRequests.map(req => ({
+            timestamp: req.timestamp,
+            ip: req.ip,
+            method: req.method,
+            statusCode: req.status_code,
+            userAgent: req.user_agent || 'Unknown',
+            country: req.country || 'Unknown'
+          }))
+        };
+      });
+    } catch (error) {
+      logger.error('Failed to get unmatched route statistics:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get domain-based statistics
+   */
+  public getDomainStats(period: string = '24h'): Array<{
+    domain: string;
+    totalRequests: number;
+    matchedRequests: number;
+    unmatchedRequests: number;
+    avgResponseTime: number;
+    uniqueIPs: number;
+    uniqueCountries: number;
+    topRoutes: Array<{ routeName: string | null; path: string; count: number; percentage: number }>;
+    topUnmatchedPaths: Array<{ path: string; count: number; percentage: number }>;
+  }> {
+    try {
+      if (!this.db) return [];
+
+      const startDate = this.getStartDateForPeriod(period);
+      const startISO = startDate.toISOString();
+
+      // Get domain statistics
+      const domainStats = this.db.query(`
+        SELECT 
+          domain,
+          COUNT(*) as total_requests,
+          AVG(response_time) as avg_response_time,
+          COUNT(DISTINCT ip) as unique_ips,
+          COUNT(DISTINCT json_extract(geolocation_json, '$.country')) as unique_countries
+        FROM individual_requests 
+        WHERE timestamp >= ?
+        GROUP BY domain
+        ORDER BY total_requests DESC
+      `).all(startISO) as any[];
+
+      return domainStats.map(domain => {
+        // Get matched requests count
+        const matchedRequests = this.db.query(`
+          SELECT COUNT(*) as count
+          FROM individual_requests 
+          WHERE timestamp >= ? AND domain = ? AND route_name IS NOT NULL
+        `).get(startISO, domain.domain) as any;
+
+        // Get unmatched requests count
+        const unmatchedRequests = this.db.query(`
+          SELECT COUNT(*) as count
+          FROM unmatched_requests 
+          WHERE timestamp >= ? AND domain = ?
+        `).get(startISO, domain.domain) as any;
+
+        // Get top routes for this domain
+        const topRoutes = this.db.query(`
+          SELECT 
+            route_name,
+            path,
+            COUNT(*) as count
+          FROM individual_requests 
+          WHERE timestamp >= ? AND domain = ? AND route_name IS NOT NULL
+          GROUP BY route_name, path
+          ORDER BY count DESC
+          LIMIT 10
+        `).all(startISO, domain.domain) as any[];
+
+        // Get top unmatched paths for this domain
+        const topUnmatchedPaths = this.db.query(`
+          SELECT 
+            path,
+            COUNT(*) as count
+          FROM unmatched_requests 
+          WHERE timestamp >= ? AND domain = ?
+          GROUP BY path
+          ORDER BY count DESC
+          LIMIT 10
+        `).all(startISO, domain.domain) as any[];
+
+        const totalRequests = domain.total_requests;
+        const matchedCount = matchedRequests?.count || 0;
+        const unmatchedCount = unmatchedRequests?.count || 0;
+
+        return {
+          domain: domain.domain,
+          totalRequests,
+          matchedRequests: matchedCount,
+          unmatchedRequests: unmatchedCount,
+          avgResponseTime: domain.avg_response_time || 0,
+          uniqueIPs: domain.unique_ips,
+          uniqueCountries: domain.unique_countries,
+          topRoutes: topRoutes.map(r => ({
+            routeName: r.route_name,
+            path: r.path,
+            count: r.count,
+            percentage: (r.count / totalRequests) * 100
+          })),
+          topUnmatchedPaths: topUnmatchedPaths.map(p => ({
+            path: p.path,
+            count: p.count,
+            percentage: (p.count / totalRequests) * 100
+          }))
+        };
+      });
+    } catch (error) {
+      logger.error('Failed to get domain statistics:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get detailed request history for a specific route
+   */
+  public getRouteRequestHistory(
+    routeName: string,
+    domain: string,
+    path: string,
+    period: string = '24h',
+    limit: number = 100
+  ): Array<{
+    timestamp: string;
+    ip: string;
+    method: string;
+    statusCode: number;
+    responseTime: number;
+    userAgent: string;
+    country: string;
+    city: string;
+    queryString: string;
+    headers: Record<string, string>;
+  }> {
+    try {
+      if (!this.db) return [];
+
+      const startDate = this.getStartDateForPeriod(period);
+      const startISO = startDate.toISOString();
+
+      const requests = this.db.query(`
+        SELECT 
+          timestamp,
+          ip,
+          method,
+          status_code,
+          response_time,
+          user_agent,
+          json_extract(geolocation_json, '$.country') as country,
+          json_extract(geolocation_json, '$.city') as city,
+          query_string,
+          headers_json
+        FROM individual_requests 
+        WHERE timestamp >= ? AND route_name = ? AND domain = ? AND path = ?
+        ORDER BY timestamp DESC
+        LIMIT ?
+      `).all(startISO, routeName, domain, path, limit) as any[];
+
+      return requests.map(req => ({
+        timestamp: req.timestamp,
+        ip: req.ip,
+        method: req.method,
+        statusCode: req.status_code,
+        responseTime: req.response_time,
+        userAgent: req.user_agent || 'Unknown',
+        country: req.country || 'Unknown',
+        city: req.city || 'Unknown',
+        queryString: req.query_string || '',
+        headers: req.headers_json ? JSON.parse(req.headers_json) : {}
+      }));
+    } catch (error) {
+      logger.error('Failed to get route request history:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get detailed request history for unmatched requests
+   */
+  public getUnmatchedRequestHistory(
+    domain: string,
+    path: string,
+    period: string = '24h',
+    limit: number = 100
+  ): Array<{
+    timestamp: string;
+    ip: string;
+    method: string;
+    statusCode: number;
+    responseTime: number;
+    userAgent: string;
+    country: string;
+    city: string;
+    queryString: string;
+    headers: Record<string, string>;
+  }> {
+    try {
+      if (!this.db) return [];
+
+      const startDate = this.getStartDateForPeriod(period);
+      const startISO = startDate.toISOString();
+
+      const requests = this.db.query(`
+        SELECT 
+          timestamp,
+          ip,
+          method,
+          status_code,
+          response_time,
+          user_agent,
+          json_extract(geolocation_json, '$.country') as country,
+          json_extract(geolocation_json, '$.city') as city,
+          query_string,
+          headers_json
+        FROM unmatched_requests 
+        WHERE timestamp >= ? AND domain = ? AND path = ?
+        ORDER BY timestamp DESC
+        LIMIT ?
+      `).all(startISO, domain, path, limit) as any[];
+
+      return requests.map(req => ({
+        timestamp: req.timestamp,
+        ip: req.ip,
+        method: req.method,
+        statusCode: req.status_code,
+        responseTime: req.response_time,
+        userAgent: req.user_agent || 'Unknown',
+        country: req.country || 'Unknown',
+        city: req.city || 'Unknown',
+        queryString: req.query_string || '',
+        headers: req.headers_json ? JSON.parse(req.headers_json) : {}
+      }));
+    } catch (error) {
+      logger.error('Failed to get unmatched request history:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Helper method to get start date for a given period
+   */
+  private getStartDateForPeriod(period: string): Date {
+    const now = new Date();
+    switch (period) {
+      case '1h':
+        return new Date(now.getTime() - 60 * 60 * 1000);
+      case '6h':
+        return new Date(now.getTime() - 6 * 60 * 60 * 1000);
+      case '12h':
+        return new Date(now.getTime() - 12 * 60 * 60 * 1000);
+      case '24h':
+        return new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      case '7d':
+        return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      case '30d':
+        return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      case '90d':
+        return new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      default:
+        return new Date(now.getTime() - 24 * 60 * 60 * 1000); // Default to 24h
+    }
   }
 
   /**
