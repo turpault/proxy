@@ -9,6 +9,7 @@ import { ProxyCertificates } from './proxy-certificates';
 import { getStatisticsService } from './statistics';
 import * as fs from 'fs-extra';
 import * as path from 'path';
+import { SessionManager } from './session-manager';
 
 interface WebSocketProxyData {
   target: string;
@@ -369,6 +370,9 @@ export class ProxyServer {
 
     // Shutdown cache service (no shutdown method, just cleanup)
     await cacheService.cleanup();
+
+    // Save sessions before shutdown
+    SessionManager.shutdownAll();
 
     logger.info('Proxy server stopped successfully');
   }

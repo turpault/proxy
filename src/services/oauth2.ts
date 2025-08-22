@@ -488,8 +488,8 @@ export class OAuth2Service {
 
             if (sessionId && this.isAuthenticated(sessionId, route)) {
               const session = this.getSession(sessionId, route);
-                           const now = new Date();
-             const isExpired = session?.expiresAt && new Date(session.expiresAt) < now;
+              const now = new Date();
+              const isExpired = session?.expiresAt && new Date(session.expiresAt) < now;
               debugger;
 
               return new Response(JSON.stringify({
@@ -498,9 +498,9 @@ export class OAuth2Service {
                   accessToken: session?.accessToken,
                   tokenType: session?.tokenType,
                   scope: session?.scope,
-                                   expiresAt: session?.expiresAt,
-                 isExpired: isExpired,
-                 expiresIn: session?.expiresAt ? Math.max(0, new Date(session.expiresAt).getTime() - now.getTime()) : null,
+                  expiresAt: session?.expiresAt,
+                  isExpired: isExpired,
+                  expiresIn: session?.expiresAt ? Math.max(0, new Date(session.expiresAt).getTime() - now.getTime()) : null,
                   sessionId: sessionId
                 },
                 provider: config.provider,

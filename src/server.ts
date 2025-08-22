@@ -5,6 +5,7 @@ import { ProxyServer } from './services/proxy-server';
 import { ManagementConsole } from './services/management-console';
 import { ProcessManager } from './services/process-manager';
 import { StatisticsService } from './services/statistics';
+import { SessionManager } from './services/session-manager';
 
 export class BunProxyServer {
   private proxyServer: ProxyServer;
@@ -62,6 +63,9 @@ export class BunProxyServer {
     // Stop all services
     await this.proxyServer.stop();
     await this.managementConsole.stop();
+
+    // Shutdown all session managers
+    SessionManager.shutdownAll();
 
     logger.info('Bun proxy server stopped successfully');
   }

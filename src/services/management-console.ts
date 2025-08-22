@@ -1,54 +1,52 @@
 import { Server, ServerWebSocket } from 'bun';
 import { existsSync, readFileSync } from 'fs';
+import * as fs from 'fs-extra';
 import * as path from 'path';
+import { stringify as yamlStringify } from 'yaml';
 import managementHtml from '../frontend/management/index.html';
 import { ConfigSaveRequest, ProxyConfig } from '../types';
-import { logger } from '../utils/logger';
-import { cacheService } from './cache';
-import { configService } from './config-service';
-import { ProcessManager } from './process-manager';
-import { ProxyCertificates } from './proxy-certificates';
-import { getStatisticsService, StatisticsService } from './statistics';
-import { authService } from './local-admin-auth-service';
-import { sessionManager, SessionManager } from './session-manager';
-import { stringify as yamlStringify } from 'yaml';
-import * as fs from 'fs-extra';
 import {
-  StatusResponse,
-  GetConfigResponse,
-  SaveConfigResponse,
-  CreateBackupResponse,
-  GetBackupsResponse,
-  RestoreBackupResponse,
-  ValidateConfigResponse,
-  GetStatisticsResponse,
-  GetDetailedStatisticsResponse,
-  GetStatisticsSummaryResponse,
-  GenerateReportResponse,
-  GetProcessesResponse,
-  ReloadProcessesResponse,
-  StartProcessResponse,
-  KillProcessResponse,
-  RestartProcessResponse,
-  GetProcessLogsResponse,
-  GetProcessConfigResponse,
-  UpdateProcessConfigResponse,
-  GetCertificatesResponse,
-  GetCacheStatsResponse,
-  GetCacheEntriesResponse,
-  ClearCacheResponse,
-  DeleteCacheEntryResponse,
-  HealthResponse,
   ApiErrorResponse,
-  ApiSuccessResponse,
-  LogLine,
+  ClearCacheResponse,
+  CreateBackupResponse,
+  DeleteCacheEntryResponse,
+  GenerateReportResponse,
+  GetBackupsResponse,
+  GetCacheEntriesResponse,
+  GetCacheStatsResponse,
+  GetCertificatesResponse,
+  GetConfigResponse,
+  GetDetailedStatisticsResponse,
+  GetProcessConfigResponse,
+  GetProcessesResponse,
+  GetProcessLogsResponse,
+  GetStatisticsResponse,
+  GetStatisticsSummaryResponse,
+  HealthResponse,
+  KillProcessResponse,
   LoginRequest,
   LoginResponse,
-  LogoutRequest,
+  LogLine,
   LogoutResponse,
-  SessionValidationResponse
+  ReloadProcessesResponse,
+  RestartProcessResponse,
+  RestoreBackupResponse,
+  SaveConfigResponse,
+  SessionValidationResponse,
+  StartProcessResponse,
+  StatusResponse,
+  UpdateProcessConfigResponse,
+  ValidateConfigResponse
 } from '../types/shared';
-import { validateYAML, validateProcessConfigYAML, validateProxyConfigYAML, validateMainConfigYAML } from '../utils/yaml-validator';
+import { logger } from '../utils/logger';
+import { validateMainConfigYAML, validateProcessConfigYAML, validateProxyConfigYAML, validateYAML } from '../utils/yaml-validator';
+import { cacheService } from './cache';
+import { configService } from './config-service';
+import { authService } from './local-admin-auth-service';
+import { ProcessManager } from './process-manager';
+import { ProxyCertificates } from './proxy-certificates';
+import { SessionManager } from './session-manager';
+import { getStatisticsService, StatisticsService } from './statistics';
 
 export class ManagementConsole {
   private managementServer: Server | null = null;
@@ -1262,8 +1260,6 @@ export class ManagementConsole {
     // Shutdown process manager
     await this.processManager.shutdown();
 
-    // Save sessions before shutdown
-    SessionManager.shutdownAll();
 
     logger.info('Management console stopped successfully');
   }
