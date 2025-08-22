@@ -135,9 +135,8 @@ build/
 config/processes.yaml
 config/proxy.yaml
 config/main.yaml
-data/cache/
 config/backup/
-data/statistics/
-data/*.sqlite
 testing_scripts/
-data/*.json
+
+# Data directory (runtime data, sessions, cache, etc.)
+data/
