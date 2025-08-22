@@ -931,6 +931,7 @@ export class ManagementConsole {
             const processId = url.pathname.split('/')[3];
 
             try {
+              await this.processManager.stopProcess(processId);
               await this.processManager.killProcess(processId);
               return new Response(JSON.stringify({ success: true, message: `Process ${processId} killed` } as KillProcessResponse), {
                 status: 200,

@@ -129,10 +129,10 @@ export class ProcessManager {
 
       // Ensure directory exists
       await fs.ensureDir(path.dirname(this.stoppedStatusFile));
-      
+
       // Write to file
       await fs.writeJson(this.stoppedStatusFile, data, { spaces: 2 });
-      
+
       logger.debug(`Saved stopped status for ${stoppedProcesses.length} processes`);
     } catch (error) {
       logger.error('Failed to save stopped status', error);
@@ -151,7 +151,7 @@ export class ProcessManager {
 
       const data = await fs.readJson(this.stoppedStatusFile);
       const stoppedProcesses = new Set((data.stoppedProcesses || []) as string[]);
-      
+
       logger.info(`Loaded stopped status for ${stoppedProcesses.size} processes`);
       return stoppedProcesses;
     } catch (error) {
@@ -175,7 +175,7 @@ export class ProcessManager {
     const stoppedProcesses = await this.loadStoppedStatus();
     if (stoppedProcesses.has(processId)) {
       stoppedProcesses.delete(processId);
-      
+
       // Save updated status
       const data = {
         stoppedProcesses: Array.from(stoppedProcesses),
@@ -184,7 +184,7 @@ export class ProcessManager {
 
       await fs.ensureDir(path.dirname(this.stoppedStatusFile));
       await fs.writeJson(this.stoppedStatusFile, data, { spaces: 2 });
-      
+
       logger.debug(`Cleared stopped status for process ${processId}`);
     }
   }
@@ -731,10 +731,10 @@ export class ProcessManager {
     }
     managedProcess.isStopped = true;
     managedProcess.isTerminated = false; // Reset termination state when manually stopped
-    
+
     // Save stopped status persistently
     await this.saveStoppedStatus();
-    
+
     await this.killProcess(id);
   }
 
@@ -949,26 +949,26 @@ export class ProcessManager {
       if (managedProcess.config.healthCheck?.enabled) {
         this.startHealthCheck(id, target);
       }
-          } else {
-        // Start new process
-        try {
-          await this.spawnProcess(managedProcess, target);
+    } else {
+      // Start new process
+      try {
+        await this.spawnProcess(managedProcess, target);
 
-          // Clear stopped status when new process is started
-          await this.clearStoppedStatus(id);
+        // Clear stopped status when new process is started
+        await this.clearStoppedStatus(id);
 
-          // Notify listeners of process update
-          this.notifyProcessUpdate();
+        // Notify listeners of process update
+        this.notifyProcessUpdate();
 
-          logger.info(`Process ${id} restarted successfully`, {
-            pid: managedProcess.process?.pid,
-            restartCount: managedProcess.restartCount,
-            target,
-          });
-        } catch (error) {
-          logger.error(`Failed to restart process ${id}`, error);
-        }
+        logger.info(`Process ${id} restarted successfully`, {
+          pid: managedProcess.process?.pid,
+          restartCount: managedProcess.restartCount,
+          target,
+        });
+      } catch (error) {
+        logger.error(`Failed to restart process ${id}`, error);
       }
+    }
   }
 
   /**
