@@ -44,11 +44,11 @@ export class ProxyServer {
     this.statisticsService = serviceContainer.statisticsService;
     this.proxyCertificates = serviceContainer.proxyCertificates;
 
-    // Initialize middleware and routes with service container
+        // Initialize middleware and routes with service container
     this.proxyMiddleware = new BunMiddleware(this.config, serviceContainer);
     
     const tempDir = configService.getSetting<string>('tempDir') || path.join(process.cwd(), 'data', 'temp');
-    this.proxyRoutes = new BunRoutes(tempDir, this.statisticsService);
+    this.proxyRoutes = new BunRoutes(tempDir, serviceContainer);
 
     // Set cache expiration from main config if available
     const cacheMaxAge = configService.getSetting('cache.maxAge');

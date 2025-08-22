@@ -6,8 +6,8 @@ import { BunStaticProxy } from './bun-static-proxy';
 import { Server, sleep, file } from 'bun';
 import path from 'path';
 import { BunMiddleware } from './bun-middleware';
-import { geolocationService } from './geolocation';
 import { StatisticsService } from './statistics';
+import { ServiceContainer } from './service-container';
 
 export interface ProxyRequestConfig {
   route: ProxyRoute;
@@ -22,14 +22,16 @@ export interface ProxyRequestConfig {
 
 export class BunRoutes {
   private statisticsService: StatisticsService;
+  private geolocationService: any;
   private tempDir: string;
   private routeHandlers: Array<{
     route: ProxyRoute;
     handler: (requestContext: BunRequestContext, server: Server) => Promise<Response | null> | Response | null;
   }> = [];
 
-  constructor(tempDir: string, statisticsService: StatisticsService) {
-    this.statisticsService = statisticsService;
+  constructor(tempDir: string, serviceContainer: ServiceContainer) {
+    this.statisticsService = serviceContainer.statisticsService;
+    this.geolocationService = serviceContainer.geolocationService;
     this.tempDir = tempDir;
   }
 
