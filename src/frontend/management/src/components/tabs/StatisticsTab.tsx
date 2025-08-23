@@ -111,8 +111,8 @@ export const StatisticsTab: React.FC = () => {
           </div>
         </div>
         <div className="stat-card">
-          <h4>Active Connections</h4>
-          <div className="value" id="active-connections">
+          <h4>Unique Clients</h4>
+          <div className="value" id="unique-clients">
             {statistics?.uniqueIPs?.toString() || '0'}
           </div>
         </div>
