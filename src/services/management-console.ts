@@ -866,9 +866,9 @@ export class ManagementConsole {
               const url = new URL(req.url);
               const period = url.searchParams.get('period') || '24h';
               const limit = parseInt(url.searchParams.get('limit') || '50');
-              
+
               const perRouteStats = this.statisticsService.getPerRouteStats(period, limit);
-              
+
               return new Response(JSON.stringify({ success: true, data: perRouteStats }), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
@@ -895,9 +895,9 @@ export class ManagementConsole {
               const url = new URL(req.url);
               const period = url.searchParams.get('period') || '24h';
               const limit = parseInt(url.searchParams.get('limit') || '50');
-              
+
               const unmatchedStats = this.statisticsService.getUnmatchedRouteStats(period, limit);
-              
+
               return new Response(JSON.stringify({ success: true, data: unmatchedStats }), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
@@ -923,9 +923,9 @@ export class ManagementConsole {
               }
               const url = new URL(req.url);
               const period = url.searchParams.get('period') || '24h';
-              
+
               const domainStats = this.statisticsService.getDomainStats(period);
-              
+
               return new Response(JSON.stringify({ success: true, data: domainStats }), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
@@ -955,7 +955,7 @@ export class ManagementConsole {
               const path = url.searchParams.get('path');
               const period = url.searchParams.get('period') || '24h';
               const limit = parseInt(url.searchParams.get('limit') || '100');
-              
+
               if (!routeName || !domain || !path) {
                 return new Response(JSON.stringify({
                   success: false,
@@ -965,9 +965,9 @@ export class ManagementConsole {
                   headers: { 'Content-Type': 'application/json' }
                 });
               }
-              
+
               const routeHistory = this.statisticsService.getRouteRequestHistory(routeName, domain, path, period, limit);
-              
+
               return new Response(JSON.stringify({ success: true, data: routeHistory }), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
@@ -985,7 +985,7 @@ export class ManagementConsole {
           }
         },
 
-        "/api/statistics/unmatched-history": {
+                "/api/statistics/unmatched-history": {
           GET: async (req: Request) => {
             try {
               if (!this.isAuthenticated(req)) {
@@ -1017,6 +1017,41 @@ export class ManagementConsole {
               return new Response(JSON.stringify({
                 success: false,
                 error: 'Failed to get unmatched request history',
+                details: error instanceof Error ? error.message : 'Unknown error'
+              } as ApiErrorResponse), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+        },
+
+        "/api/statistics/version": {
+          GET: async (req: Request) => {
+            try {
+              if (!this.isAuthenticated(req)) {
+                return this.createUnauthorizedResponse();
+              }
+              
+              const databaseVersion = this.statisticsService.getDatabaseVersion();
+              const schemaVersion = this.statisticsService.SCHEMA_VERSION;
+              
+              return new Response(JSON.stringify({ 
+                success: true, 
+                data: {
+                  databaseVersion,
+                  schemaVersion,
+                  isUpToDate: databaseVersion === schemaVersion,
+                  needsMigration: databaseVersion !== schemaVersion
+                }
+              }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({
+                success: false,
+                error: 'Failed to get database version',
                 details: error instanceof Error ? error.message : 'Unknown error'
               } as ApiErrorResponse), {
                 status: 500,

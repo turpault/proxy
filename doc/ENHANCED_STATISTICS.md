@@ -85,6 +85,17 @@ CREATE TABLE route_configs (
 )
 ```
 
+### `db_version` - Database Version Tracking
+Stores the current database schema version for migration management:
+```sql
+CREATE TABLE db_version (
+  id INTEGER PRIMARY KEY,
+  version INTEGER NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+)
+```
+
 ### `route_details` - Route-specific Details
 Stores detailed information for matched routes:
 ```sql
@@ -281,6 +292,24 @@ GET /api/statistics/unmatched-history?domain=example.com&path=/admin&period=24h&
 }
 ```
 
+### Database Version Information
+```http
+GET /api/statistics/version
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "databaseVersion": 2,
+    "schemaVersion": 2,
+    "isUpToDate": true,
+    "needsMigration": false
+  }
+}
+```
+
 ## 🔧 Configuration
 
 ### Automatic Operation
@@ -290,6 +319,7 @@ The enhanced statistics system operates automatically:
 2. **Route Matching**: Requests are categorized as matched or unmatched based on route configuration
 3. **Data Retention**: Old data is automatically cleaned up after 90 days
 4. **Route Sync**: Route configurations are automatically synced to the database
+5. **Schema Versioning**: Database schema is automatically versioned and migrated when needed
 
 ### Manual Configuration
 ```yaml
@@ -301,6 +331,7 @@ settings:
     retentionDays: 90
     cleanupInterval: 86400000  # 24 hours
     saveInterval: 300000       # 5 minutes
+    schemaVersion: 2           # Current schema version
 ```
 
 ## 📈 Use Cases
@@ -331,6 +362,13 @@ settings:
 
 ## 🛠️ Implementation Details
 
+### Database Versioning and Migration
+1. **Version Check**: On startup, system checks current database version
+2. **Migration Detection**: If version mismatch is detected, migration is triggered
+3. **Backup Creation**: Existing database is backed up before migration
+4. **Schema Recreation**: All tables are dropped and recreated with new schema
+5. **Version Update**: Database version is updated to current schema version
+
 ### Request Recording Flow
 1. **Request Arrives**: Every request is processed by the proxy
 2. **Route Matching**: System attempts to match request to configured routes
@@ -342,6 +380,12 @@ settings:
 - **Automatic Cleanup**: Old data is removed after 90 days
 - **Memory Management**: Response times and route details are limited to 1000 entries per IP
 - **Database Optimization**: Indexes ensure fast query performance
+
+### Schema Versioning
+- **Version Tracking**: Database schema version is stored in `db_version` table
+- **Automatic Migration**: Schema changes trigger automatic migration
+- **Backup Protection**: Existing data is backed up before migration
+- **Version API**: Version information available via API endpoints
 
 ### Performance Considerations
 - **Indexed Queries**: All queries use database indexes for optimal performance
@@ -399,6 +443,12 @@ du -h data/statistics/statistics.sqlite
 
 # View recent requests
 sqlite3 data/statistics/statistics.sqlite "SELECT COUNT(*) FROM individual_requests WHERE timestamp > datetime('now', '-1 hour');"
+
+# Check database version
+curl http://localhost:4481/api/statistics/version
+
+# Check for backup files
+ls -la data/statistics/statistics_backup_*
 ```
 
 ## 📚 Examples
@@ -430,4 +480,16 @@ curl "http://localhost:4481/api/statistics/per-route?period=24h" | jq '.data[].t
 curl "http://localhost:4481/api/statistics/unmatched?period=24h" | jq '.data[].topCountries'
 ```
 
-The enhanced SQLite statistics system provides comprehensive insights into your proxy traffic, enabling better monitoring, security analysis, and performance optimization.
+### Database Versioning
+```bash
+# Check current database version
+curl http://localhost:4481/api/statistics/version
+
+# Monitor for version mismatches
+curl http://localhost:4481/api/statistics/version | jq '.data.needsMigration'
+
+# Check backup files after migration
+ls -la data/statistics/statistics_backup_*
+```
+
+The enhanced SQLite statistics system provides comprehensive insights into your proxy traffic, enabling better monitoring, security analysis, and performance optimization. The database versioning system ensures smooth schema migrations and data protection during updates.

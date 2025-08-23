@@ -135,6 +135,7 @@ export class StatisticsService {
   private isShuttingDown = false;
   private saveInterval: NodeJS.Timeout | null = null;
   private db!: Database; // SQLite database instance
+  public readonly SCHEMA_VERSION = 2; // Current schema version
 
   constructor() {
     // Get directories from configService
@@ -164,139 +165,251 @@ export class StatisticsService {
     return StatisticsService.instance;
   }
 
-  /**
-   * Initialize SQLite database
+    /**
+   * Initialize SQLite database with versioning
    */
   private initializeDatabase(): void {
     try {
       const dbPath = path.join(this.dataDir, 'statistics.sqlite');
       this.db = new Database(dbPath);
 
+      // Check and handle database versioning
+      this.handleDatabaseVersioning();
+
       // Create tables if they don't exist
-      this.db.run(`
-        CREATE TABLE IF NOT EXISTS request_stats (
-          ip TEXT PRIMARY KEY,
-          geolocation_json TEXT,
-          count INTEGER DEFAULT 0,
-          first_seen TEXT NOT NULL,
-          last_seen TEXT NOT NULL,
-          user_agents_json TEXT,
-          routes_json TEXT,
-          methods_json TEXT,
-          response_times_json TEXT,
-          request_types_json TEXT,
-          created_at TEXT DEFAULT (datetime('now')),
-          updated_at TEXT DEFAULT (datetime('now'))
-        )
-      `);
-
-      this.db.run(`
-        CREATE TABLE IF NOT EXISTS route_details (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          ip TEXT NOT NULL,
-          domain TEXT NOT NULL,
-          target TEXT NOT NULL,
-          method TEXT NOT NULL,
-          response_time REAL DEFAULT 0,
-          timestamp TEXT NOT NULL,
-          request_type TEXT DEFAULT 'proxy',
-          status_code INTEGER DEFAULT 200,
-          user_agent TEXT,
-          path TEXT,
-          query_string TEXT,
-          headers_json TEXT,
-          created_at TEXT DEFAULT (datetime('now')),
-          FOREIGN KEY (ip) REFERENCES request_stats(ip) ON DELETE CASCADE
-        )
-      `);
-
-      // New table for individual requests (for detailed tracking)
-      this.db.run(`
-        CREATE TABLE IF NOT EXISTS individual_requests (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          ip TEXT NOT NULL,
-          domain TEXT NOT NULL,
-          path TEXT NOT NULL,
-          method TEXT NOT NULL,
-          status_code INTEGER DEFAULT 200,
-          response_time REAL DEFAULT 0,
-          timestamp TEXT NOT NULL,
-          user_agent TEXT,
-          request_type TEXT DEFAULT 'proxy',
-          route_name TEXT,
-          target_url TEXT,
-          query_string TEXT,
-          headers_json TEXT,
-          geolocation_json TEXT,
-          created_at TEXT DEFAULT (datetime('now'))
-        )
-      `);
-
-      // New table for route configurations (for matching)
-      this.db.run(`
-        CREATE TABLE IF NOT EXISTS route_configs (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          name TEXT,
-          domain TEXT NOT NULL,
-          path TEXT NOT NULL,
-          target TEXT,
-          type TEXT DEFAULT 'proxy',
-          ssl BOOLEAN DEFAULT 0,
-          created_at TEXT DEFAULT (datetime('now')),
-          updated_at TEXT DEFAULT (datetime('now')),
-          UNIQUE(domain, path)
-        )
-      `);
-
-      // New table for unmatched requests
-      this.db.run(`
-        CREATE TABLE IF NOT EXISTS unmatched_requests (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          ip TEXT NOT NULL,
-          domain TEXT NOT NULL,
-          path TEXT NOT NULL,
-          method TEXT NOT NULL,
-          status_code INTEGER DEFAULT 404,
-          response_time REAL DEFAULT 0,
-          timestamp TEXT NOT NULL,
-          user_agent TEXT,
-          query_string TEXT,
-          headers_json TEXT,
-          geolocation_json TEXT,
-          created_at TEXT DEFAULT (datetime('now'))
-        )
-      `);
+      this.createTables();
 
       // Create indexes for better performance
-      this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_details_ip ON route_details(ip)`);
-      this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_details_timestamp ON route_details(timestamp)`);
-      this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_details_domain ON route_details(domain)`);
-      this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_details_target ON route_details(target)`);
-      this.db.run(`CREATE INDEX IF NOT EXISTS idx_request_stats_last_seen ON request_stats(last_seen)`);
-      
-      // Indexes for individual requests
-      this.db.run(`CREATE INDEX IF NOT EXISTS idx_individual_requests_ip ON individual_requests(ip)`);
-      this.db.run(`CREATE INDEX IF NOT EXISTS idx_individual_requests_timestamp ON individual_requests(timestamp)`);
-      this.db.run(`CREATE INDEX IF NOT EXISTS idx_individual_requests_domain ON individual_requests(domain)`);
-      this.db.run(`CREATE INDEX IF NOT EXISTS idx_individual_requests_path ON individual_requests(path)`);
-      this.db.run(`CREATE INDEX IF NOT EXISTS idx_individual_requests_method ON individual_requests(method)`);
-      this.db.run(`CREATE INDEX IF NOT EXISTS idx_individual_requests_status ON individual_requests(status_code)`);
-      
-      // Indexes for unmatched requests
-      this.db.run(`CREATE INDEX IF NOT EXISTS idx_unmatched_requests_ip ON unmatched_requests(ip)`);
-      this.db.run(`CREATE INDEX IF NOT EXISTS idx_unmatched_requests_timestamp ON unmatched_requests(timestamp)`);
-      this.db.run(`CREATE INDEX IF NOT EXISTS idx_unmatched_requests_domain ON unmatched_requests(domain)`);
-      this.db.run(`CREATE INDEX IF NOT EXISTS idx_unmatched_requests_path ON unmatched_requests(path)`);
-      
-      // Indexes for route configs
-      this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_configs_domain ON route_configs(domain)`);
-      this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_configs_path ON route_configs(path)`);
+      this.createIndexes();
 
       logger.info(`SQLite database initialized: ${dbPath}`);
     } catch (error) {
       logger.error('Failed to initialize SQLite database:', error);
       throw error;
     }
+  }
+
+  /**
+   * Handle database versioning and migrations
+   */
+  private handleDatabaseVersioning(): void {
+    // Create version table if it doesn't exist
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS db_version (
+        id INTEGER PRIMARY KEY,
+        version INTEGER NOT NULL,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
+
+    // Check current version
+    const versionResult = this.db.query('SELECT version FROM db_version ORDER BY id DESC LIMIT 1').get() as any;
+    const currentVersion = versionResult ? versionResult.version : 0;
+
+    if (currentVersion !== this.SCHEMA_VERSION) {
+      logger.info(`Database schema version mismatch. Current: ${currentVersion}, Required: ${this.SCHEMA_VERSION}`);
+      
+      if (currentVersion > 0) {
+        // Backup existing data if upgrading
+        this.backupExistingData();
+      }
+
+      // Drop all existing tables and recreate them
+      this.dropAllTables();
+      this.createTables();
+      this.createIndexes();
+
+      // Update version
+      this.db.run('DELETE FROM db_version');
+      this.db.run('INSERT INTO db_version (version) VALUES (?)', [this.SCHEMA_VERSION]);
+
+      logger.info(`Database schema upgraded to version ${this.SCHEMA_VERSION}`);
+    } else {
+      logger.debug(`Database schema is up to date (version ${this.SCHEMA_VERSION})`);
+    }
+  }
+
+  /**
+   * Backup existing data before schema migration
+   */
+  private backupExistingData(): void {
+    try {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const backupPath = path.join(this.dataDir, `statistics_backup_${timestamp}.sqlite`);
+      
+      // Create a backup by copying the database file
+      const currentDbPath = path.join(this.dataDir, 'statistics.sqlite');
+      if (fs.existsSync(currentDbPath)) {
+        fs.copyFileSync(currentDbPath, backupPath);
+        logger.info(`Database backup created: ${backupPath}`);
+      } else {
+        logger.warn('No existing database file found to backup');
+      }
+    } catch (error) {
+      logger.warn('Failed to create database backup:', error);
+    }
+  }
+
+  /**
+   * Drop all existing tables
+   */
+  private dropAllTables(): void {
+    const tables = [
+      'unmatched_requests',
+      'individual_requests', 
+      'route_details',
+      'route_configs',
+      'request_stats'
+    ];
+
+    // Drop tables in reverse dependency order
+    for (const table of tables) {
+      try {
+        this.db.run(`DROP TABLE IF EXISTS ${table}`);
+      } catch (error) {
+        logger.warn(`Failed to drop table ${table}:`, error);
+      }
+    }
+
+    logger.info('All existing tables dropped for schema migration');
+  }
+
+  /**
+   * Create all tables
+   */
+  private createTables(): void {
+    // Create request_stats table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS request_stats (
+        ip TEXT PRIMARY KEY,
+        geolocation_json TEXT,
+        count INTEGER DEFAULT 0,
+        first_seen TEXT NOT NULL,
+        last_seen TEXT NOT NULL,
+        user_agents_json TEXT,
+        routes_json TEXT,
+        methods_json TEXT,
+        response_times_json TEXT,
+        request_types_json TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
+
+    // Create route_details table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS route_details (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ip TEXT NOT NULL,
+        domain TEXT NOT NULL,
+        target TEXT NOT NULL,
+        method TEXT NOT NULL,
+        response_time REAL DEFAULT 0,
+        timestamp TEXT NOT NULL,
+        request_type TEXT DEFAULT 'proxy',
+        status_code INTEGER DEFAULT 200,
+        user_agent TEXT,
+        path TEXT,
+        query_string TEXT,
+        headers_json TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (ip) REFERENCES request_stats(ip) ON DELETE CASCADE
+      )
+    `);
+
+    // Create individual_requests table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS individual_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ip TEXT NOT NULL,
+        domain TEXT NOT NULL,
+        path TEXT NOT NULL,
+        method TEXT NOT NULL,
+        status_code INTEGER DEFAULT 200,
+        response_time REAL DEFAULT 0,
+        timestamp TEXT NOT NULL,
+        user_agent TEXT,
+        request_type TEXT DEFAULT 'proxy',
+        route_name TEXT,
+        target_url TEXT,
+        query_string TEXT,
+        headers_json TEXT,
+        geolocation_json TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
+
+    // Create route_configs table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS route_configs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        domain TEXT NOT NULL,
+        path TEXT NOT NULL,
+        target TEXT,
+        type TEXT DEFAULT 'proxy',
+        ssl BOOLEAN DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(domain, path)
+      )
+    `);
+
+    // Create unmatched_requests table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS unmatched_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ip TEXT NOT NULL,
+        domain TEXT NOT NULL,
+        path TEXT NOT NULL,
+        method TEXT NOT NULL,
+        status_code INTEGER DEFAULT 404,
+        response_time REAL DEFAULT 0,
+        timestamp TEXT NOT NULL,
+        user_agent TEXT,
+        query_string TEXT,
+        headers_json TEXT,
+        geolocation_json TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
+
+    logger.info('All tables created successfully');
+  }
+
+  /**
+   * Create all indexes
+   */
+  private createIndexes(): void {
+    // Indexes for route_details
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_details_ip ON route_details(ip)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_details_timestamp ON route_details(timestamp)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_details_domain ON route_details(domain)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_details_target ON route_details(target)`);
+    
+    // Indexes for request_stats
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_request_stats_last_seen ON request_stats(last_seen)`);
+    
+    // Indexes for individual requests
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_individual_requests_ip ON individual_requests(ip)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_individual_requests_timestamp ON individual_requests(timestamp)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_individual_requests_domain ON individual_requests(domain)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_individual_requests_path ON individual_requests(path)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_individual_requests_method ON individual_requests(method)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_individual_requests_status ON individual_requests(status_code)`);
+    
+    // Indexes for unmatched requests
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_unmatched_requests_ip ON unmatched_requests(ip)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_unmatched_requests_timestamp ON unmatched_requests(timestamp)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_unmatched_requests_domain ON unmatched_requests(domain)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_unmatched_requests_path ON unmatched_requests(path)`);
+    
+    // Indexes for route configs
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_configs_domain ON route_configs(domain)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_configs_path ON route_configs(path)`);
+
+    logger.info('All indexes created successfully');
   }
 
   /**
@@ -1026,6 +1139,21 @@ export class StatisticsService {
   }
 
   /**
+   * Get current database version
+   */
+  public getDatabaseVersion(): number {
+    try {
+      if (!this.db) return 0;
+      
+      const versionResult = this.db.query('SELECT version FROM db_version ORDER BY id DESC LIMIT 1').get() as any;
+      return versionResult ? versionResult.version : 0;
+    } catch (error) {
+      logger.error('Failed to get database version:', error);
+      return 0;
+    }
+  }
+
+  /**
    * Get statistics summary
    */
   public getStatsSummary(): {
@@ -1035,6 +1163,8 @@ export class StatisticsService {
     cacheSize: number;
     lastSaved?: string;
     dataFileSize?: number;
+    databaseVersion: number;
+    schemaVersion: number;
   } {
     const statsArray = Array.from(this.stats.values());
     const totalRequests = statsArray.reduce((sum, stat) => sum + stat.count, 0);
@@ -1047,11 +1177,15 @@ export class StatisticsService {
       cacheSize: number;
       lastSaved?: string;
       dataFileSize?: number;
+      databaseVersion: number;
+      schemaVersion: number;
     } = {
       totalRequests,
       uniqueIPs: statsArray.length,
       uniqueCountries,
       cacheSize: this.stats.size,
+      databaseVersion: this.getDatabaseVersion(),
+      schemaVersion: this.SCHEMA_VERSION,
     };
 
     // Try to get database file info
