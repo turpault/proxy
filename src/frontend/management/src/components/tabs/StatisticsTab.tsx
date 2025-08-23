@@ -5,6 +5,11 @@ import { StatisticsSummary, DetailedStatistics, RouteStatistics } from '../../ty
 import { GeoMap } from '../GeoMap';
 import { API_BASE, GetStatisticsResponse, GetDetailedStatisticsResponse } from '../../utils/api-client';
 
+// Utility function to strip IPv6-mapped IPv4 prefix
+const stripIPv6Prefix = (ip: string): string => {
+  return ip.replace(/^::ffff:/, '');
+};
+
 export const StatisticsTab: React.FC = () => {
   const { status } = useWebSocket();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -106,7 +111,7 @@ export const StatisticsTab: React.FC = () => {
     if (!detailedStatistics?.ipStats) return [];
 
     return detailedStatistics.ipStats.map(ip => ({
-      ip: ip.ip,
+      ip: stripIPv6Prefix(ip.ip),
       country: ip.country,
       city: ip.city,
       count: ip.totalRequests,

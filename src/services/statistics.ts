@@ -792,8 +792,8 @@ export class StatisticsService {
       return routeStats
         .filter(route => configuredRouteNames.has(route.route_name))
         .map(route => {
-        // Get top countries for this route
-        const topCountries = this.db.query(`
+          // Get top countries for this route
+          const topCountries = this.db.query(`
           SELECT 
             json_extract(geolocation_json, '$.country') as country,
             COUNT(*) as count
@@ -804,15 +804,15 @@ export class StatisticsService {
           LIMIT 5
         `).all(startISO, route.route_name) as any[];
 
-        // Get methods for this route
-        const methods = this.db.query(`
+          // Get methods for this route
+          const methods = this.db.query(`
           SELECT DISTINCT method
           FROM requests 
           WHERE timestamp >= ? AND route_name = ? AND is_matched = 1
         `).all(startISO, route.route_name) as any[];
 
-        // Get status codes for this route
-        const statusCodes = this.db.query(`
+          // Get status codes for this route
+          const statusCodes = this.db.query(`
           SELECT 
             status_code as code,
             COUNT(*) as count
@@ -822,8 +822,8 @@ export class StatisticsService {
           ORDER BY count DESC
         `).all(startISO, route.route_name) as any[];
 
-        // Get top paths for this route
-        const topPaths = this.db.query(`
+          // Get top paths for this route
+          const topPaths = this.db.query(`
           SELECT 
             path,
             COUNT(*) as count
@@ -834,39 +834,39 @@ export class StatisticsService {
           LIMIT 10
         `).all(startISO, route.route_name) as any[];
 
-        const totalRequests = route.total_requests;
+          const totalRequests = route.total_requests;
 
-        // Get route configuration details
-        const routeConfig = configuredRoutes.find(r => r.name === route.route_name);
-        
-        return {
-          routeName: route.route_name,
-          domain: routeConfig?.domain || route.domain,
-          path: routeConfig?.path || route.path,
-          target: routeConfig?.target || route.target_url,
-          requestType: route.request_type,
-          totalRequests,
-          avgResponseTime: route.avg_response_time || 0,
-          uniqueIPs: route.unique_ips,
-          uniqueCountries: route.unique_countries,
-          topCountries: topCountries.map(c => ({
-            country: c.country || 'Unknown',
-            count: c.count,
-            percentage: (c.count / totalRequests) * 100
-          })),
-          methods: methods.map(m => m.method),
-          statusCodes: statusCodes.map(s => ({
-            code: s.code,
-            count: s.count,
-            percentage: (s.count / totalRequests) * 100
-          })),
-          topPaths: topPaths.map(p => ({
-            path: p.path,
-            count: p.count,
-            percentage: (p.count / totalRequests) * 100
-          }))
-        };
-      });
+          // Get route configuration details
+          const routeConfig = configuredRoutes.find(r => r.name === route.route_name);
+
+          return {
+            routeName: route.route_name,
+            domain: routeConfig?.domain || route.domain,
+            path: routeConfig?.path || route.path,
+            target: routeConfig?.target || route.target_url,
+            requestType: route.request_type,
+            totalRequests,
+            avgResponseTime: route.avg_response_time || 0,
+            uniqueIPs: route.unique_ips,
+            uniqueCountries: route.unique_countries,
+            topCountries: topCountries.map(c => ({
+              country: c.country || 'Unknown',
+              count: c.count,
+              percentage: (c.count / totalRequests) * 100
+            })),
+            methods: methods.map(m => m.method),
+            statusCodes: statusCodes.map(s => ({
+              code: s.code,
+              count: s.count,
+              percentage: (s.count / totalRequests) * 100
+            })),
+            topPaths: topPaths.map(p => ({
+              path: p.path,
+              count: p.count,
+              percentage: (p.count / totalRequests) * 100
+            }))
+          };
+        });
     } catch (error) {
       logger.error('Failed to get per-route statistics:', error);
       return [];

@@ -3,6 +3,11 @@ import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
+// Utility function to strip IPv6-mapped IPv4 prefix
+const stripIPv6Prefix = (ip: string): string => {
+  return ip.replace(/^::ffff:/, '');
+};
+
 // Fix for default markers in react-leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -195,7 +200,7 @@ export const GeoMap: React.FC<GeoMapProps> = ({
     } else {
       data = ipData;
     }
-    
+
     const maxCount = Math.max(...data.map(d => d.count), 1);
 
     return data.map(item => {
@@ -270,7 +275,7 @@ export const GeoMap: React.FC<GeoMapProps> = ({
           lng: coords.lng + offsetLng,
           intensity,
           radius,
-          displayName: `${ipItem.ip} (${ipItem.city}, ${ipItem.country})`,
+          displayName: `${stripIPv6Prefix(ipItem.ip)} (${ipItem.city}, ${ipItem.country})`,
           type: 'ip'
         };
       }
@@ -318,9 +323,9 @@ export const GeoMap: React.FC<GeoMapProps> = ({
             <span>Total Requests: {totalRequests.toLocaleString()}</span>
             <span>
               {viewMode === 'country' ? 'Countries' : viewMode === 'city' ? 'Cities' : 'IPs'}: {
-                viewMode === 'country' ? countryData.length : 
-                viewMode === 'city' ? cityData.length : 
-                ipData.length
+                viewMode === 'country' ? countryData.length :
+                  viewMode === 'city' ? cityData.length :
+                    ipData.length
               }
             </span>
           </div>
@@ -338,7 +343,7 @@ export const GeoMap: React.FC<GeoMapProps> = ({
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           />
-          
+
           {/* Country/City markers */}
           {processedData.map((data, index) => (
             <CircleMarker
