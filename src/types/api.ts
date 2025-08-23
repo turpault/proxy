@@ -92,8 +92,6 @@ export interface ApiEndpointTypes {
     response: GetDetailedStatisticsResponse;
   };
 
-
-
   // Processes
   'GET /api/processes': {
     request: EmptyRequest;

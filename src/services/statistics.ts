@@ -129,7 +129,6 @@ export interface TimePeriodStats {
 export class StatisticsService {
   private static instance: StatisticsService;
 
-  private reportDir: string;
   private dataDir: string;
   private isShuttingDown = false;
   private db!: Database; // SQLite database instance
@@ -137,11 +136,8 @@ export class StatisticsService {
 
   constructor() {
     // Get directories from configService
-    const logsDir = configService.getSetting<string>('logsDir');
-    this.reportDir = logsDir ? path.join(logsDir, 'statistics') : path.resolve(process.cwd(), 'logs', 'statistics');
     this.dataDir = configService.getSetting<string>('statsDir') || path.resolve(process.cwd(), 'data', 'statistics');
 
-    this.ensureReportDirectory();
     this.ensureDataDirectory();
     this.initializeDatabase();
   }
@@ -465,8 +461,6 @@ export class StatisticsService {
         'DELETE FROM geolocation_cities WHERE last_seen < ?'
       ).run(cutoffISO).changes;
 
-      // Reload stats from database to sync memory
-      await this.loadPersistedStats();
 
       const totalDeleted = deletedRequests + deletedCountries + deletedCities;
       if (totalDeleted > 0) {
@@ -646,252 +640,6 @@ export class StatisticsService {
       logger.error('Failed to update geolocation aggregation:', error);
     }
   }
-
-  /**
-   * Generate a statistics report for the current period
-   */
-  public generateReport(): StatisticsReport {
-    const now = new Date();
-    const startOfDay = new Date(now);
-    startOfDay.setHours(0, 0, 0, 0);
-
-    try {
-      if (!this.db) {
-        throw new Error('Database not initialized');
-      }
-
-      // Get total requests for today
-      const totalRequestsResult = this.db.query(`
-        SELECT COUNT(*) as total
-        FROM requests 
-        WHERE DATE(timestamp) = DATE(?)
-      `).get(startOfDay.toISOString()) as any;
-      const totalRequests = totalRequestsResult?.total || 0;
-
-      // Get top countries
-      const topCountries = this.db.query(`
-        SELECT 
-          json_extract(geolocation_json, '$.country') as country,
-          COUNT(*) as count
-        FROM requests 
-        WHERE DATE(timestamp) = DATE(?)
-        GROUP BY country
-        ORDER BY count DESC
-        LIMIT 10
-      `).all(startOfDay.toISOString()) as any[];
-
-      // Get top cities
-      const topCities = this.db.query(`
-        SELECT 
-          json_extract(geolocation_json, '$.city') as city,
-          json_extract(geolocation_json, '$.country') as country,
-          COUNT(*) as count
-        FROM requests 
-        WHERE DATE(timestamp) = DATE(?)
-        GROUP BY city, country
-        ORDER BY count DESC
-        LIMIT 10
-      `).all(startOfDay.toISOString()) as any[];
-
-      // Get top IPs
-      const topIPs = this.db.query(`
-        SELECT 
-          ip,
-          geolocation_json,
-          COUNT(*) as count
-        FROM requests 
-        WHERE DATE(timestamp) = DATE(?)
-        GROUP BY ip
-        ORDER BY count DESC
-        LIMIT 10
-      `).all(startOfDay.toISOString()) as any[];
-
-      // Get request types
-      const requestTypes = this.db.query(`
-        SELECT 
-          request_type as type,
-          COUNT(*) as count
-        FROM requests 
-        WHERE DATE(timestamp) = DATE(?)
-        GROUP BY request_type
-        ORDER BY count DESC
-      `).all(startOfDay.toISOString()) as any[];
-
-      // Generate hourly and daily breakdowns
-      const requestsByHour = this.generateHourlyBreakdownFromDB(startOfDay);
-      const requestsByDay = this.generateDailyBreakdownFromDB(startOfDay);
-
-      return {
-        period: {
-          start: startOfDay,
-          end: now,
-        },
-        summary: {
-          totalRequests,
-          uniqueIPs: topIPs.length,
-          uniqueCountries: topCountries.length,
-          uniqueCities: topCities.length,
-          topCountries: topCountries.map(country => ({
-            country: country.country || 'Unknown',
-            count: country.count,
-            percentage: (country.count / totalRequests) * 100,
-          })),
-          topCities: topCities.map(city => ({
-            city: city.city || 'Unknown',
-            country: city.country || 'Unknown',
-            count: city.count,
-            percentage: (city.count / totalRequests) * 100,
-          })),
-          topIPs: topIPs.map(ip => ({
-            ip: ip.ip,
-            location: this.formatLocation(JSON.parse(ip.geolocation_json || '{}')),
-            count: ip.count,
-            percentage: (ip.count / totalRequests) * 100,
-          })),
-          requestsByHour,
-          requestsByDay,
-        },
-        requestTypes: requestTypes.map(type => ({
-          type: type.type,
-          count: type.count,
-          percentage: (type.count / totalRequests) * 100,
-        })),
-        generatedAt: now.toISOString(),
-      };
-    } catch (error) {
-      logger.error('Failed to generate report from database:', error);
-      return {
-        period: {
-          start: startOfDay.toISOString(),
-          end: now.toISOString(),
-        },
-        summary: {
-          totalRequests: 0,
-          uniqueIPs: 0,
-          uniqueCountries: 0,
-          uniqueCities: 0,
-        },
-        topCountries: [],
-        topCities: [],
-        topIPs: [],
-        requestTypes: [],
-        requestsByHour: [],
-        requestsByDay: [],
-        generatedAt: now.toISOString(),
-      };
-    }
-  }
-
-  /**
-   * Generate hourly breakdown of requests from database
-   */
-  private generateHourlyBreakdownFromDB(startDate: Date): Array<{ hour: number; count: number }> {
-    try {
-      if (!this.db) return [];
-
-      const hourlyStats = new Map<number, number>();
-
-      // Initialize all hours with 0
-      for (let hour = 0; hour < 24; hour++) {
-        hourlyStats.set(hour, 0);
-      }
-
-      // Get hourly breakdown from database
-      const hourlyData = this.db.query(`
-        SELECT 
-          CAST(strftime('%H', timestamp) AS INTEGER) as hour,
-          COUNT(*) as count
-        FROM requests 
-        WHERE DATE(timestamp) = DATE(?)
-        GROUP BY hour
-        ORDER BY hour
-      `).all(startDate.toISOString()) as any[];
-
-      // Update the map with actual data
-      hourlyData.forEach(row => {
-        hourlyStats.set(row.hour, row.count);
-      });
-
-      return Array.from(hourlyStats.entries())
-        .map(([hour, count]) => ({ hour, count }))
-        .sort((a, b) => a.hour - b.hour);
-    } catch (error) {
-      logger.error('Failed to generate hourly breakdown from database:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Generate daily breakdown of requests from database
-   */
-  private generateDailyBreakdownFromDB(startDate: Date): Array<{ day: string; count: number }> {
-    try {
-      if (!this.db) return [];
-
-      const dailyData = this.db.query(`
-        SELECT 
-          DATE(timestamp) as day,
-          COUNT(*) as count
-        FROM requests 
-        WHERE timestamp >= ?
-        GROUP BY day
-        ORDER BY day
-      `).all(startDate.toISOString()) as any[];
-
-      return dailyData.map(row => ({
-        day: row.day,
-        count: row.count
-      }));
-    } catch (error) {
-      logger.error('Failed to generate daily breakdown from database:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Format location string for display
-   */
-  private formatLocation(geolocation: GeolocationInfo | null): string {
-    if (!geolocation) return 'Unknown';
-
-    const parts = [];
-    if (geolocation.city) parts.push(geolocation.city);
-    if (geolocation.region) parts.push(geolocation.region);
-    if (geolocation.country) parts.push(geolocation.country);
-
-    return parts.length > 0 ? parts.join(', ') : 'Unknown';
-  }
-
-  /**
-   * Save report to file
-   */
-  private async saveReport(report: StatisticsReport): Promise<void> {
-    try {
-      const timestamp = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-      const filename = `statistics-${timestamp}.json`;
-      const filepath = path.join(this.reportDir, filename);
-
-      await fs.writeFile(filepath, JSON.stringify(report, null, 2), 'utf8');
-      logger.info(`Statistics report saved: ${filepath}`);
-    } catch (error) {
-      logger.error('Failed to save statistics report', error);
-    }
-  }
-
-  /**
-   * Ensure report directory exists
-   */
-  private async ensureReportDirectory(): Promise<void> {
-    try {
-      await fs.ensureDir(this.reportDir);
-      logger.info(`Statistics reports directory: ${this.reportDir}`);
-    } catch (error) {
-      logger.error('Failed to create statistics reports directory', error);
-    }
-  }
-
-
-
 
 
   /**
@@ -1528,18 +1276,6 @@ export class StatisticsService {
 
     logger.info('Statistics service shutdown complete');
   }
-
-  /**
-   * Force save current statistics (for manual backup)
-   */
-  public async forceSave(): Promise<void> {
-    await this.saveStats();
-    logger.info('Statistics force saved');
-  }
-
-
-
-
 
   /**
    * Get geolocation statistics by country

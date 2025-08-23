@@ -109,6 +109,28 @@ export class ManagementConsole {
   }
 
   /**
+   * Get milliseconds for a given period
+   */
+  private getPeriodMs(period: string): number {
+    switch (period) {
+      case '1h':
+        return 60 * 60 * 1000;
+      case '6h':
+        return 6 * 60 * 60 * 1000;
+      case '24h':
+        return 24 * 60 * 60 * 1000;
+      case '7d':
+        return 7 * 24 * 60 * 60 * 1000;
+      case '30d':
+        return 30 * 24 * 60 * 60 * 1000;
+      case '90d':
+        return 90 * 24 * 60 * 60 * 1000;
+      default:
+        return 24 * 60 * 60 * 1000; // Default to 24h
+    }
+  }
+
+  /**
    * Ensure log line timestamps are monotonically increasing per process.
    * Adjusts any non-increasing timestamps by bumping to previous + 1ms.
    * Updates the per-process cursor to the last emitted timestamp.
@@ -789,7 +811,63 @@ export class ManagementConsole {
                 name: route.name
               }));
 
-              const detailedStats = this.statisticsService.getTimePeriodStats(period, routeConfigs);
+              // Get per-route statistics
+              const perRouteStats = this.statisticsService.getPerRouteStats(period, 50);
+              
+              // Get unmatched route statistics
+              const unmatchedStats = this.statisticsService.getUnmatchedRouteStats(period, 50);
+
+              // Combine matched and unmatched routes
+              const allRoutes = [
+                ...perRouteStats.map(route => ({
+                  name: route.routeName,
+                  domain: route.domain,
+                  target: route.target,
+                  requests: route.totalRequests,
+                  avgResponseTime: route.avgResponseTime,
+                  topCountries: route.topCountries,
+                  uniqueIPs: route.uniqueIPs,
+                  methods: route.methods,
+                  requestType: route.requestType
+                })),
+                ...unmatchedStats.map(route => ({
+                  name: 'Unmatched',
+                  domain: route.domain,
+                  target: '',
+                  requests: route.totalRequests,
+                  avgResponseTime: route.avgResponseTime,
+                  topCountries: route.topCountries,
+                  uniqueIPs: route.uniqueIPs,
+                  methods: route.methods,
+                  requestType: 'unmatched',
+                  uniquePaths: route.recentRequests?.slice(-5).map(req => req.ip) || [] // Show recent IPs
+                }))
+              ];
+
+              // Calculate overall statistics
+              const totalRequests = allRoutes.reduce((sum, route) => sum + route.requests, 0);
+              const avgResponseTime = allRoutes.length > 0 
+                ? allRoutes.reduce((sum, route) => sum + route.avgResponseTime, 0) / allRoutes.length 
+                : 0;
+
+              // Get unique countries from all routes
+              const uniqueCountries = new Set(
+                allRoutes.flatMap(route => 
+                  route.topCountries?.map(country => country.country) || []
+                )
+              ).size;
+
+              const detailedStats = {
+                totalRequests,
+                uniqueRoutes: allRoutes.length,
+                uniqueCountries,
+                avgResponseTime,
+                routes: allRoutes,
+                period: {
+                  start: new Date(Date.now() - this.getPeriodMs(period)),
+                  end: new Date()
+                }
+              };
 
               // Convert dates to ISO strings for JSON serialization
               const serializedStats = {
