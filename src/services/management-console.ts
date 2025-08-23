@@ -985,7 +985,7 @@ export class ManagementConsole {
           }
         },
 
-                "/api/statistics/unmatched-history": {
+        "/api/statistics/unmatched-history": {
           GET: async (req: Request) => {
             try {
               if (!this.isAuthenticated(req)) {
@@ -996,7 +996,7 @@ export class ManagementConsole {
               const path = url.searchParams.get('path');
               const period = url.searchParams.get('period') || '24h';
               const limit = parseInt(url.searchParams.get('limit') || '100');
-              
+
               if (!domain || !path) {
                 return new Response(JSON.stringify({
                   success: false,
@@ -1006,9 +1006,9 @@ export class ManagementConsole {
                   headers: { 'Content-Type': 'application/json' }
                 });
               }
-              
+
               const unmatchedHistory = this.statisticsService.getUnmatchedRequestHistory(domain, path, period, limit);
-              
+
               return new Response(JSON.stringify({ success: true, data: unmatchedHistory }), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
@@ -1026,7 +1026,7 @@ export class ManagementConsole {
           }
         },
 
-        "/api/statistics/version": {
+                "/api/statistics/version": {
           GET: async (req: Request) => {
             try {
               if (!this.isAuthenticated(req)) {
@@ -1036,8 +1036,8 @@ export class ManagementConsole {
               const databaseVersion = this.statisticsService.getDatabaseVersion();
               const schemaVersion = this.statisticsService.SCHEMA_VERSION;
               
-              return new Response(JSON.stringify({ 
-                success: true, 
+              return new Response(JSON.stringify({
+                success: true,
                 data: {
                   databaseVersion,
                   schemaVersion,
@@ -1052,6 +1052,64 @@ export class ManagementConsole {
               return new Response(JSON.stringify({
                 success: false,
                 error: 'Failed to get database version',
+                details: error instanceof Error ? error.message : 'Unknown error'
+              } as ApiErrorResponse), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+        },
+
+        "/api/statistics/countries": {
+          GET: async (req: Request) => {
+            try {
+              if (!this.isAuthenticated(req)) {
+                return this.createUnauthorizedResponse();
+              }
+              const url = new URL(req.url);
+              const period = url.searchParams.get('period') || '24h';
+              const limit = parseInt(url.searchParams.get('limit') || '50');
+              
+              const countryStats = this.statisticsService.getCountryStats(period, limit);
+              
+              return new Response(JSON.stringify({ success: true, data: countryStats }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({
+                success: false,
+                error: 'Failed to get country statistics',
+                details: error instanceof Error ? error.message : 'Unknown error'
+              } as ApiErrorResponse), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+        },
+
+        "/api/statistics/cities": {
+          GET: async (req: Request) => {
+            try {
+              if (!this.isAuthenticated(req)) {
+                return this.createUnauthorizedResponse();
+              }
+              const url = new URL(req.url);
+              const period = url.searchParams.get('period') || '24h';
+              const limit = parseInt(url.searchParams.get('limit') || '50');
+              
+              const cityStats = this.statisticsService.getCityStats(period, limit);
+              
+              return new Response(JSON.stringify({ success: true, data: cityStats }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({
+                success: false,
+                error: 'Failed to get city statistics',
                 details: error instanceof Error ? error.message : 'Unknown error'
               } as ApiErrorResponse), {
                 status: 500,

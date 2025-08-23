@@ -135,7 +135,7 @@ export class StatisticsService {
   private isShuttingDown = false;
   private saveInterval: NodeJS.Timeout | null = null;
   private db!: Database; // SQLite database instance
-  public readonly SCHEMA_VERSION = 2; // Current schema version
+  public readonly SCHEMA_VERSION = 3; // Current schema version
 
   constructor() {
     // Get directories from configService
@@ -165,9 +165,9 @@ export class StatisticsService {
     return StatisticsService.instance;
   }
 
-    /**
-   * Initialize SQLite database with versioning
-   */
+  /**
+ * Initialize SQLite database with versioning
+ */
   private initializeDatabase(): void {
     try {
       const dbPath = path.join(this.dataDir, 'statistics.sqlite');
@@ -209,7 +209,7 @@ export class StatisticsService {
 
     if (currentVersion !== this.SCHEMA_VERSION) {
       logger.info(`Database schema version mismatch. Current: ${currentVersion}, Required: ${this.SCHEMA_VERSION}`);
-      
+
       if (currentVersion > 0) {
         // Backup existing data if upgrading
         this.backupExistingData();
@@ -237,7 +237,7 @@ export class StatisticsService {
     try {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const backupPath = path.join(this.dataDir, `statistics_backup_${timestamp}.sqlite`);
-      
+
       // Create a backup by copying the database file
       const currentDbPath = path.join(this.dataDir, 'statistics.sqlite');
       if (fs.existsSync(currentDbPath)) {
@@ -251,16 +251,15 @@ export class StatisticsService {
     }
   }
 
-  /**
+    /**
    * Drop all existing tables
    */
   private dropAllTables(): void {
     const tables = [
-      'unmatched_requests',
-      'individual_requests', 
-      'route_details',
-      'route_configs',
-      'request_stats'
+      'geolocation_cities',
+      'geolocation_countries',
+      'requests',
+      'route_configs'
     ];
 
     // Drop tables in reverse dependency order
@@ -279,48 +278,9 @@ export class StatisticsService {
    * Create all tables
    */
   private createTables(): void {
-    // Create request_stats table
+    // Create requests table (unified for matched and unmatched requests)
     this.db.run(`
-      CREATE TABLE IF NOT EXISTS request_stats (
-        ip TEXT PRIMARY KEY,
-        geolocation_json TEXT,
-        count INTEGER DEFAULT 0,
-        first_seen TEXT NOT NULL,
-        last_seen TEXT NOT NULL,
-        user_agents_json TEXT,
-        routes_json TEXT,
-        methods_json TEXT,
-        response_times_json TEXT,
-        request_types_json TEXT,
-        created_at TEXT DEFAULT (datetime('now')),
-        updated_at TEXT DEFAULT (datetime('now'))
-      )
-    `);
-
-    // Create route_details table
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS route_details (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        ip TEXT NOT NULL,
-        domain TEXT NOT NULL,
-        target TEXT NOT NULL,
-        method TEXT NOT NULL,
-        response_time REAL DEFAULT 0,
-        timestamp TEXT NOT NULL,
-        request_type TEXT DEFAULT 'proxy',
-        status_code INTEGER DEFAULT 200,
-        user_agent TEXT,
-        path TEXT,
-        query_string TEXT,
-        headers_json TEXT,
-        created_at TEXT DEFAULT (datetime('now')),
-        FOREIGN KEY (ip) REFERENCES request_stats(ip) ON DELETE CASCADE
-      )
-    `);
-
-    // Create individual_requests table
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS individual_requests (
+      CREATE TABLE IF NOT EXISTS requests (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         ip TEXT NOT NULL,
         domain TEXT NOT NULL,
@@ -336,7 +296,40 @@ export class StatisticsService {
         query_string TEXT,
         headers_json TEXT,
         geolocation_json TEXT,
+        is_matched BOOLEAN DEFAULT 1,
         created_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
+
+
+
+    // Create geolocation_countries table (country-based aggregation)
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS geolocation_countries (
+        country TEXT PRIMARY KEY,
+        total_requests INTEGER DEFAULT 0,
+        unique_ips INTEGER DEFAULT 0,
+        avg_response_time REAL DEFAULT 0,
+        first_seen TEXT NOT NULL,
+        last_seen TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
+
+    // Create geolocation_cities table (city-based aggregation)
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS geolocation_cities (
+        city TEXT NOT NULL,
+        country TEXT NOT NULL,
+        total_requests INTEGER DEFAULT 0,
+        unique_ips INTEGER DEFAULT 0,
+        avg_response_time REAL DEFAULT 0,
+        first_seen TEXT NOT NULL,
+        last_seen TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        PRIMARY KEY (city, country)
       )
     `);
 
@@ -356,54 +349,29 @@ export class StatisticsService {
       )
     `);
 
-    // Create unmatched_requests table
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS unmatched_requests (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        ip TEXT NOT NULL,
-        domain TEXT NOT NULL,
-        path TEXT NOT NULL,
-        method TEXT NOT NULL,
-        status_code INTEGER DEFAULT 404,
-        response_time REAL DEFAULT 0,
-        timestamp TEXT NOT NULL,
-        user_agent TEXT,
-        query_string TEXT,
-        headers_json TEXT,
-        geolocation_json TEXT,
-        created_at TEXT DEFAULT (datetime('now'))
-      )
-    `);
-
     logger.info('All tables created successfully');
   }
 
-  /**
+    /**
    * Create all indexes
    */
   private createIndexes(): void {
-    // Indexes for route_details
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_details_ip ON route_details(ip)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_details_timestamp ON route_details(timestamp)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_details_domain ON route_details(domain)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_details_target ON route_details(target)`);
+    // Indexes for requests table
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_requests_ip ON requests(ip)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_requests_timestamp ON requests(timestamp)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_requests_domain ON requests(domain)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_requests_path ON requests(path)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_requests_method ON requests(method)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_requests_status ON requests(status_code)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_requests_matched ON requests(is_matched)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_requests_route_name ON requests(route_name)`);
     
-    // Indexes for request_stats
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_request_stats_last_seen ON request_stats(last_seen)`);
+
     
-    // Indexes for individual requests
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_individual_requests_ip ON individual_requests(ip)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_individual_requests_timestamp ON individual_requests(timestamp)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_individual_requests_domain ON individual_requests(domain)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_individual_requests_path ON individual_requests(path)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_individual_requests_method ON individual_requests(method)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_individual_requests_status ON individual_requests(status_code)`);
-    
-    // Indexes for unmatched requests
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_unmatched_requests_ip ON unmatched_requests(ip)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_unmatched_requests_timestamp ON unmatched_requests(timestamp)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_unmatched_requests_domain ON unmatched_requests(domain)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_unmatched_requests_path ON unmatched_requests(path)`);
+    // Indexes for geolocation tables
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_geolocation_countries_last_seen ON geolocation_countries(last_seen)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_geolocation_cities_last_seen ON geolocation_cities(last_seen)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_geolocation_cities_country ON geolocation_cities(country)`);
     
     // Indexes for route configs
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_configs_domain ON route_configs(domain)`);
@@ -468,63 +436,10 @@ export class StatisticsService {
         return;
       }
 
-      // Begin transaction for better performance
-      this.db.run('BEGIN TRANSACTION');
-
-      try {
-        // Clear existing data
-        this.db.run('DELETE FROM route_details');
-        this.db.run('DELETE FROM request_stats');
-
-        // Insert current stats
-        for (const [ip, stat] of this.stats.entries()) {
-          const serialized = this.serializeStats(stat);
-
-          // Insert main stats
-          this.db.run(`
-            INSERT INTO request_stats (
-              ip, geolocation_json, count, first_seen, last_seen,
-              user_agents_json, routes_json, methods_json, response_times_json, request_types_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `, [
-            ip,
-            JSON.stringify(serialized.geolocation),
-            serialized.count,
-            serialized.firstSeen,
-            serialized.lastSeen,
-            JSON.stringify(serialized.userAgents),
-            JSON.stringify(serialized.routes),
-            JSON.stringify(serialized.methods),
-            JSON.stringify(serialized.responseTimes),
-            JSON.stringify(serialized.requestTypes)
-          ]);
-
-          // Insert route details
-          for (const detail of serialized.routeDetails) {
-            this.db.run(`
-              INSERT INTO route_details (
-                ip, domain, target, method, response_time, timestamp, request_type
-              ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            `, [
-              ip,
-              detail.domain,
-              detail.target,
-              detail.method,
-              detail.responseTime,
-              detail.timestamp,
-              detail.requestType
-            ]);
-          }
-        }
-
-        // Commit transaction
-        this.db.run('COMMIT');
-        logger.debug(`Statistics saved to SQLite: ${this.stats.size} entries`);
-      } catch (error) {
-        // Rollback on error
-        this.db.run('ROLLBACK');
-        throw error;
-      }
+      // Note: With the new schema, we don't need to save aggregated stats
+      // since they are calculated on-demand from the requests table
+      // and geolocation data is updated in real-time
+      logger.debug('Statistics aggregation is now handled in real-time from requests table');
     } catch (error) {
       logger.error('Failed to save statistics to SQLite:', error);
     }
@@ -540,16 +455,42 @@ export class StatisticsService {
         return;
       }
 
-      // Load main stats
-      const statsRows = this.db.query('SELECT * FROM request_stats').all() as any[];
+      // Load aggregated stats from requests table
+      const statsRows = this.db.query(`
+        SELECT 
+          ip,
+          COUNT(*) as count,
+          MIN(timestamp) as first_seen,
+          MAX(timestamp) as last_seen,
+          GROUP_CONCAT(DISTINCT user_agent) as user_agents,
+          GROUP_CONCAT(DISTINCT route_name) as routes,
+          GROUP_CONCAT(DISTINCT method) as methods,
+          GROUP_CONCAT(response_time) as response_times,
+          GROUP_CONCAT(DISTINCT request_type) as request_types,
+          json_extract(geolocation_json, '$.country') as country,
+          json_extract(geolocation_json, '$.city') as city,
+          json_extract(geolocation_json, '$.latitude') as latitude,
+          json_extract(geolocation_json, '$.longitude') as longitude
+        FROM requests 
+        GROUP BY ip
+      `).all() as any[];
 
       this.stats.clear();
 
       for (const row of statsRows) {
         // Load route details for this IP
-        const routeDetailsRows = this.db.query(
-          'SELECT * FROM route_details WHERE ip = ? ORDER BY timestamp'
-        ).all(row.ip) as any[];
+        const routeDetailsRows = this.db.query(`
+          SELECT 
+            domain,
+            target_url as target,
+            method,
+            response_time,
+            timestamp,
+            request_type
+          FROM requests 
+          WHERE ip = ? AND is_matched = 1
+          ORDER BY timestamp
+        `).all(row.ip) as any[];
 
         const routeDetails = routeDetailsRows.map((detailRow: any) => ({
           domain: detailRow.domain,
@@ -563,15 +504,20 @@ export class StatisticsService {
         // Reconstruct RequestStats object
         const stat: RequestStats = {
           ip: row.ip,
-          geolocation: row.geolocation_json ? JSON.parse(row.geolocation_json) : null,
+          geolocation: {
+            country: row.country,
+            city: row.city,
+            latitude: row.latitude,
+            longitude: row.longitude
+          },
           count: row.count,
           firstSeen: new Date(row.first_seen),
           lastSeen: new Date(row.last_seen),
-          userAgents: new Set(JSON.parse(row.user_agents_json || '[]')),
-          routes: new Set(JSON.parse(row.routes_json || '[]')),
-          methods: new Set(JSON.parse(row.methods_json || '[]')),
-          responseTimes: JSON.parse(row.response_times_json || '[]'),
-          requestTypes: new Set(JSON.parse(row.request_types_json || '[]')),
+          userAgents: new Set(row.user_agents ? row.user_agents.split(',') : []),
+          routes: new Set(row.routes ? row.routes.split(',') : []),
+          methods: new Set(row.methods ? row.methods.split(',') : []),
+          responseTimes: row.response_times ? row.response_times.split(',').map(Number) : [],
+          requestTypes: new Set(row.request_types ? row.request_types.split(',') : []),
           routeDetails
         };
 
@@ -622,28 +568,24 @@ export class StatisticsService {
       const cutoffISO = cutoffDate.toISOString();
 
       // Delete old data from all tables
-      const deletedIndividualRequests = this.db.query(
-        'DELETE FROM individual_requests WHERE timestamp < ?'
+      const deletedRequests = this.db.query(
+        'DELETE FROM requests WHERE timestamp < ?'
       ).run(cutoffISO).changes;
 
-      const deletedUnmatchedRequests = this.db.query(
-        'DELETE FROM unmatched_requests WHERE timestamp < ?'
+      const deletedCountries = this.db.query(
+        'DELETE FROM geolocation_countries WHERE last_seen < ?'
       ).run(cutoffISO).changes;
 
-      const deletedRouteDetails = this.db.query(
-        'DELETE FROM route_details WHERE timestamp < ?'
-      ).run(cutoffISO).changes;
-
-      const deletedStats = this.db.query(
-        'DELETE FROM request_stats WHERE last_seen < ?'
+      const deletedCities = this.db.query(
+        'DELETE FROM geolocation_cities WHERE last_seen < ?'
       ).run(cutoffISO).changes;
 
       // Reload stats from database to sync memory
       await this.loadPersistedStats();
 
-      const totalDeleted = deletedStats + deletedRouteDetails + deletedIndividualRequests + deletedUnmatchedRequests;
+      const totalDeleted = deletedRequests + deletedCountries + deletedCities;
       if (totalDeleted > 0) {
-        logger.info(`Cleaned up ${deletedStats} old statistics entries, ${deletedRouteDetails} route details, ${deletedIndividualRequests} individual requests, and ${deletedUnmatchedRequests} unmatched requests`);
+        logger.info(`Cleaned up ${deletedRequests} old requests, ${deletedCountries} country entries, and ${deletedCities} city entries`);
       }
     } catch (error) {
       logger.error('Failed to cleanup old statistics:', error);
@@ -780,13 +722,14 @@ export class StatisticsService {
       const now = new Date().toISOString();
       const url = new URL(requestContext.url);
       const domain = url.hostname;
+      const isMatched = route ? 1 : 0;
 
-      // Store in individual_requests table
+      // Store in unified requests table
       this.db.run(`
-        INSERT INTO individual_requests (
+        INSERT INTO requests (
           ip, domain, path, method, status_code, response_time, timestamp,
-          user_agent, request_type, route_name, target_url, query_string, headers_json, geolocation_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          user_agent, request_type, route_name, target_url, query_string, headers_json, geolocation_json, is_matched
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         requestContext.ip,
         domain,
@@ -801,55 +744,79 @@ export class StatisticsService {
         route?.target || null,
         queryString,
         JSON.stringify(headers),
-        JSON.stringify(requestContext.geolocation)
+        JSON.stringify(requestContext.geolocation),
+        isMatched
       ]);
 
-      // If no route matched, store in unmatched_requests table
-      if (!route) {
-        this.db.run(`
-          INSERT INTO unmatched_requests (
-            ip, domain, path, method, status_code, response_time, timestamp,
-            user_agent, query_string, headers_json, geolocation_json
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, [
-          requestContext.ip,
-          domain,
-          path,
-          requestContext.method,
-          statusCode,
-          responseTime || 0,
-          now,
-          requestContext.userAgent,
-          queryString,
-          JSON.stringify(headers),
-          JSON.stringify(requestContext.geolocation)
-        ]);
-      }
-
-      // Update route_details table with enhanced information
-      if (route) {
-        this.db.run(`
-          INSERT INTO route_details (
-            ip, domain, target, method, response_time, timestamp, request_type,
-            status_code, user_agent, path, query_string, headers_json
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, [
-          requestContext.ip,
-          route.domain,
-          route.target || 'unknown',
-          requestContext.method,
-          responseTime || 0,
-          now,
-          route.type || 'proxy',
-          statusCode,
-          requestContext.userAgent,
-          path,
-          queryString,
-          JSON.stringify(headers)
-        ]);
-      }
+      // Update geolocation aggregation tables
+      this.updateGeolocationAggregation(requestContext, responseTime || 0, now);
     } catch (error) {
       logger.error('Failed to store detailed request in database:', error);
+    }
+  }
+
+  /**
+   * Update geolocation aggregation tables
+   */
+  private updateGeolocationAggregation(
+    requestContext: BunRequestContext,
+    responseTime: number,
+    timestamp: string
+  ): void {
+    try {
+      if (!requestContext.geolocation) return;
+
+      const { country, city } = requestContext.geolocation;
+      if (!country) return;
+
+      // Update country aggregation
+      this.db.run(`
+        INSERT INTO geolocation_countries (country, total_requests, unique_ips, avg_response_time, first_seen, last_seen)
+        VALUES (?, 1, 1, ?, ?, ?)
+        ON CONFLICT(country) DO UPDATE SET
+          total_requests = total_requests + 1,
+          avg_response_time = (avg_response_time * total_requests + ?) / (total_requests + 1),
+          last_seen = ?,
+          updated_at = datetime('now')
+      `, [country, responseTime, timestamp, timestamp, responseTime, timestamp]);
+
+      // Update unique IPs for country
+      this.db.run(`
+        UPDATE geolocation_countries 
+        SET unique_ips = (
+          SELECT COUNT(DISTINCT ip) 
+          FROM requests 
+          WHERE json_extract(geolocation_json, '$.country') = ?
+        )
+        WHERE country = ?
+      `, [country, country]);
+
+      // Update city aggregation if city exists
+      if (city) {
+        this.db.run(`
+          INSERT INTO geolocation_cities (city, country, total_requests, unique_ips, avg_response_time, first_seen, last_seen)
+          VALUES (?, ?, 1, 1, ?, ?, ?)
+          ON CONFLICT(city, country) DO UPDATE SET
+            total_requests = total_requests + 1,
+            avg_response_time = (avg_response_time * total_requests + ?) / (total_requests + 1),
+            last_seen = ?,
+            updated_at = datetime('now')
+        `, [city, country, responseTime, timestamp, timestamp, responseTime, timestamp]);
+
+        // Update unique IPs for city
+        this.db.run(`
+          UPDATE geolocation_cities 
+          SET unique_ips = (
+            SELECT COUNT(DISTINCT ip) 
+            FROM requests 
+            WHERE json_extract(geolocation_json, '$.city') = ? 
+            AND json_extract(geolocation_json, '$.country') = ?
+          )
+          WHERE city = ? AND country = ?
+        `, [city, country, city, country]);
+      }
+    } catch (error) {
+      logger.error('Failed to update geolocation aggregation:', error);
     }
   }
 
@@ -1144,7 +1111,7 @@ export class StatisticsService {
   public getDatabaseVersion(): number {
     try {
       if (!this.db) return 0;
-      
+
       const versionResult = this.db.query('SELECT version FROM db_version ORDER BY id DESC LIMIT 1').get() as any;
       return versionResult ? versionResult.version : 0;
     } catch (error) {
@@ -1239,8 +1206,8 @@ export class StatisticsService {
           AVG(response_time) as avg_response_time,
           COUNT(DISTINCT ip) as unique_ips,
           COUNT(DISTINCT json_extract(geolocation_json, '$.country')) as unique_countries
-        FROM individual_requests 
-        WHERE timestamp >= ? AND route_name IS NOT NULL
+        FROM requests 
+        WHERE timestamp >= ? AND route_name IS NOT NULL AND is_matched = 1
         GROUP BY route_name, domain, path, target_url, request_type
         ORDER BY total_requests DESC
         LIMIT ?
@@ -1252,8 +1219,8 @@ export class StatisticsService {
           SELECT 
             json_extract(geolocation_json, '$.country') as country,
             COUNT(*) as count
-          FROM individual_requests 
-          WHERE timestamp >= ? AND route_name = ? AND domain = ? AND path = ?
+          FROM requests 
+          WHERE timestamp >= ? AND route_name = ? AND domain = ? AND path = ? AND is_matched = 1
           GROUP BY country
           ORDER BY count DESC
           LIMIT 5
@@ -1262,8 +1229,8 @@ export class StatisticsService {
         // Get methods for this route
         const methods = this.db.query(`
           SELECT DISTINCT method
-          FROM individual_requests 
-          WHERE timestamp >= ? AND route_name = ? AND domain = ? AND path = ?
+          FROM requests 
+          WHERE timestamp >= ? AND route_name = ? AND domain = ? AND path = ? AND is_matched = 1
         `).all(startISO, route.route_name, route.domain, route.path) as any[];
 
         // Get status codes for this route
@@ -1271,8 +1238,8 @@ export class StatisticsService {
           SELECT 
             status_code as code,
             COUNT(*) as count
-          FROM individual_requests 
-          WHERE timestamp >= ? AND route_name = ? AND domain = ? AND path = ?
+          FROM requests 
+          WHERE timestamp >= ? AND route_name = ? AND domain = ? AND path = ? AND is_matched = 1
           GROUP BY status_code
           ORDER BY count DESC
         `).all(startISO, route.route_name, route.domain, route.path) as any[];
@@ -1282,8 +1249,8 @@ export class StatisticsService {
           SELECT 
             path,
             COUNT(*) as count
-          FROM individual_requests 
-          WHERE timestamp >= ? AND route_name = ? AND domain = ?
+          FROM requests 
+          WHERE timestamp >= ? AND route_name = ? AND domain = ? AND is_matched = 1
           GROUP BY path
           ORDER BY count DESC
           LIMIT 10
@@ -1363,8 +1330,8 @@ export class StatisticsService {
           AVG(response_time) as avg_response_time,
           COUNT(DISTINCT ip) as unique_ips,
           COUNT(DISTINCT json_extract(geolocation_json, '$.country')) as unique_countries
-        FROM unmatched_requests 
-        WHERE timestamp >= ?
+        FROM requests 
+        WHERE timestamp >= ? AND is_matched = 0
         GROUP BY domain, path
         ORDER BY total_requests DESC
         LIMIT ?
@@ -1376,8 +1343,8 @@ export class StatisticsService {
           SELECT 
             json_extract(geolocation_json, '$.country') as country,
             COUNT(*) as count
-          FROM unmatched_requests 
-          WHERE timestamp >= ? AND domain = ? AND path = ?
+          FROM requests 
+          WHERE timestamp >= ? AND domain = ? AND path = ? AND is_matched = 0
           GROUP BY country
           ORDER BY count DESC
           LIMIT 5
@@ -1386,8 +1353,8 @@ export class StatisticsService {
         // Get methods for this unmatched route
         const methods = this.db.query(`
           SELECT DISTINCT method
-          FROM unmatched_requests 
-          WHERE timestamp >= ? AND domain = ? AND path = ?
+          FROM requests 
+          WHERE timestamp >= ? AND domain = ? AND path = ? AND is_matched = 0
         `).all(startISO, route.domain, route.path) as any[];
 
         // Get status codes for this unmatched route
@@ -1395,8 +1362,8 @@ export class StatisticsService {
           SELECT 
             status_code as code,
             COUNT(*) as count
-          FROM unmatched_requests 
-          WHERE timestamp >= ? AND domain = ? AND path = ?
+          FROM requests 
+          WHERE timestamp >= ? AND domain = ? AND path = ? AND is_matched = 0
           GROUP BY status_code
           ORDER BY count DESC
         `).all(startISO, route.domain, route.path) as any[];
@@ -1406,8 +1373,8 @@ export class StatisticsService {
           SELECT 
             user_agent,
             COUNT(*) as count
-          FROM unmatched_requests 
-          WHERE timestamp >= ? AND domain = ? AND path = ?
+          FROM requests 
+          WHERE timestamp >= ? AND domain = ? AND path = ? AND is_matched = 0
           GROUP BY user_agent
           ORDER BY count DESC
           LIMIT 10
@@ -1422,8 +1389,8 @@ export class StatisticsService {
             status_code,
             user_agent,
             json_extract(geolocation_json, '$.country') as country
-          FROM unmatched_requests 
-          WHERE timestamp >= ? AND domain = ? AND path = ?
+          FROM requests 
+          WHERE timestamp >= ? AND domain = ? AND path = ? AND is_matched = 0
           ORDER BY timestamp DESC
           LIMIT 20
         `).all(startISO, route.domain, route.path) as any[];
@@ -1497,7 +1464,7 @@ export class StatisticsService {
           AVG(response_time) as avg_response_time,
           COUNT(DISTINCT ip) as unique_ips,
           COUNT(DISTINCT json_extract(geolocation_json, '$.country')) as unique_countries
-        FROM individual_requests 
+        FROM requests 
         WHERE timestamp >= ?
         GROUP BY domain
         ORDER BY total_requests DESC
@@ -1507,15 +1474,15 @@ export class StatisticsService {
         // Get matched requests count
         const matchedRequests = this.db.query(`
           SELECT COUNT(*) as count
-          FROM individual_requests 
-          WHERE timestamp >= ? AND domain = ? AND route_name IS NOT NULL
+          FROM requests 
+          WHERE timestamp >= ? AND domain = ? AND is_matched = 1
         `).get(startISO, domain.domain) as any;
 
         // Get unmatched requests count
         const unmatchedRequests = this.db.query(`
           SELECT COUNT(*) as count
-          FROM unmatched_requests 
-          WHERE timestamp >= ? AND domain = ?
+          FROM requests 
+          WHERE timestamp >= ? AND domain = ? AND is_matched = 0
         `).get(startISO, domain.domain) as any;
 
         // Get top routes for this domain
@@ -1524,8 +1491,8 @@ export class StatisticsService {
             route_name,
             path,
             COUNT(*) as count
-          FROM individual_requests 
-          WHERE timestamp >= ? AND domain = ? AND route_name IS NOT NULL
+          FROM requests 
+          WHERE timestamp >= ? AND domain = ? AND is_matched = 1
           GROUP BY route_name, path
           ORDER BY count DESC
           LIMIT 10
@@ -1536,8 +1503,8 @@ export class StatisticsService {
           SELECT 
             path,
             COUNT(*) as count
-          FROM unmatched_requests 
-          WHERE timestamp >= ? AND domain = ?
+          FROM requests 
+          WHERE timestamp >= ? AND domain = ? AND is_matched = 0
           GROUP BY path
           ORDER BY count DESC
           LIMIT 10
@@ -1613,8 +1580,8 @@ export class StatisticsService {
           json_extract(geolocation_json, '$.city') as city,
           query_string,
           headers_json
-        FROM individual_requests 
-        WHERE timestamp >= ? AND route_name = ? AND domain = ? AND path = ?
+        FROM requests 
+        WHERE timestamp >= ? AND route_name = ? AND domain = ? AND path = ? AND is_matched = 1
         ORDER BY timestamp DESC
         LIMIT ?
       `).all(startISO, routeName, domain, path, limit) as any[];
@@ -2030,6 +1997,164 @@ export class StatisticsService {
     this.stats.clear();
     this.saveStats();
     logger.info('All statistics cleared');
+  }
+
+  /**
+   * Get geolocation statistics by country
+   */
+  public getCountryStats(period: string = '24h', limit: number = 50): Array<{
+    country: string;
+    totalRequests: number;
+    uniqueIPs: number;
+    avgResponseTime: number;
+    firstSeen: string;
+    lastSeen: string;
+    topCities: Array<{ city: string; count: number; percentage: number }>;
+    topRoutes: Array<{ routeName: string | null; count: number; percentage: number }>;
+  }> {
+    try {
+      if (!this.db) return [];
+
+      const startDate = this.getStartDateForPeriod(period);
+      const startISO = startDate.toISOString();
+
+      // Get country statistics from aggregation table
+      const countryStats = this.db.query(`
+        SELECT 
+          country,
+          total_requests,
+          unique_ips,
+          avg_response_time,
+          first_seen,
+          last_seen
+        FROM geolocation_countries 
+        WHERE last_seen >= ?
+        ORDER BY total_requests DESC
+        LIMIT ?
+      `).all(startISO, limit) as any[];
+
+      return countryStats.map(country => {
+        // Get top cities for this country
+        const topCities = this.db.query(`
+          SELECT 
+            city,
+            total_requests as count
+          FROM geolocation_cities 
+          WHERE country = ? AND last_seen >= ?
+          ORDER BY total_requests DESC
+          LIMIT 10
+        `).all(country.country, startISO) as any[];
+
+        // Get top routes for this country
+        const topRoutes = this.db.query(`
+          SELECT 
+            route_name,
+            COUNT(*) as count
+          FROM requests 
+          WHERE json_extract(geolocation_json, '$.country') = ? AND timestamp >= ?
+          GROUP BY route_name
+          ORDER BY count DESC
+          LIMIT 10
+        `).all(country.country, startISO) as any[];
+
+        const totalRequests = country.total_requests;
+
+        return {
+          country: country.country,
+          totalRequests,
+          uniqueIPs: country.unique_ips,
+          avgResponseTime: country.avg_response_time || 0,
+          firstSeen: country.first_seen,
+          lastSeen: country.last_seen,
+          topCities: topCities.map(c => ({
+            city: c.city,
+            count: c.count,
+            percentage: (c.count / totalRequests) * 100
+          })),
+          topRoutes: topRoutes.map(r => ({
+            routeName: r.route_name,
+            count: r.count,
+            percentage: (r.count / totalRequests) * 100
+          }))
+        };
+      });
+    } catch (error) {
+      logger.error('Failed to get country statistics:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get geolocation statistics by city
+   */
+  public getCityStats(period: string = '24h', limit: number = 50): Array<{
+    city: string;
+    country: string;
+    totalRequests: number;
+    uniqueIPs: number;
+    avgResponseTime: number;
+    firstSeen: string;
+    lastSeen: string;
+    topRoutes: Array<{ routeName: string | null; count: number; percentage: number }>;
+  }> {
+    try {
+      if (!this.db) return [];
+
+      const startDate = this.getStartDateForPeriod(period);
+      const startISO = startDate.toISOString();
+
+      // Get city statistics from aggregation table
+      const cityStats = this.db.query(`
+        SELECT 
+          city,
+          country,
+          total_requests,
+          unique_ips,
+          avg_response_time,
+          first_seen,
+          last_seen
+        FROM geolocation_cities 
+        WHERE last_seen >= ?
+        ORDER BY total_requests DESC
+        LIMIT ?
+      `).all(startISO, limit) as any[];
+
+      return cityStats.map(city => {
+        // Get top routes for this city
+        const topRoutes = this.db.query(`
+          SELECT 
+            route_name,
+            COUNT(*) as count
+          FROM requests 
+          WHERE json_extract(geolocation_json, '$.city') = ? 
+            AND json_extract(geolocation_json, '$.country') = ? 
+            AND timestamp >= ?
+          GROUP BY route_name
+          ORDER BY count DESC
+          LIMIT 10
+        `).all(city.city, city.country, startISO) as any[];
+
+        const totalRequests = city.total_requests;
+
+        return {
+          city: city.city,
+          country: city.country,
+          totalRequests,
+          uniqueIPs: city.unique_ips,
+          avgResponseTime: city.avg_response_time || 0,
+          firstSeen: city.first_seen,
+          lastSeen: city.last_seen,
+          topRoutes: topRoutes.map(r => ({
+            routeName: r.route_name,
+            count: r.count,
+            percentage: (r.count / totalRequests) * 100
+          }))
+        };
+      });
+    } catch (error) {
+      logger.error('Failed to get city statistics:', error);
+      return [];
+    }
   }
 }
 
