@@ -1503,46 +1503,33 @@ body {
   overflow: hidden;
 }
 
-.geo-map-svg {
-  display: block;
+.leaflet-map {
+  border-radius: 6px;
+  overflow: hidden;
 }
 
-.world-outline path {
-  fill: #f7fafc;
-  stroke: #a0aec0;
-  stroke-width: 0.8;
-  opacity: 0.8;
+.leaflet-container {
+  font-family: inherit;
 }
 
-.world-outline path:hover {
-  fill: #edf2f7;
-  stroke: #718096;
-  stroke-width: 1;
+.leaflet-popup-content-wrapper {
+  border-radius: 6px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-.country-marker {
-  cursor: pointer;
-  transition: all 0.2s;
+.leaflet-popup-content {
+  margin: 8px 12px;
+  font-size: 0.875rem;
+  line-height: 1.4;
 }
 
-.country-marker:hover {
-  transform: scale(1.1);
+.leaflet-popup-tip {
+  background: white;
 }
 
-.marker-circle {
-  transition: all 0.2s;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
-}
-
-.country-marker:hover .marker-circle {
-  stroke-width: 1;
-  stroke: #2b6cb0;
-}
-
-.marker-label {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-weight: 500;
-  pointer-events: none;
+.leaflet-control-attribution {
+  font-size: 0.75rem;
+  color: #718096;
 }
 
 .geo-map-legend {

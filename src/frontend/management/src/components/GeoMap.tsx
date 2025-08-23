@@ -1,4 +1,15 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+// Fix for default markers in react-leaflet
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
 
 interface CountryData {
   country: string;
@@ -89,72 +100,72 @@ const countryCodeMap: { [key: string]: string } = {
   'Unknown': 'Unknown'
 };
 
-// World map coordinates (adjusted for detailed map layout)
-const countryCoordinates: { [key: string]: { x: number; y: number; name: string } } = {
-  'US': { x: 30, y: 25, name: 'United States' },
-  'CN': { x: 75, y: 27, name: 'China' },
-  'IN': { x: 68, y: 40, name: 'India' },
-  'JP': { x: 85, y: 27, name: 'Japan' },
-  'DE': { x: 52, y: 25, name: 'Germany' },
-  'GB': { x: 48, y: 25, name: 'United Kingdom' },
-  'FR': { x: 50, y: 27, name: 'France' },
-  'BR': { x: 28, y: 55, name: 'Brazil' },
-  'IT': { x: 54, y: 30, name: 'Italy' },
-  'CA': { x: 25, y: 18, name: 'Canada' },
-  'AU': { x: 78, y: 72, name: 'Australia' },
-  'RU': { x: 70, y: 20, name: 'Russia' },
-  'KR': { x: 82, y: 30, name: 'South Korea' },
-  'ES': { x: 47, y: 30, name: 'Spain' },
-  'MX': { x: 20, y: 35, name: 'Mexico' },
-  'ID': { x: 72, y: 50, name: 'Indonesia' },
-  'NL': { x: 51, y: 25, name: 'Netherlands' },
-  'SA': { x: 58, y: 40, name: 'Saudi Arabia' },
-  'TR': { x: 58, y: 30, name: 'Turkey' },
-  'CH': { x: 53, y: 28, name: 'Switzerland' },
-  'SE': { x: 54, y: 20, name: 'Sweden' },
-  'AR': { x: 26, y: 65, name: 'Argentina' },
-  'BE': { x: 51, y: 26, name: 'Belgium' },
-  'TH': { x: 72, y: 45, name: 'Thailand' },
-  'PL': { x: 56, y: 23, name: 'Poland' },
-  'AT': { x: 54, y: 28, name: 'Austria' },
-  'NO': { x: 53, y: 18, name: 'Norway' },
-  'AE': { x: 62, y: 40, name: 'United Arab Emirates' },
-  'SG': { x: 75, y: 50, name: 'Singapore' },
-  'MY': { x: 73, y: 50, name: 'Malaysia' },
-  'DK': { x: 52, y: 22, name: 'Denmark' },
-  'FI': { x: 57, y: 18, name: 'Finland' },
-  'CL': { x: 22, y: 70, name: 'Chile' },
-  'ZA': { x: 52, y: 60, name: 'South Africa' },
-  'EG': { x: 58, y: 37, name: 'Egypt' },
-  'PH': { x: 80, y: 45, name: 'Philippines' },
-  'VN': { x: 74, y: 45, name: 'Vietnam' },
-  'CZ': { x: 55, y: 26, name: 'Czech Republic' },
-  'RO': { x: 58, y: 30, name: 'Romania' },
-  'PT': { x: 46, y: 30, name: 'Portugal' },
-  'GR': { x: 56, y: 35, name: 'Greece' },
-  'HU': { x: 56, y: 26, name: 'Hungary' },
-  'IE': { x: 47, y: 23, name: 'Ireland' },
-  'IL': { x: 60, y: 35, name: 'Israel' },
-  'NZ': { x: 85, y: 75, name: 'New Zealand' },
-  'CO': { x: 24, y: 50, name: 'Colombia' },
-  'PE': { x: 22, y: 55, name: 'Peru' },
-  'HR': { x: 55, y: 30, name: 'Croatia' },
-  'BG': { x: 58, y: 32, name: 'Bulgaria' },
-  'SK': { x: 56, y: 27, name: 'Slovakia' },
-  'LT': { x: 58, y: 22, name: 'Lithuania' },
-  'SI': { x: 55, y: 29, name: 'Slovenia' },
-  'LV': { x: 58, y: 20, name: 'Latvia' },
-  'EE': { x: 59, y: 20, name: 'Estonia' },
-  'CY': { x: 60, y: 35, name: 'Cyprus' },
-  'LU': { x: 52, y: 28, name: 'Luxembourg' },
-  'MT': { x: 54, y: 35, name: 'Malta' },
-  'IS': { x: 50, y: 15, name: 'Iceland' },
-  'AD': { x: 50, y: 30, name: 'Andorra' },
-  'MC': { x: 52, y: 31, name: 'Monaco' },
-  'LI': { x: 53, y: 28, name: 'Liechtenstein' },
-  'SM': { x: 54, y: 30, name: 'San Marino' },
-  'VA': { x: 54, y: 32, name: 'Vatican City' },
-  'Unknown': { x: 50, y: 50, name: 'Unknown' }
+// Country coordinates for Leaflet (latitude, longitude)
+const countryCoordinates: { [key: string]: { lat: number; lng: number; name: string } } = {
+  'US': { lat: 39.8283, lng: -98.5795, name: 'United States' },
+  'CN': { lat: 35.8617, lng: 104.1954, name: 'China' },
+  'IN': { lat: 20.5937, lng: 78.9629, name: 'India' },
+  'JP': { lat: 36.2048, lng: 138.2529, name: 'Japan' },
+  'DE': { lat: 51.1657, lng: 10.4515, name: 'Germany' },
+  'GB': { lat: 55.3781, lng: -3.4360, name: 'United Kingdom' },
+  'FR': { lat: 46.2276, lng: 2.2137, name: 'France' },
+  'BR': { lat: -14.2350, lng: -51.9253, name: 'Brazil' },
+  'IT': { lat: 41.8719, lng: 12.5674, name: 'Italy' },
+  'CA': { lat: 56.1304, lng: -106.3468, name: 'Canada' },
+  'AU': { lat: -25.2744, lng: 133.7751, name: 'Australia' },
+  'RU': { lat: 61.5240, lng: 105.3188, name: 'Russia' },
+  'KR': { lat: 35.9078, lng: 127.7669, name: 'South Korea' },
+  'ES': { lat: 40.4637, lng: -3.7492, name: 'Spain' },
+  'MX': { lat: 23.6345, lng: -102.5528, name: 'Mexico' },
+  'ID': { lat: -0.7893, lng: 113.9213, name: 'Indonesia' },
+  'NL': { lat: 52.1326, lng: 5.2913, name: 'Netherlands' },
+  'SA': { lat: 23.8859, lng: 45.0792, name: 'Saudi Arabia' },
+  'TR': { lat: 38.9637, lng: 35.2433, name: 'Turkey' },
+  'CH': { lat: 46.8182, lng: 8.2275, name: 'Switzerland' },
+  'SE': { lat: 60.1282, lng: 18.6435, name: 'Sweden' },
+  'AR': { lat: -38.4161, lng: -63.6167, name: 'Argentina' },
+  'BE': { lat: 50.8503, lng: 4.3517, name: 'Belgium' },
+  'TH': { lat: 15.8700, lng: 100.9925, name: 'Thailand' },
+  'PL': { lat: 51.9194, lng: 19.1451, name: 'Poland' },
+  'AT': { lat: 47.5162, lng: 14.5501, name: 'Austria' },
+  'NO': { lat: 60.4720, lng: 8.4689, name: 'Norway' },
+  'AE': { lat: 23.4241, lng: 53.8478, name: 'United Arab Emirates' },
+  'SG': { lat: 1.3521, lng: 103.8198, name: 'Singapore' },
+  'MY': { lat: 4.2105, lng: 108.9758, name: 'Malaysia' },
+  'DK': { lat: 56.2639, lng: 9.5018, name: 'Denmark' },
+  'FI': { lat: 61.9241, lng: 25.7482, name: 'Finland' },
+  'CL': { lat: -35.6751, lng: -71.5430, name: 'Chile' },
+  'ZA': { lat: -30.5595, lng: 22.9375, name: 'South Africa' },
+  'EG': { lat: 26.8206, lng: 30.8025, name: 'Egypt' },
+  'PH': { lat: 12.8797, lng: 121.7740, name: 'Philippines' },
+  'VN': { lat: 14.0583, lng: 108.2772, name: 'Vietnam' },
+  'CZ': { lat: 49.8175, lng: 15.4730, name: 'Czech Republic' },
+  'RO': { lat: 45.9432, lng: 24.9668, name: 'Romania' },
+  'PT': { lat: 39.3999, lng: -8.2245, name: 'Portugal' },
+  'GR': { lat: 39.0742, lng: 21.8243, name: 'Greece' },
+  'HU': { lat: 47.1625, lng: 19.5033, name: 'Hungary' },
+  'IE': { lat: 53.1424, lng: -7.6921, name: 'Ireland' },
+  'IL': { lat: 31.0461, lng: 34.8516, name: 'Israel' },
+  'NZ': { lat: -40.9006, lng: 174.8860, name: 'New Zealand' },
+  'CO': { lat: 4.5709, lng: -74.2973, name: 'Colombia' },
+  'PE': { lat: -9.1900, lng: -75.0152, name: 'Peru' },
+  'HR': { lat: 45.1000, lng: 15.2000, name: 'Croatia' },
+  'BG': { lat: 42.7339, lng: 25.4858, name: 'Bulgaria' },
+  'SK': { lat: 48.6690, lng: 19.6990, name: 'Slovakia' },
+  'LT': { lat: 55.1694, lng: 23.8813, name: 'Lithuania' },
+  'SI': { lat: 46.0569, lng: 14.5058, name: 'Slovenia' },
+  'LV': { lat: 56.8796, lng: 24.6032, name: 'Latvia' },
+  'EE': { lat: 58.5953, lng: 25.0136, name: 'Estonia' },
+  'CY': { lat: 35.1264, lng: 33.4299, name: 'Cyprus' },
+  'LU': { lat: 49.8153, lng: 6.1296, name: 'Luxembourg' },
+  'MT': { lat: 35.9375, lng: 14.3754, name: 'Malta' },
+  'IS': { lat: 64.9631, lng: -19.0208, name: 'Iceland' },
+  'AD': { lat: 42.5063, lng: 1.5218, name: 'Andorra' },
+  'MC': { lat: 43.7384, lng: 7.4246, name: 'Monaco' },
+  'LI': { lat: 47.1660, lng: 9.5554, name: 'Liechtenstein' },
+  'SM': { lat: 43.9424, lng: 12.4578, name: 'San Marino' },
+  'VA': { lat: 41.9029, lng: 12.4534, name: 'Vatican City' },
+  'Unknown': { lat: 0, lng: 0, name: 'Unknown' }
 };
 
 export const GeoMap: React.FC<GeoMapProps> = ({
@@ -179,15 +190,15 @@ export const GeoMap: React.FC<GeoMapProps> = ({
         if (!coords) return null;
 
         const intensity = Math.max(0.1, item.count / maxCount);
-        const size = Math.max(4, Math.min(20, 4 + (intensity * 16)));
+        const radius = Math.max(4, Math.min(20, 4 + (intensity * 16)));
 
         return {
           ...item,
           countryCode,
-          x: coords.x,
-          y: coords.y,
+          lat: coords.lat,
+          lng: coords.lng,
           intensity,
-          size,
+          radius,
           displayName: coords.name,
           type: 'country'
         };
@@ -201,19 +212,19 @@ export const GeoMap: React.FC<GeoMapProps> = ({
         if (!coords) return null;
 
         // Add some random offset for cities within the same country
-        const offsetX = (Math.random() - 0.5) * 4;
-        const offsetY = (Math.random() - 0.5) * 4;
+        const offsetLat = (Math.random() - 0.5) * 2;
+        const offsetLng = (Math.random() - 0.5) * 2;
 
         const intensity = Math.max(0.1, item.count / maxCount);
-        const size = Math.max(3, Math.min(16, 3 + (intensity * 13)));
+        const radius = Math.max(3, Math.min(16, 3 + (intensity * 13)));
 
         return {
           ...item,
           countryCode,
-          x: coords.x + offsetX,
-          y: coords.y + offsetY,
+          lat: coords.lat + offsetLat,
+          lng: coords.lng + offsetLng,
           intensity,
-          size,
+          radius,
           displayName: `${item.city}, ${item.country}`,
           type: 'city'
         };
@@ -252,123 +263,39 @@ export const GeoMap: React.FC<GeoMapProps> = ({
       </div>
 
       <div className="geo-map-wrapper" style={{ height }}>
-        <svg
-          viewBox="0 0 100 100"
-          className="geo-map-svg"
+        <MapContainer
+          center={[20, 0]}
+          zoom={2}
           style={{ width: '100%', height: '100%' }}
+          className="leaflet-map"
         >
-          {/* World map outline with detailed coastlines */}
-          <g className="world-outline">
-            {/* North America */}
-            <path
-              d="M 15 20 L 18 18 L 22 17 L 26 16 L 30 15 L 34 16 L 38 17 L 42 18 L 45 20 L 47 22 L 48 25 L 47 28 L 45 31 L 42 33 L 38 34 L 34 35 L 30 36 L 26 35 L 22 34 L 18 33 L 15 31 L 13 28 L 12 25 L 13 22 L 15 20 Z M 35 12 L 37 10 L 39 12 L 37 14 L 35 12 Z"
-              fill="#f7fafc"
-              stroke="#cbd5e0"
-              strokeWidth="0.2"
-            />
-            
-            {/* South America */}
-            <path
-              d="M 25 40 L 27 42 L 29 45 L 30 48 L 31 52 L 31 56 L 30 60 L 29 64 L 27 67 L 25 70 L 23 67 L 22 64 L 21 60 L 20 56 L 20 52 L 21 48 L 22 45 L 23 42 L 25 40 Z"
-              fill="#f7fafc"
-              stroke="#cbd5e0"
-              strokeWidth="0.2"
-            />
-            
-            {/* Europe */}
-            <path
-              d="M 45 18 L 48 17 L 51 18 L 54 19 L 57 20 L 59 22 L 60 25 L 59 28 L 57 30 L 54 31 L 51 32 L 48 31 L 45 30 L 43 28 L 42 25 L 43 22 L 45 18 Z M 52 15 L 54 13 L 56 15 L 54 17 L 52 15 Z"
-              fill="#f7fafc"
-              stroke="#cbd5e0"
-              strokeWidth="0.2"
-            />
-            
-            {/* Africa */}
-            <path
-              d="M 48 25 L 50 27 L 52 30 L 54 33 L 55 37 L 56 41 L 56 45 L 55 49 L 54 53 L 52 56 L 50 59 L 48 62 L 46 59 L 45 56 L 44 53 L 43 49 L 42 45 L 42 41 L 43 37 L 44 33 L 45 30 L 46 27 L 48 25 Z"
-              fill="#f7fafc"
-              stroke="#cbd5e0"
-              strokeWidth="0.2"
-            />
-            
-            {/* Asia */}
-            <path
-              d="M 60 15 L 65 14 L 70 15 L 75 16 L 80 18 L 84 20 L 87 23 L 88 27 L 87 31 L 84 34 L 80 36 L 75 37 L 70 38 L 65 37 L 60 36 L 57 34 L 55 31 L 54 27 L 55 23 L 57 20 L 60 15 Z M 75 12 L 78 10 L 81 12 L 78 14 L 75 12 Z"
-              fill="#f7fafc"
-              stroke="#cbd5e0"
-              strokeWidth="0.2"
-            />
-            
-            {/* Australia */}
-            <path
-              d="M 75 65 L 78 66 L 81 67 L 83 69 L 84 72 L 83 75 L 81 77 L 78 78 L 75 79 L 72 78 L 70 77 L 68 75 L 67 72 L 68 69 L 70 67 L 72 66 L 75 65 Z"
-              fill="#f7fafc"
-              stroke="#cbd5e0"
-              strokeWidth="0.2"
-            />
-            
-            {/* Greenland */}
-            <path
-              d="M 35 8 L 37 6 L 39 8 L 40 10 L 39 12 L 37 14 L 35 12 L 34 10 L 35 8 Z"
-              fill="#f7fafc"
-              stroke="#cbd5e0"
-              strokeWidth="0.2"
-            />
-            
-            {/* Antarctica */}
-            <path
-              d="M 25 85 L 35 86 L 45 87 L 55 88 L 65 89 L 75 88 L 85 87 L 95 86 L 95 90 L 85 91 L 75 92 L 65 93 L 55 92 L 45 91 L 35 90 L 25 89 L 15 90 L 15 86 L 25 85 Z"
-              fill="#f7fafc"
-              stroke="#cbd5e0"
-              strokeWidth="0.2"
-            />
-            
-            {/* Major Islands */}
-            <path
-              d="M 20 35 L 21 34 L 22 35 L 21 36 L 20 35 Z"
-              fill="#f7fafc"
-              stroke="#cbd5e0"
-              strokeWidth="0.1"
-            />
-            <path
-              d="M 85 45 L 86 44 L 87 45 L 86 46 L 85 45 Z"
-              fill="#f7fafc"
-              stroke="#cbd5e0"
-              strokeWidth="0.1"
-            />
-            <path
-              d="M 70 55 L 71 54 L 72 55 L 71 56 L 70 55 Z"
-              fill="#f7fafc"
-              stroke="#cbd5e0"
-              strokeWidth="0.1"
-            />
-          </g>
-
-          {/* Country markers */}
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          />
+          
+          {/* Country/City markers */}
           {processedData.map((data, index) => (
-            <g key={`${data.countryCode}-${index}`} className="country-marker">
-              <circle
-                cx={data.x}
-                cy={data.y}
-                r={data.size}
-                fill={`rgba(66, 153, 225, ${data.intensity})`}
-                stroke="#3182ce"
-                strokeWidth="0.5"
-                className="marker-circle"
-              />
-              <text
-                x={data.x}
-                y={data.y + data.size + 2}
-                textAnchor="middle"
-                fontSize="2"
-                fill="#4a5568"
-                className="marker-label"
-              >
-                {data.count}
-              </text>
-            </g>
+            <CircleMarker
+              key={`${data.countryCode}-${index}`}
+              center={[data.lat, data.lng]}
+              radius={data.radius}
+              fillColor={`rgba(66, 153, 225, ${data.intensity})`}
+              color="#3182ce"
+              weight={1}
+              opacity={0.8}
+              fillOpacity={data.intensity}
+            >
+              <Popup>
+                <div>
+                  <strong>{data.displayName}</strong><br />
+                  Requests: {data.count.toLocaleString()}<br />
+                  Percentage: {data.percentage.toFixed(1)}%
+                </div>
+              </Popup>
+            </CircleMarker>
           ))}
-        </svg>
+        </MapContainer>
       </div>
 
       {/* Legend */}
