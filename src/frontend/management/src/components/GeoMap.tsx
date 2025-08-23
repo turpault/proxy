@@ -21,6 +21,8 @@ interface CountryData {
   count: number;
   percentage: number;
   city?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 interface CityData {
@@ -28,6 +30,8 @@ interface CityData {
   country: string;
   count: number;
   percentage: number;
+  latitude?: number;
+  longitude?: number;
 }
 
 interface IPData {
@@ -36,6 +40,8 @@ interface IPData {
   city: string;
   count: number;
   percentage: number;
+  latitude?: number;
+  longitude?: number;
 }
 
 interface GeoMapProps {
@@ -205,12 +211,24 @@ export const GeoMap: React.FC<GeoMapProps> = ({
 
     return data.map(item => {
       if (viewMode === 'country') {
+        const countryItem = item as CountryData;
         const countryCode = Object.keys(countryCodeMap).find(
-          code => countryCodeMap[code] === item.country
+          code => countryCodeMap[code] === countryItem.country
         ) || 'Unknown';
 
-        const coords = countryCoordinates[countryCode];
-        if (!coords) return null;
+        // Use actual coordinates if available, otherwise fall back to simplified coordinates
+        let lat, lng, displayName;
+        if (countryItem.latitude && countryItem.longitude) {
+          lat = countryItem.latitude;
+          lng = countryItem.longitude;
+          displayName = countryItem.country;
+        } else {
+          const coords = countryCoordinates[countryCode];
+          if (!coords) return null;
+          lat = coords.lat;
+          lng = coords.lng;
+          displayName = coords.name;
+        }
 
         const intensity = Math.max(0.1, item.count / maxCount);
         const radius = Math.max(4, Math.min(20, 4 + (intensity * 16)));
@@ -218,61 +236,84 @@ export const GeoMap: React.FC<GeoMapProps> = ({
         return {
           ...item,
           countryCode,
-          lat: coords.lat,
-          lng: coords.lng,
+          lat,
+          lng,
           intensity,
           radius,
-          displayName: coords.name,
+          displayName,
           type: 'country'
         };
       } else if (viewMode === 'city') {
-        // For cities, we need to find the country coordinates and add some offset
-        const countryCode = Object.keys(countryCodeMap).find(
-          code => countryCodeMap[code] === item.country
-        ) || 'Unknown';
+        const cityItem = item as CityData;
+        // Use actual coordinates if available, otherwise fall back to country coordinates with offset
+        let lat, lng;
+        if (cityItem.latitude && cityItem.longitude) {
+          lat = cityItem.latitude;
+          lng = cityItem.longitude;
+        } else {
+          // For cities, we need to find the country coordinates and add some offset
+          const countryCode = Object.keys(countryCodeMap).find(
+            code => countryCodeMap[code] === cityItem.country
+          ) || 'Unknown';
 
-        const coords = countryCoordinates[countryCode];
-        if (!coords) return null;
+          const coords = countryCoordinates[countryCode];
+          if (!coords) return null;
 
-        // Add some random offset for cities within the same country
-        const offsetLat = (Math.random() - 0.5) * 2;
-        const offsetLng = (Math.random() - 0.5) * 2;
+          // Add some random offset for cities within the same country
+          const offsetLat = (Math.random() - 0.5) * 2;
+          const offsetLng = (Math.random() - 0.5) * 2;
+          lat = coords.lat + offsetLat;
+          lng = coords.lng + offsetLng;
+        }
 
-        const intensity = Math.max(0.1, item.count / maxCount);
+        const intensity = Math.max(0.1, cityItem.count / maxCount);
         const radius = Math.max(3, Math.min(16, 3 + (intensity * 13)));
 
         return {
-          ...item,
-          countryCode,
-          lat: coords.lat + offsetLat,
-          lng: coords.lng + offsetLng,
+          ...cityItem,
+          countryCode: Object.keys(countryCodeMap).find(
+            code => countryCodeMap[code] === cityItem.country
+          ) || 'Unknown',
+          lat,
+          lng,
           intensity,
           radius,
-          displayName: `${item.city}, ${item.country}`,
+          displayName: `${cityItem.city}, ${cityItem.country}`,
           type: 'city'
         };
       } else {
-        // For IPs, we need to find the country coordinates and add some offset
         const ipItem = item as IPData;
-        const countryCode = Object.keys(countryCodeMap).find(
-          code => countryCodeMap[code] === ipItem.country
-        ) || 'Unknown';
+        // Use actual coordinates if available, otherwise fall back to country coordinates with offset
+        let lat, lng;
+        if (ipItem.latitude && ipItem.longitude) {
+          lat = ipItem.latitude;
+          lng = ipItem.longitude;
+        } else {
+          // For IPs, we need to find the country coordinates and add some offset
+          const countryCode = Object.keys(countryCodeMap).find(
+            code => countryCodeMap[code] === ipItem.country
+          ) || 'Unknown';
 
-        const coords = countryCoordinates[countryCode];
-        if (!coords) return null;
+          const coords = countryCoordinates[countryCode];
+          if (!coords) return null;
 
-        // Add some random offset for IPs within the same country
-        const offsetLat = (Math.random() - 0.5) * 1.5;
-        const offsetLng = (Math.random() - 0.5) * 1.5;
+          // Add some random offset for IPs within the same country
+          const offsetLat = (Math.random() - 0.5) * 1.5;
+          const offsetLng = (Math.random() - 0.5) * 1.5;
+          lat = coords.lat + offsetLat;
+          lng = coords.lng + offsetLng;
+        }
 
         const intensity = Math.max(0.1, ipItem.count / maxCount);
         const radius = Math.max(2, Math.min(12, 2 + (intensity * 10)));
 
         return {
           ...ipItem,
-          countryCode,
-          lat: coords.lat + offsetLat,
-          lng: coords.lng + offsetLng,
+          countryCode: Object.keys(countryCodeMap).find(
+            code => countryCodeMap[code] === ipItem.country
+          ) || 'Unknown',
+          lat,
+          lng,
           intensity,
           radius,
           displayName: `${stripIPv6Prefix(ipItem.ip)} (${ipItem.city}, ${ipItem.country})`,

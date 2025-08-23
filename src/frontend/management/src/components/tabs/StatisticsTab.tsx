@@ -90,7 +90,9 @@ export const StatisticsTab: React.FC = () => {
     return detailedStatistics.countryStats.map(country => ({
       country: country.country,
       count: country.totalRequests,
-      percentage: (country.totalRequests / (detailedStatistics.countryStats?.reduce((sum, c) => sum + c.totalRequests, 0) || 1)) * 100
+      percentage: (country.totalRequests / (detailedStatistics.countryStats?.reduce((sum, c) => sum + c.totalRequests, 0) || 1)) * 100,
+      latitude: country.latitude,
+      longitude: country.longitude
     })).sort((a, b) => b.count - a.count);
   }, [detailedStatistics?.countryStats]);
 
@@ -102,7 +104,9 @@ export const StatisticsTab: React.FC = () => {
       city: city.city,
       country: city.country,
       count: city.totalRequests,
-      percentage: (city.totalRequests / (detailedStatistics.cityStats?.reduce((sum, c) => sum + c.totalRequests, 0) || 1)) * 100
+      percentage: (city.totalRequests / (detailedStatistics.cityStats?.reduce((sum, c) => sum + c.totalRequests, 0) || 1)) * 100,
+      latitude: city.latitude,
+      longitude: city.longitude
     })).sort((a, b) => b.count - a.count);
   }, [detailedStatistics?.cityStats]);
 
@@ -115,7 +119,9 @@ export const StatisticsTab: React.FC = () => {
       country: ip.country,
       city: ip.city,
       count: ip.totalRequests,
-      percentage: (ip.totalRequests / (detailedStatistics.ipStats?.reduce((sum, i) => sum + i.totalRequests, 0) || 1)) * 100
+      percentage: (ip.totalRequests / (detailedStatistics.ipStats?.reduce((sum, i) => sum + i.totalRequests, 0) || 1)) * 100,
+      latitude: ip.latitude,
+      longitude: ip.longitude
     })).sort((a, b) => b.count - a.count);
   }, [detailedStatistics?.ipStats]);
 

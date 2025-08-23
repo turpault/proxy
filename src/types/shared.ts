@@ -145,6 +145,8 @@ export interface DetailedStatistics {
     totalRequests: number;
     uniqueIPs: number;
     avgResponseTime: number;
+    latitude?: number;
+    longitude?: number;
     firstSeen: string;
     lastSeen: string;
     topCities: Array<{ city: string; count: number; percentage: number }>;
@@ -156,6 +158,8 @@ export interface DetailedStatistics {
     totalRequests: number;
     uniqueIPs: number;
     avgResponseTime: number;
+    latitude?: number;
+    longitude?: number;
     firstSeen: string;
     lastSeen: string;
     topRoutes: Array<{ routeName: string | null; count: number; percentage: number }>;
@@ -168,6 +172,8 @@ export interface DetailedStatistics {
     lastSeen: string;
     country: string;
     city: string;
+    latitude?: number;
+    longitude?: number;
     topRoutes: Array<{ routeName: string | null; count: number; percentage: number }>;
     methods: string[];
   }>;

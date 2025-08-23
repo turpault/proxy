@@ -132,7 +132,7 @@ export class StatisticsService {
   private dataDir: string;
   private isShuttingDown = false;
   private db!: Database; // SQLite database instance
-  public readonly SCHEMA_VERSION = 3; // Current schema version
+  public readonly SCHEMA_VERSION = 4; // Current schema version
 
   constructor() {
     // Get directories from configService
@@ -301,9 +301,11 @@ export class StatisticsService {
         total_requests INTEGER DEFAULT 0,
         unique_ips INTEGER DEFAULT 0,
         avg_response_time REAL DEFAULT 0,
+        latitude REAL,
+        longitude REAL,
         first_seen TEXT NOT NULL,
         last_seen TEXT NOT NULL,
-          created_at TEXT DEFAULT (datetime('now')),
+        created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now'))
       )
     `);
@@ -316,6 +318,8 @@ export class StatisticsService {
         total_requests INTEGER DEFAULT 0,
         unique_ips INTEGER DEFAULT 0,
         avg_response_time REAL DEFAULT 0,
+        latitude REAL,
+        longitude REAL,
         first_seen TEXT NOT NULL,
         last_seen TEXT NOT NULL,
         created_at TEXT DEFAULT (datetime('now')),
@@ -587,19 +591,21 @@ export class StatisticsService {
     try {
       if (!requestContext.geolocation) return;
 
-      const { country, city } = requestContext.geolocation;
+      const { country, city, latitude, longitude } = requestContext.geolocation;
       if (!country) return;
 
       // Update country aggregation
       this.db.run(`
-        INSERT INTO geolocation_countries (country, total_requests, unique_ips, avg_response_time, first_seen, last_seen)
-        VALUES (?, 1, 1, ?, ?, ?)
+        INSERT INTO geolocation_countries (country, total_requests, unique_ips, avg_response_time, latitude, longitude, first_seen, last_seen)
+        VALUES (?, 1, 1, ?, ?, ?, ?, ?)
         ON CONFLICT(country) DO UPDATE SET
           total_requests = total_requests + 1,
           avg_response_time = (avg_response_time * total_requests + ?) / (total_requests + 1),
+          latitude = COALESCE(latitude, ?),
+          longitude = COALESCE(longitude, ?),
           last_seen = ?,
           updated_at = datetime('now')
-      `, [country, responseTime, timestamp, timestamp, responseTime, timestamp]);
+      `, [country, responseTime, latitude || null, longitude || null, timestamp, timestamp, responseTime, latitude || null, longitude || null, timestamp]);
 
       // Update unique IPs for country
       this.db.run(`
@@ -615,14 +621,16 @@ export class StatisticsService {
       // Update city aggregation if city exists
       if (city) {
         this.db.run(`
-          INSERT INTO geolocation_cities (city, country, total_requests, unique_ips, avg_response_time, first_seen, last_seen)
-          VALUES (?, ?, 1, 1, ?, ?, ?)
+          INSERT INTO geolocation_cities (city, country, total_requests, unique_ips, avg_response_time, latitude, longitude, first_seen, last_seen)
+          VALUES (?, ?, 1, 1, ?, ?, ?, ?, ?)
           ON CONFLICT(city, country) DO UPDATE SET
             total_requests = total_requests + 1,
             avg_response_time = (avg_response_time * total_requests + ?) / (total_requests + 1),
+            latitude = COALESCE(latitude, ?),
+            longitude = COALESCE(longitude, ?),
             last_seen = ?,
             updated_at = datetime('now')
-        `, [city, country, responseTime, timestamp, timestamp, responseTime, timestamp]);
+        `, [city, country, responseTime, latitude || null, longitude || null, timestamp, timestamp, responseTime, latitude || null, longitude || null, timestamp]);
 
         // Update unique IPs for city
         this.db.run(`
@@ -1309,6 +1317,8 @@ export class StatisticsService {
           total_requests,
           unique_ips,
           avg_response_time,
+          latitude,
+          longitude,
           first_seen,
           last_seen
         FROM geolocation_countries 
@@ -1348,6 +1358,8 @@ export class StatisticsService {
           totalRequests,
           uniqueIPs: country.unique_ips,
           avgResponseTime: country.avg_response_time || 0,
+          latitude: country.latitude,
+          longitude: country.longitude,
           firstSeen: country.first_seen,
           lastSeen: country.last_seen,
           topCities: topCities.map(c => ({
@@ -1395,6 +1407,8 @@ export class StatisticsService {
           total_requests,
           unique_ips,
           avg_response_time,
+          latitude,
+          longitude,
           first_seen,
           last_seen
         FROM geolocation_cities 
@@ -1426,6 +1440,8 @@ export class StatisticsService {
           totalRequests,
           uniqueIPs: city.unique_ips,
           avgResponseTime: city.avg_response_time || 0,
+          latitude: city.latitude,
+          longitude: city.longitude,
           firstSeen: city.first_seen,
           lastSeen: city.last_seen,
           topRoutes: topRoutes.map(r => ({
@@ -1470,7 +1486,9 @@ export class StatisticsService {
           MIN(timestamp) as first_seen,
           MAX(timestamp) as last_seen,
           json_extract(geolocation_json, '$.country') as country,
-          json_extract(geolocation_json, '$.city') as city
+          json_extract(geolocation_json, '$.city') as city,
+          json_extract(geolocation_json, '$.latitude') as latitude,
+          json_extract(geolocation_json, '$.longitude') as longitude
         FROM requests 
         WHERE timestamp >= ?
         GROUP BY ip
@@ -1509,6 +1527,8 @@ export class StatisticsService {
           lastSeen: ip.last_seen,
           country: ip.country || 'Unknown',
           city: ip.city || 'Unknown',
+          latitude: ip.latitude,
+          longitude: ip.longitude,
           topRoutes: topRoutes.map(r => ({
             routeName: r.route_name,
             count: r.count,
