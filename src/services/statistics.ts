@@ -128,8 +128,7 @@ export interface TimePeriodStats {
 
 export class StatisticsService {
   private static instance: StatisticsService;
-  private stats: Map<string, RequestStats> = new Map();
-  private reportInterval: NodeJS.Timeout | null = null;
+
   private reportDir: string;
   private dataDir: string;
   private isShuttingDown = false;
@@ -145,8 +144,6 @@ export class StatisticsService {
     this.ensureReportDirectory();
     this.ensureDataDirectory();
     this.initializeDatabase();
-    this.loadPersistedStats();
-    this.startPeriodicReporting();
   }
 
   public static getInstance(): StatisticsService {
@@ -426,90 +423,7 @@ export class StatisticsService {
 
 
 
-  /**
-   * Load persisted statistics from SQLite database
-   */
-  private async loadPersistedStats(): Promise<void> {
-    try {
-      if (!this.db) {
-        logger.error('Database not initialized');
-        return;
-      }
 
-      // Load aggregated stats from requests table
-      const statsRows = this.db.query(`
-        SELECT 
-          ip,
-          COUNT(*) as count,
-          MIN(timestamp) as first_seen,
-          MAX(timestamp) as last_seen,
-          GROUP_CONCAT(DISTINCT user_agent) as user_agents,
-          GROUP_CONCAT(DISTINCT route_name) as routes,
-          GROUP_CONCAT(DISTINCT method) as methods,
-          GROUP_CONCAT(response_time) as response_times,
-          GROUP_CONCAT(DISTINCT request_type) as request_types,
-          json_extract(geolocation_json, '$.country') as country,
-          json_extract(geolocation_json, '$.city') as city,
-          json_extract(geolocation_json, '$.latitude') as latitude,
-          json_extract(geolocation_json, '$.longitude') as longitude
-        FROM requests 
-        GROUP BY ip
-      `).all() as any[];
-
-      this.stats.clear();
-
-      for (const row of statsRows) {
-        // Load route details for this IP
-        const routeDetailsRows = this.db.query(`
-          SELECT 
-            domain,
-            target_url as target,
-            method,
-            response_time,
-            timestamp,
-            request_type
-          FROM requests 
-          WHERE ip = ? AND is_matched = 1
-          ORDER BY timestamp
-        `).all(row.ip) as any[];
-
-        const routeDetails = routeDetailsRows.map((detailRow: any) => ({
-          domain: detailRow.domain,
-          target: detailRow.target,
-          method: detailRow.method,
-          responseTime: detailRow.response_time,
-          timestamp: new Date(detailRow.timestamp),
-          requestType: detailRow.request_type
-        }));
-
-        // Reconstruct RequestStats object
-        const stat: RequestStats = {
-          ip: row.ip,
-          geolocation: {
-            country: row.country,
-            city: row.city,
-            latitude: row.latitude,
-            longitude: row.longitude
-          },
-          count: row.count,
-          firstSeen: new Date(row.first_seen),
-          lastSeen: new Date(row.last_seen),
-          userAgents: new Set(row.user_agents ? row.user_agents.split(',') : []),
-          routes: new Set(row.routes ? row.routes.split(',') : []),
-          methods: new Set(row.methods ? row.methods.split(',') : []),
-          responseTimes: row.response_times ? row.response_times.split(',').map(Number) : [],
-          requestTypes: new Set(row.request_types ? row.request_types.split(',') : []),
-          routeDetails
-        };
-
-        this.stats.set(row.ip, stat);
-      }
-
-      logger.info(`Statistics loaded from SQLite: ${this.stats.size} entries`);
-    } catch (error) {
-      logger.error('Failed to load persisted statistics from SQLite:', error);
-    }
-  }
 
   /**
    * Ensure data directory exists
@@ -605,70 +519,12 @@ export class StatisticsService {
   ): void {
     if (this.isShuttingDown) return;
 
-    const now = new Date();
-    const existing = this.stats.get(requestContext.ip);
-
     // Extract additional request information
     const url = new URL(requestContext.url);
     const path = url.pathname;
     const queryStr = url.search;
     const statusCode = response?.status || 200;
     const headers = requestContext.headers;
-
-    if (existing) {
-      // Update existing stats
-      existing.count++;
-      existing.lastSeen = now;
-      existing.userAgents.add(requestContext.userAgent);
-      existing.routes.add(route?.name || 'unknown');
-      existing.methods.add(requestContext.method);
-      existing.requestTypes.add(route?.type || 'proxy');
-
-      if (responseTime !== undefined) {
-        existing.responseTimes.push(responseTime);
-        // Keep only last 1000 response times to prevent memory issues
-        if (existing.responseTimes.length > 1000) {
-          existing.responseTimes = existing.responseTimes.slice(-1000);
-        }
-      }
-
-      if (route) {
-        existing.routeDetails.push({
-          domain: route.domain,
-          target: route.target || 'unknown',
-          method: requestContext.method,
-          responseTime: responseTime || 0,
-          timestamp: now,
-          requestType: route.type || 'proxy',
-        });
-        // Keep only last 1000 route details
-        if (existing.routeDetails.length > 1000) {
-          existing.routeDetails = existing.routeDetails.slice(-1000);
-        }
-      }
-    } else {
-      // Create new stats entry
-      this.stats.set(requestContext.ip, {
-        ip: requestContext.ip,
-        geolocation: requestContext.geolocation,
-        count: 1,
-        firstSeen: now,
-        lastSeen: now,
-        userAgents: new Set([requestContext.userAgent]),
-        routes: new Set([route?.name || 'unknown']),
-        methods: new Set([requestContext.method]),
-        responseTimes: responseTime !== undefined ? [responseTime] : [],
-        requestTypes: new Set([route?.type || 'proxy']),
-        routeDetails: route ? [{
-          domain: route.domain,
-          target: route.target || 'unknown',
-          method: requestContext.method,
-          responseTime: responseTime || 0,
-          timestamp: now,
-          requestType: route.type || 'proxy',
-        }] : [],
-      });
-    }
 
     // Store detailed request information in database
     this.storeDetailedRequest(requestContext, route, responseTime, response, path, queryStr, statusCode, headers);
@@ -799,183 +655,197 @@ export class StatisticsService {
     const startOfDay = new Date(now);
     startOfDay.setHours(0, 0, 0, 0);
 
-    const statsArray = Array.from(this.stats.values());
-    const totalRequests = statsArray.reduce((sum, stat) => sum + stat.count, 0);
-
-    // Group by country
-    const countryStats = new Map<string, { count: number; ips: Set<string> }>();
-    statsArray.forEach(stat => {
-      const country = stat.geolocation?.country || 'Unknown';
-      const existing = countryStats.get(country);
-      if (existing) {
-        existing.count += stat.count;
-        existing.ips.add(stat.ip);
-      } else {
-        countryStats.set(country, { count: stat.count, ips: new Set([stat.ip]) });
+    try {
+      if (!this.db) {
+        throw new Error('Database not initialized');
       }
-    });
 
-    // Group by city
-    const cityStats = new Map<string, { count: number; country: string; ips: Set<string> }>();
-    statsArray.forEach(stat => {
-      const city = stat.geolocation?.city || 'Unknown';
-      const country = stat.geolocation?.country || 'Unknown';
-      const cityKey = `${city}, ${country}`;
-      const existing = cityStats.get(cityKey);
-      if (existing) {
-        existing.count += stat.count;
-        existing.ips.add(stat.ip);
-      } else {
-        cityStats.set(cityKey, { count: stat.count, country, ips: new Set([stat.ip]) });
-      }
-    });
+      // Get total requests for today
+      const totalRequestsResult = this.db.query(`
+        SELECT COUNT(*) as total
+        FROM requests 
+        WHERE DATE(timestamp) = DATE(?)
+      `).get(startOfDay.toISOString()) as any;
+      const totalRequests = totalRequestsResult?.total || 0;
 
-    // Calculate top countries
-    const topCountries = Array.from(countryStats.entries())
-      .map(([country, data]) => ({
-        country,
-        count: data.count,
-        percentage: (data.count / totalRequests) * 100,
-      }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
+      // Get top countries
+      const topCountries = this.db.query(`
+        SELECT 
+          json_extract(geolocation_json, '$.country') as country,
+          COUNT(*) as count
+        FROM requests 
+        WHERE DATE(timestamp) = DATE(?)
+        GROUP BY country
+        ORDER BY count DESC
+        LIMIT 10
+      `).all(startOfDay.toISOString()) as any[];
 
-    // Calculate top cities
-    const topCities = Array.from(cityStats.entries())
-      .map(([cityKey, data]) => {
-        const [city, country] = cityKey.split(', ');
-        return {
-          city: city || 'Unknown',
-          country: country || 'Unknown',
-          count: data.count,
-          percentage: (data.count / totalRequests) * 100,
-        };
-      })
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
+      // Get top cities
+      const topCities = this.db.query(`
+        SELECT 
+          json_extract(geolocation_json, '$.city') as city,
+          json_extract(geolocation_json, '$.country') as country,
+          COUNT(*) as count
+        FROM requests 
+        WHERE DATE(timestamp) = DATE(?)
+        GROUP BY city, country
+        ORDER BY count DESC
+        LIMIT 10
+      `).all(startOfDay.toISOString()) as any[];
 
-    // Calculate top IPs
-    const topIPs = statsArray
-      .map(stat => ({
-        ip: stat.ip,
-        location: this.formatLocation(stat.geolocation),
-        count: stat.count,
-        percentage: (stat.count / totalRequests) * 100,
-      }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
+      // Get top IPs
+      const topIPs = this.db.query(`
+        SELECT 
+          ip,
+          geolocation_json,
+          COUNT(*) as count
+        FROM requests 
+        WHERE DATE(timestamp) = DATE(?)
+        GROUP BY ip
+        ORDER BY count DESC
+        LIMIT 10
+      `).all(startOfDay.toISOString()) as any[];
 
-    // Generate hourly and daily breakdowns
-    const requestsByHour = this.generateHourlyBreakdown(statsArray);
-    const requestsByDay = this.generateDailyBreakdown(statsArray);
+      // Get request types
+      const requestTypes = this.db.query(`
+        SELECT 
+          request_type as type,
+          COUNT(*) as count
+        FROM requests 
+        WHERE DATE(timestamp) = DATE(?)
+        GROUP BY request_type
+        ORDER BY count DESC
+      `).all(startOfDay.toISOString()) as any[];
 
-    // Calculate request type statistics
-    const requestTypeStats = new Map<string, number>();
-    statsArray.forEach(stat => {
-      stat.requestTypes.forEach(type => {
-        requestTypeStats.set(type, (requestTypeStats.get(type) || 0) + stat.count);
-      });
-    });
+      // Generate hourly and daily breakdowns
+      const requestsByHour = this.generateHourlyBreakdownFromDB(startOfDay);
+      const requestsByDay = this.generateDailyBreakdownFromDB(startOfDay);
 
-    const requestTypes = Array.from(requestTypeStats.entries())
-      .map(([type, count]) => ({
-        type,
-        count,
-        percentage: (count / totalRequests) * 100,
-      }))
-      .sort((a, b) => b.count - a.count);
-
-    return {
-      period: {
-        start: startOfDay,
-        end: now,
-      },
-      summary: {
-        totalRequests,
-        uniqueIPs: statsArray.length,
-        uniqueCountries: countryStats.size,
-        uniqueCities: cityStats.size,
-        topCountries,
-        topCities,
-        topIPs,
-        requestsByHour,
-        requestsByDay,
-        requestTypes,
-      },
-      details: {
-        byIP: statsArray.map(stat => ({
-          ip: stat.ip,
-          location: this.formatLocation(stat.geolocation),
-          count: stat.count,
-          firstSeen: stat.firstSeen,
-          lastSeen: stat.lastSeen,
-          userAgents: Array.from(stat.userAgents),
-          routes: Array.from(stat.routes),
-          methods: Array.from(stat.methods),
-          requestTypes: Array.from(stat.requestTypes),
-          latitude: stat.geolocation?.latitude ?? null,
-          longitude: stat.geolocation?.longitude ?? null,
+      return {
+        period: {
+          start: startOfDay,
+          end: now,
+        },
+        summary: {
+          totalRequests,
+          uniqueIPs: topIPs.length,
+          uniqueCountries: topCountries.length,
+          uniqueCities: topCities.length,
+          topCountries: topCountries.map(country => ({
+            country: country.country || 'Unknown',
+            count: country.count,
+            percentage: (country.count / totalRequests) * 100,
+          })),
+          topCities: topCities.map(city => ({
+            city: city.city || 'Unknown',
+            country: city.country || 'Unknown',
+            count: city.count,
+            percentage: (city.count / totalRequests) * 100,
+          })),
+          topIPs: topIPs.map(ip => ({
+            ip: ip.ip,
+            location: this.formatLocation(JSON.parse(ip.geolocation_json || '{}')),
+            count: ip.count,
+            percentage: (ip.count / totalRequests) * 100,
+          })),
+          requestsByHour,
+          requestsByDay,
+        },
+        requestTypes: requestTypes.map(type => ({
+          type: type.type,
+          count: type.count,
+          percentage: (type.count / totalRequests) * 100,
         })),
-        byCountry: Array.from(countryStats.entries()).map(([country, data]) => ({
-          country,
-          count: data.count,
-          percentage: (data.count / totalRequests) * 100,
-          ips: Array.from(data.ips),
-        })),
-        byCity: Array.from(cityStats.entries()).map(([cityKey, data]) => {
-          const [city, country] = cityKey.split(', ');
-          return {
-            city: city || 'Unknown',
-            country: country || 'Unknown',
-            count: data.count,
-            percentage: (data.count / totalRequests) * 100,
-            ips: Array.from(data.ips),
-          };
-        }),
-      },
-    };
-  }
-
-  /**
-   * Generate hourly breakdown of requests
-   */
-  private generateHourlyBreakdown(statsArray: RequestStats[]): Array<{ hour: number; count: number }> {
-    const hourlyStats = new Map<number, number>();
-
-    // Initialize all hours with 0
-    for (let hour = 0; hour < 24; hour++) {
-      hourlyStats.set(hour, 0);
+        generatedAt: now.toISOString(),
+      };
+    } catch (error) {
+      logger.error('Failed to generate report from database:', error);
+      return {
+        period: {
+          start: startOfDay.toISOString(),
+          end: now.toISOString(),
+        },
+        summary: {
+          totalRequests: 0,
+          uniqueIPs: 0,
+          uniqueCountries: 0,
+          uniqueCities: 0,
+        },
+        topCountries: [],
+        topCities: [],
+        topIPs: [],
+        requestTypes: [],
+        requestsByHour: [],
+        requestsByDay: [],
+        generatedAt: now.toISOString(),
+      };
     }
-
-    // Count requests by hour
-    statsArray.forEach(stat => {
-      const hour = stat.lastSeen.getHours();
-      const current = hourlyStats.get(hour) || 0;
-      hourlyStats.set(hour, current + stat.count);
-    });
-
-    return Array.from(hourlyStats.entries())
-      .map(([hour, count]) => ({ hour, count }))
-      .sort((a, b) => a.hour - b.hour);
   }
 
   /**
-   * Generate daily breakdown of requests
+   * Generate hourly breakdown of requests from database
    */
-  private generateDailyBreakdown(statsArray: RequestStats[]): Array<{ day: string; count: number }> {
-    const dailyStats = new Map<string, number>();
+  private generateHourlyBreakdownFromDB(startDate: Date): Array<{ hour: number; count: number }> {
+    try {
+      if (!this.db) return [];
 
-    statsArray.forEach(stat => {
-      const day = stat.lastSeen.toISOString().split('T')[0]; // YYYY-MM-DD format
-      if (day) {
-        const current = dailyStats.get(day) || 0;
-        dailyStats.set(day, current + stat.count);
+      const hourlyStats = new Map<number, number>();
+
+      // Initialize all hours with 0
+      for (let hour = 0; hour < 24; hour++) {
+        hourlyStats.set(hour, 0);
       }
-    });
 
-    return Array.from(dailyStats.entries())
-      .map(([day, count]) => ({ day, count }))
-      .sort((a, b) => a.day.localeCompare(b.day));
+      // Get hourly breakdown from database
+      const hourlyData = this.db.query(`
+        SELECT 
+          CAST(strftime('%H', timestamp) AS INTEGER) as hour,
+          COUNT(*) as count
+        FROM requests 
+        WHERE DATE(timestamp) = DATE(?)
+        GROUP BY hour
+        ORDER BY hour
+      `).all(startDate.toISOString()) as any[];
+
+      // Update the map with actual data
+      hourlyData.forEach(row => {
+        hourlyStats.set(row.hour, row.count);
+      });
+
+      return Array.from(hourlyStats.entries())
+        .map(([hour, count]) => ({ hour, count }))
+        .sort((a, b) => a.hour - b.hour);
+    } catch (error) {
+      logger.error('Failed to generate hourly breakdown from database:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Generate daily breakdown of requests from database
+   */
+  private generateDailyBreakdownFromDB(startDate: Date): Array<{ day: string; count: number }> {
+    try {
+      if (!this.db) return [];
+
+      const dailyData = this.db.query(`
+        SELECT 
+          DATE(timestamp) as day,
+          COUNT(*) as count
+        FROM requests 
+        WHERE timestamp >= ?
+        GROUP BY day
+        ORDER BY day
+      `).all(startDate.toISOString()) as any[];
+
+      return dailyData.map(row => ({
+        day: row.day,
+        count: row.count
+      }));
+    } catch (error) {
+      logger.error('Failed to generate daily breakdown from database:', error);
+      return [];
+    }
   }
 
   /**
@@ -1020,61 +890,9 @@ export class StatisticsService {
     }
   }
 
-  /**
-   * Start periodic reporting
-   */
-  private startPeriodicReporting(): void {
-    // Calculate time until next midnight
-    const now = new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
 
-    const timeUntilMidnight = tomorrow.getTime() - now.getTime();
 
-    // Schedule first report at midnight
-    setTimeout(() => {
-      this.generateAndSaveReport();
 
-      // Then schedule daily reports
-      this.reportInterval = setInterval(() => {
-        this.generateAndSaveReport();
-      }, 24 * 60 * 60 * 1000); // 24 hours
-    }, timeUntilMidnight);
-
-    logger.info(`Statistics reporting scheduled to start at ${tomorrow.toISOString()}`);
-  }
-
-  /**
-   * Generate and save a report
-   */
-  private async generateAndSaveReport(): Promise<void> {
-    try {
-      const report = this.generateReport();
-      await this.saveReport(report);
-
-      // Log summary
-      logger.info('Daily statistics report generated', {
-        totalRequests: report.summary.totalRequests,
-        uniqueIPs: report.summary.uniqueIPs,
-        uniqueCountries: report.summary.uniqueCountries,
-        topCountry: report.summary.topCountries[0]?.country || 'None',
-        topCity: report.summary.topCities[0]?.city || 'None',
-      });
-
-      // Clean up old stats instead of clearing all
-      await this.cleanupOldStats();
-    } catch (error) {
-      logger.error('Failed to generate statistics report', error);
-    }
-  }
-
-  /**
-   * Get current statistics (for API endpoints)
-   */
-  public getCurrentStats(): StatisticsReport {
-    return this.generateReport();
-  }
 
   /**
    * Get current database version
@@ -1104,41 +922,76 @@ export class StatisticsService {
     databaseVersion: number;
     schemaVersion: number;
   } {
-    const statsArray = Array.from(this.stats.values());
-    const totalRequests = statsArray.reduce((sum, stat) => sum + stat.count, 0);
-    const uniqueCountries = new Set(statsArray.map(stat => stat.geolocation?.country).filter(Boolean)).size;
-
-    const summary: {
-      totalRequests: number;
-      uniqueIPs: number;
-      uniqueCountries: number;
-      cacheSize: number;
-      lastSaved?: string;
-      dataFileSize?: number;
-      databaseVersion: number;
-      schemaVersion: number;
-    } = {
-      totalRequests,
-      uniqueIPs: statsArray.length,
-      uniqueCountries,
-      cacheSize: this.stats.size,
-      databaseVersion: this.getDatabaseVersion(),
-      schemaVersion: this.SCHEMA_VERSION,
-    };
-
-    // Try to get database file info
     try {
-      const dbFile = path.join(this.dataDir, 'statistics.sqlite');
-      if (fs.existsSync(dbFile)) {
-        const stats = fs.statSync(dbFile);
-        summary.lastSaved = stats.mtime.toISOString();
-        summary.dataFileSize = stats.size;
+      if (!this.db) {
+        return {
+          totalRequests: 0,
+          uniqueIPs: 0,
+          uniqueCountries: 0,
+          cacheSize: 0,
+          databaseVersion: this.getDatabaseVersion(),
+          schemaVersion: this.SCHEMA_VERSION,
+        };
       }
-    } catch (error) {
-      // Ignore file errors
-    }
 
-    return summary;
+      // Get total requests
+      const totalRequestsResult = this.db.query('SELECT COUNT(*) as total FROM requests').get() as any;
+      const totalRequests = totalRequestsResult?.total || 0;
+
+      // Get unique IPs
+      const uniqueIPsResult = this.db.query('SELECT COUNT(DISTINCT ip) as unique_ips FROM requests').get() as any;
+      const uniqueIPs = uniqueIPsResult?.unique_ips || 0;
+
+      // Get unique countries
+      const uniqueCountriesResult = this.db.query(`
+        SELECT COUNT(DISTINCT json_extract(geolocation_json, '$.country')) as unique_countries 
+        FROM requests 
+        WHERE json_extract(geolocation_json, '$.country') IS NOT NULL
+      `).get() as any;
+      const uniqueCountries = uniqueCountriesResult?.unique_countries || 0;
+
+      const summary: {
+        totalRequests: number;
+        uniqueIPs: number;
+        uniqueCountries: number;
+        cacheSize: number;
+        lastSaved?: string;
+        dataFileSize?: number;
+        databaseVersion: number;
+        schemaVersion: number;
+      } = {
+        totalRequests,
+        uniqueIPs,
+        uniqueCountries,
+        cacheSize: 0, // No longer using in-memory cache
+        databaseVersion: this.getDatabaseVersion(),
+        schemaVersion: this.SCHEMA_VERSION,
+      };
+
+      // Try to get database file info
+      try {
+        const dbFile = path.join(this.dataDir, 'statistics.sqlite');
+        if (fs.existsSync(dbFile)) {
+          const stats = fs.statSync(dbFile);
+          summary.lastSaved = stats.mtime.toISOString();
+          summary.dataFileSize = stats.size;
+        }
+      } catch (error) {
+        // Ignore file errors
+      }
+
+      return summary;
+    } catch (error) {
+      logger.error('Failed to get stats summary from database:', error);
+      return {
+        totalRequests: 0,
+        uniqueIPs: 0,
+        uniqueCountries: 0,
+        cacheSize: 0,
+        databaseVersion: this.getDatabaseVersion(),
+        schemaVersion: this.SCHEMA_VERSION,
+      };
+    }
   }
 
   /**
@@ -1668,14 +1521,6 @@ export class StatisticsService {
   public async shutdown(): Promise<void> {
     this.isShuttingDown = true;
 
-    if (this.reportInterval) {
-      clearInterval(this.reportInterval);
-      this.reportInterval = null;
-    }
-
-    // Generate final report
-    await this.generateAndSaveReport();
-
     // Close database connection
     if (this.db) {
       this.db.close();
@@ -1692,275 +1537,9 @@ export class StatisticsService {
     logger.info('Statistics force saved');
   }
 
-  /**
-   * Generate statistics for a specific time period
-   */
-  public getTimePeriodStats(period: string, routeConfigs?: { domain: string; path?: string; target?: string; name?: string }[]): TimePeriodStats {
-    const now = new Date();
-    let startDate: Date;
 
-    switch (period) {
-      case '24h':
-        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        break;
-      case '7d':
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        break;
-      case '30d':
-        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        break;
-      case '90d':
-        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-        break;
-      default:
-        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000); // Default to 24h
-    }
 
-    // Filter stats for the time period
-    const periodStats = Array.from(this.stats.values()).filter(stat =>
-      stat.lastSeen >= startDate
-    );
 
-    // Collect all route details from the period
-    const allRouteDetails = periodStats.flatMap(stat =>
-      stat.routeDetails.filter(detail => detail.timestamp >= startDate)
-    );
-
-    // Group by domain and target
-    const routeGroups = new Map<string, {
-      domain: string;
-      target: string;
-      requests: number;
-      responseTimes: number[];
-      countries: Map<string, { count: number; cities: Set<string> }>;
-      ips: Set<string>;
-      methods: Set<string>;
-      paths: Set<string>;
-      requestTypes: Set<string>; // Track request types for each route
-    }>();
-
-    // Track unmatched requests
-    const unmatchedPaths = new Set<string>();
-    let unmatchedCount = 0;
-    let unmatchedResponseTimes: number[] = [];
-    let unmatchedIPs = new Set<string>();
-    let unmatchedMethods = new Set<string>();
-    let unmatchedCountries = new Map<string, { count: number; cities: Set<string> }>();
-
-    allRouteDetails.forEach(detail => {
-      // Try to match with routeConfigs
-      let matched = false;
-      if (routeConfigs) {
-        matched = routeConfigs.some(cfg =>
-          (cfg.domain === detail.domain && (cfg.target === detail.target || cfg.path === detail.target))
-        );
-      }
-      if (!matched) {
-        unmatchedCount++;
-        unmatchedPaths.add(detail.target);
-        unmatchedResponseTimes.push(detail.responseTime);
-        unmatchedMethods.add(detail.method);
-        // Find the IP and country
-        const stat = periodStats.find(s =>
-          s.routeDetails.some(rd =>
-            rd.domain === detail.domain &&
-            rd.target === detail.target &&
-            rd.timestamp.getTime() === detail.timestamp.getTime()
-          )
-        );
-        if (stat) {
-          unmatchedIPs.add(stat.ip);
-          if (stat.geolocation) {
-            const country = stat.geolocation.country || 'Unknown';
-            const city = stat.geolocation.city;
-            const countryData = unmatchedCountries.get(country);
-            if (countryData) {
-              countryData.count++;
-              if (city) countryData.cities.add(city);
-            } else {
-              unmatchedCountries.set(country, {
-                count: 1,
-                cities: city ? new Set([city]) : new Set()
-              });
-            }
-          }
-        }
-        return;
-      }
-      const key = `${detail.domain}:${detail.target}`;
-      const existing = routeGroups.get(key);
-
-      if (existing) {
-        existing.requests++;
-        existing.responseTimes.push(detail.responseTime);
-        existing.methods.add(detail.method);
-        existing.requestTypes.add(detail.requestType);
-
-        // Find the IP that made this request
-        const stat = periodStats.find(s =>
-          s.routeDetails.some(rd =>
-            rd.domain === detail.domain &&
-            rd.target === detail.target &&
-            rd.timestamp.getTime() === detail.timestamp.getTime()
-          )
-        );
-
-        if (stat) {
-          existing.ips.add(stat.ip);
-
-          if (stat.geolocation) {
-            const country = stat.geolocation.country || 'Unknown';
-            const city = stat.geolocation.city;
-
-            const countryData = existing.countries.get(country);
-            if (countryData) {
-              countryData.count++;
-              if (city) countryData.cities.add(city);
-            } else {
-              existing.countries.set(country, {
-                count: 1,
-                cities: city ? new Set([city]) : new Set()
-              });
-            }
-          }
-        }
-      } else {
-        const countries = new Map<string, { count: number; cities: Set<string> }>();
-        const ips = new Set<string>();
-        const methods = new Set<string>([detail.method]);
-        const requestTypes = new Set<string>([detail.requestType]);
-
-        // Find the IP that made this request
-        const stat = periodStats.find(s =>
-          s.routeDetails.some(rd =>
-            rd.domain === detail.domain &&
-            rd.target === detail.target &&
-            rd.timestamp.getTime() === detail.timestamp.getTime()
-          )
-        );
-
-        if (stat) {
-          ips.add(stat.ip);
-
-          if (stat.geolocation) {
-            const country = stat.geolocation.country || 'Unknown';
-            const city = stat.geolocation.city;
-
-            countries.set(country, {
-              count: 1,
-              cities: city ? new Set([city]) : new Set()
-            });
-          }
-        }
-
-        routeGroups.set(key, {
-          domain: detail.domain,
-          target: detail.target,
-          requests: 1,
-          responseTimes: [detail.responseTime],
-          countries,
-          ips,
-          methods,
-          paths: new Set(),
-          requestTypes,
-        });
-      }
-    });
-
-    // Convert to RouteStats format
-    const routes: RouteStats[] = Array.from(routeGroups.values()).map(route => {
-      const avgResponseTime = route.responseTimes.length > 0
-        ? route.responseTimes.reduce((sum, time) => sum + time, 0) / route.responseTimes.length
-        : 0;
-
-      const topCountries = Array.from(route.countries.entries())
-        .map(([country, data]) => ({
-          country,
-          count: data.count,
-          percentage: (data.count / route.requests) * 100,
-          city: data.cities.size > 0 ? Array.from(data.cities)[0] : undefined
-        }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 5);
-
-      // Find the route name from the config if available
-      let routeName: string | undefined = undefined;
-      if (routeConfigs) {
-        const match = routeConfigs.find(cfg => cfg.domain === route.domain && (cfg.target === route.target || cfg.path === route.target));
-        if (match) routeName = match.name;
-      }
-
-      return {
-        name: routeName,
-        domain: route.domain,
-        target: route.target,
-        requests: route.requests,
-        avgResponseTime,
-        topCountries,
-        uniqueIPs: route.ips.size,
-        methods: Array.from(route.methods),
-        requestType: Array.from(route.requestTypes)[0] || 'proxy',
-      };
-    });
-
-    // Add unmatched requests as a special route card if any
-    if (unmatchedCount > 0) {
-      const unmatchedTopCountries = Array.from(unmatchedCountries.entries())
-        .map(([country, data]) => ({
-          country,
-          count: data.count,
-          percentage: (data.count / unmatchedCount) * 100,
-          city: data.cities.size > 0 ? Array.from(data.cities)[0] : undefined
-        }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 5);
-      routes.push({
-        name: 'Unmatched',
-        domain: 'Unmatched',
-        target: '',
-        requests: unmatchedCount,
-        avgResponseTime: unmatchedResponseTimes.length > 0 ? unmatchedResponseTimes.reduce((a, b) => a + b, 0) / unmatchedResponseTimes.length : 0,
-        topCountries: unmatchedTopCountries,
-        uniqueIPs: unmatchedIPs.size,
-        methods: Array.from(unmatchedMethods),
-        uniquePaths: Array.from(unmatchedPaths).slice(-200), // Limit to last 200 unique paths
-        requestType: 'unmatched',
-      });
-    }
-
-    // Sort routes by request count
-    routes.sort((a, b) => b.requests - a.requests);
-
-    // Calculate overall statistics
-    const totalRequests = routes.reduce((sum, route) => sum + route.requests, 0);
-    const uniqueCountries = new Set(
-      periodStats
-        .map(stat => stat.geolocation?.country)
-        .filter(Boolean)
-    ).size;
-
-    const avgResponseTime = routes.length > 0
-      ? routes.reduce((sum, route) => sum + route.avgResponseTime, 0) / routes.length
-      : 0;
-
-    return {
-      totalRequests,
-      uniqueRoutes: routes.length,
-      uniqueCountries,
-      avgResponseTime,
-      routes,
-      period: {
-        start: startDate,
-        end: now
-      }
-    };
-  }
-
-  public clearAll(): void {
-    this.stats.clear();
-    this.saveStats();
-    logger.info('All statistics cleared');
-  }
 
   /**
    * Get geolocation statistics by country
