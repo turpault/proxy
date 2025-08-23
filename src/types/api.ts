@@ -19,7 +19,7 @@ import {
   GetDetailedStatisticsRequest,
   GetDetailedStatisticsResponse,
   GetStatisticsSummaryResponse,
-  GenerateReportResponse,
+
   GetProcessesResponse,
   ReloadProcessesResponse,
   StartProcessResponse,
@@ -95,10 +95,7 @@ export interface ApiEndpointTypes {
     request: EmptyRequest;
     response: GetStatisticsSummaryResponse;
   };
-  'POST /api/statistics/generate-report': {
-    request: EmptyRequest;
-    response: GenerateReportResponse;
-  };
+
 
   // Processes
   'GET /api/processes': {

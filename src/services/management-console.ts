@@ -10,7 +10,7 @@ import {
   ClearCacheResponse,
   CreateBackupResponse,
   DeleteCacheEntryResponse,
-  GenerateReportResponse,
+
   GetBackupsResponse,
   GetCacheEntriesResponse,
   GetCacheStatsResponse,
@@ -827,35 +827,7 @@ export class ManagementConsole {
           }
         },
 
-        "/api/statistics/generate-report": {
-          POST: async (req: Request) => {
-            try {
-              const stats = this.statisticsService.getStatsSummary();
-              const reportDir = path.join(process.cwd(), 'logs', 'statistics');
-              await fs.ensureDir(reportDir);
-              const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-              const reportPath = path.join(reportDir, `manual-report-${timestamp}.json`);
-              await fs.writeFile(reportPath, JSON.stringify(stats, null, 2));
-              logger.info(`Manual statistics report generated at ${reportPath}`);
-              return new Response(JSON.stringify({
-                success: true,
-                message: 'Statistics report generated successfully',
-                data: {
-                  filepath: reportPath,
-                  summary: stats
-                }
-              } as GenerateReportResponse), {
-                status: 200,
-                headers: { 'Content-Type': 'application/json' }
-              });
-            } catch (error) {
-              return new Response(JSON.stringify({ success: false, error: 'Failed to generate report', details: error instanceof Error ? error.message : 'Unknown error' } as ApiErrorResponse), {
-                status: 500,
-                headers: { 'Content-Type': 'application/json' }
-              });
-            }
-          }
-        },
+
 
         "/api/statistics/per-route": {
           GET: async (req: Request) => {

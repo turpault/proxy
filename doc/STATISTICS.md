@@ -186,26 +186,7 @@ GET /api/statistics/summary
 }
 ```
 
-### Generate Manual Report
-```http
-POST /api/statistics/generate-report
-```
 
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Statistics report generated successfully",
-  "data": {
-    "filepath": "/path/to/logs/statistics/statistics-manual-2024-01-01-1704067200000.json",
-    "summary": {
-      "totalRequests": 15420,
-      "uniqueIPs": 342,
-      "uniqueCountries": 15
-    }
-  }
-}
-```
 
 ### Server Status (includes statistics)
 ```http
@@ -245,7 +226,6 @@ The statistics service runs automatically with no additional configuration requi
 ### Report Timing
 - **First Report**: Generated at the next midnight after server start
 - **Subsequent Reports**: Generated every 24 hours at midnight
-- **Manual Reports**: Can be generated at any time via API
 
 ### Data Retention
 - **In-Memory Data**: Cleared after each 24-hour period

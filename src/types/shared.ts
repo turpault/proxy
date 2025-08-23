@@ -325,12 +325,7 @@ export type GetDetailedStatisticsResponse = DetailedStatisticsResponse;
 
 export type GetStatisticsSummaryResponse = StatisticsResponse;
 
-export type GenerateReportResponse = DataResponse<{
-  filepath: string;
-  summary: StatisticsSummary;
-}> & {
-  message?: string;
-};
+
 
 // ============================================================================
 // PROCESSES API
