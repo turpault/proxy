@@ -120,184 +120,63 @@ CREATE TABLE route_details (
 
 ## 📊 API Endpoints
 
-### Per-Route Statistics
+### Get Statistics Summary
 ```http
-GET /api/statistics/per-route?period=24h&limit=50
+GET /api/statistics
 ```
 
 **Response:**
 ```json
 {
   "success": true,
-  "data": [
-    {
-      "routeName": "API Gateway",
-      "domain": "api.example.com",
-      "path": "/api",
-      "target": "http://localhost:3001",
-      "requestType": "proxy",
-      "totalRequests": 15420,
-      "avgResponseTime": 45.2,
-      "uniqueIPs": 342,
-      "uniqueCountries": 15,
-      "topCountries": [
-        { "country": "United States", "count": 8500, "percentage": 55.1 },
-        { "country": "Germany", "count": 3200, "percentage": 20.7 }
-      ],
-      "methods": ["GET", "POST", "PUT", "DELETE"],
-      "statusCodes": [
-        { "code": 200, "count": 14000, "percentage": 90.8 },
-        { "code": 404, "count": 800, "percentage": 5.2 }
-      ],
-      "topPaths": [
-        { "path": "/api/users", "count": 5000, "percentage": 32.4 },
-        { "path": "/api/products", "count": 3200, "percentage": 20.7 }
-      ]
-    }
-  ]
+  "data": {
+    "totalRequests": 15420,
+    "uniqueIPs": 342,
+    "uniqueCountries": 15,
+    "cacheSize": 0,
+    "databaseVersion": 3,
+    "schemaVersion": 3
+  }
 }
 ```
 
-### Unmatched Route Statistics
+### Get Detailed Statistics
 ```http
-GET /api/statistics/unmatched?period=24h&limit=50
+GET /api/statistics/detailed?period=24h
 ```
 
 **Response:**
 ```json
 {
   "success": true,
-  "data": [
-    {
-      "domain": "example.com",
-      "path": "/admin",
-      "totalRequests": 1250,
-      "avgResponseTime": 12.5,
-      "uniqueIPs": 89,
-      "uniqueCountries": 8,
-      "topCountries": [
-        { "country": "United States", "count": 800, "percentage": 64.0 },
-        { "country": "Russia", "count": 200, "percentage": 16.0 }
-      ],
-      "methods": ["GET", "POST"],
-      "statusCodes": [
-        { "code": 404, "count": 1250, "percentage": 100.0 }
-      ],
-      "topUserAgents": [
-        { "userAgent": "Mozilla/5.0 (compatible; Bot)", "count": 500, "percentage": 40.0 },
-        { "userAgent": "curl/7.68.0", "count": 200, "percentage": 16.0 }
-      ],
-      "recentRequests": [
-        {
-          "timestamp": "2024-01-15T10:30:00.000Z",
-          "ip": "192.168.1.100",
-          "method": "GET",
-          "statusCode": 404,
-          "userAgent": "Mozilla/5.0...",
-          "country": "United States"
-        }
-      ]
-    }
-  ]
-}
-```
-
-### Domain Statistics
-```http
-GET /api/statistics/domains?period=24h
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "domain": "example.com",
-      "totalRequests": 25000,
-      "matchedRequests": 23500,
-      "unmatchedRequests": 1500,
-      "avgResponseTime": 52.3,
-      "uniqueIPs": 1200,
-      "uniqueCountries": 25,
-      "topRoutes": [
-        { "routeName": "Web Application", "path": "/", "count": 15000, "percentage": 60.0 },
-        { "routeName": "API Gateway", "path": "/api", "count": 8500, "percentage": 34.0 }
-      ],
-      "topUnmatchedPaths": [
-        { "path": "/admin", "count": 800, "percentage": 3.2 },
-        { "path": "/wp-admin", "count": 400, "percentage": 1.6 }
-      ]
-    }
-  ]
-}
-```
-
-### Route Request History
-```http
-GET /api/statistics/route-history?routeName=API Gateway&domain=api.example.com&path=/api&period=24h&limit=100
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "timestamp": "2024-01-15T10:30:00.000Z",
-      "ip": "192.168.1.100",
-      "method": "GET",
-      "statusCode": 200,
-      "responseTime": 45.2,
-      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      "country": "United States",
-      "city": "New York",
-      "queryString": "?page=1&limit=10",
-      "headers": {
-        "accept": "application/json",
-        "authorization": "Bearer token123",
-        "user-agent": "Mozilla/5.0..."
+  "data": {
+    "totalRequests": 15420,
+    "uniqueRoutes": 5,
+    "uniqueCountries": 15,
+    "avgResponseTime": 125.5,
+    "routes": [
+      {
+        "name": "API Gateway",
+        "domain": "api.example.com",
+        "target": "http://backend:3000",
+        "requests": 5420,
+        "avgResponseTime": 125.5,
+        "topCountries": [
+          { "country": "United States", "count": 2340, "percentage": 43.2 },
+          { "country": "Germany", "count": 890, "percentage": 16.4 }
+        ],
+        "uniqueIPs": 89,
+        "methods": ["GET", "POST", "PUT"],
+        "requestType": "proxy"
       }
+    ],
+    "period": {
+      "start": "2024-01-01T00:00:00Z",
+      "end": "2024-01-01T23:59:59Z"
     }
-  ]
+  }
 }
 ```
-
-### Unmatched Request History
-```http
-GET /api/statistics/unmatched-history?domain=example.com&path=/admin&period=24h&limit=100
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "timestamp": "2024-01-15T10:30:00.000Z",
-      "ip": "192.168.1.100",
-      "method": "GET",
-      "statusCode": 404,
-      "responseTime": 12.5,
-      "userAgent": "Mozilla/5.0 (compatible; Bot)",
-      "country": "United States",
-      "city": "New York",
-      "queryString": "",
-      "headers": {
-        "accept": "*/*",
-        "user-agent": "Mozilla/5.0 (compatible; Bot)"
-      }
-    }
-  ]
-}
-```
-
-### Database Version Information
-```http
-GET /api/statistics/version
-```
-
-**Response:**
 ```json
 {
   "success": true,

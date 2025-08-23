@@ -17,14 +17,11 @@ export type {
   // Statistics API types
   GetStatisticsResponse,
   GetDetailedStatisticsRequest, GetDetailedStatisticsResponse,
-  GetStatisticsSummaryResponse,
-  GenerateReportResponse,
 
   // Processes API types
   GetProcessesResponse,
   ReloadProcessesResponse,
   StartProcessResponse,
-  StopProcessResponse,
   RestartProcessResponse,
   GetProcessLogsRequest, GetProcessLogsResponse,
   GetProcessConfigResponse,

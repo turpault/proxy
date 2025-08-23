@@ -18,7 +18,7 @@ import {
   GetStatisticsResponse,
   GetDetailedStatisticsRequest,
   GetDetailedStatisticsResponse,
-  GetStatisticsSummaryResponse,
+
 
   GetProcessesResponse,
   ReloadProcessesResponse,
@@ -91,10 +91,7 @@ export interface ApiEndpointTypes {
     request: GetDetailedStatisticsRequest;
     response: GetDetailedStatisticsResponse;
   };
-  'GET /api/statistics/summary': {
-    request: EmptyRequest;
-    response: GetStatisticsSummaryResponse;
-  };
+
 
 
   // Processes

@@ -323,7 +323,7 @@ export type GetDetailedStatisticsRequest = {
 
 export type GetDetailedStatisticsResponse = DetailedStatisticsResponse;
 
-export type GetStatisticsSummaryResponse = StatisticsResponse;
+
 
 
 
@@ -411,8 +411,7 @@ export interface LogoutRequest {
   sessionId: string;
 }
 
-// Logout response type
-export type LogoutResponse = SuccessResponse;
+
 
 // Session validation response type
 export interface SessionValidationResponse {

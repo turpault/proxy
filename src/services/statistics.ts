@@ -162,7 +162,7 @@ export class StatisticsService {
 
   /**
  * Initialize SQLite database with versioning
- */
+   */
   private initializeDatabase(): void {
     try {
       const dbPath = path.join(this.dataDir, 'statistics.sqlite');
@@ -193,10 +193,10 @@ export class StatisticsService {
       CREATE TABLE IF NOT EXISTS db_version (
         id INTEGER PRIMARY KEY,
         version INTEGER NOT NULL,
-        created_at TEXT DEFAULT (datetime('now')),
-        updated_at TEXT DEFAULT (datetime('now'))
-      )
-    `);
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now'))
+        )
+      `);
 
     // Check current version
     const versionResult = this.db.query('SELECT version FROM db_version ORDER BY id DESC LIMIT 1').get() as any;
@@ -276,16 +276,16 @@ export class StatisticsService {
     // Create requests table (unified for matched and unmatched requests)
     this.db.run(`
       CREATE TABLE IF NOT EXISTS requests (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        ip TEXT NOT NULL,
-        domain TEXT NOT NULL,
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          ip TEXT NOT NULL,
+          domain TEXT NOT NULL,
         path TEXT NOT NULL,
-        method TEXT NOT NULL,
+          method TEXT NOT NULL,
         status_code INTEGER DEFAULT 200,
-        response_time REAL DEFAULT 0,
-        timestamp TEXT NOT NULL,
+          response_time REAL DEFAULT 0,
+          timestamp TEXT NOT NULL,
         user_agent TEXT,
-        request_type TEXT DEFAULT 'proxy',
+          request_type TEXT DEFAULT 'proxy',
         route_name TEXT,
         target_url TEXT,
         query_string TEXT,
@@ -307,7 +307,7 @@ export class StatisticsService {
         avg_response_time REAL DEFAULT 0,
         first_seen TEXT NOT NULL,
         last_seen TEXT NOT NULL,
-        created_at TEXT DEFAULT (datetime('now')),
+          created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now'))
       )
     `);
