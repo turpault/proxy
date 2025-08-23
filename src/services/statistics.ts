@@ -133,7 +133,6 @@ export class StatisticsService {
   private reportDir: string;
   private dataDir: string;
   private isShuttingDown = false;
-  private saveInterval: NodeJS.Timeout | null = null;
   private db!: Database; // SQLite database instance
   public readonly SCHEMA_VERSION = 3; // Current schema version
 
@@ -148,7 +147,6 @@ export class StatisticsService {
     this.initializeDatabase();
     this.loadPersistedStats();
     this.startPeriodicReporting();
-    this.startPeriodicSaving();
   }
 
   public static getInstance(): StatisticsService {
@@ -251,9 +249,9 @@ export class StatisticsService {
     }
   }
 
-    /**
-   * Drop all existing tables
-   */
+  /**
+ * Drop all existing tables
+ */
   private dropAllTables(): void {
     const tables = [
       'geolocation_cities',
@@ -352,9 +350,9 @@ export class StatisticsService {
     logger.info('All tables created successfully');
   }
 
-    /**
-   * Create all indexes
-   */
+  /**
+ * Create all indexes
+ */
   private createIndexes(): void {
     // Indexes for requests table
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_requests_ip ON requests(ip)`);
@@ -365,14 +363,14 @@ export class StatisticsService {
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_requests_status ON requests(status_code)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_requests_matched ON requests(is_matched)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_requests_route_name ON requests(route_name)`);
-    
 
-    
+
+
     // Indexes for geolocation tables
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_geolocation_countries_last_seen ON geolocation_countries(last_seen)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_geolocation_cities_last_seen ON geolocation_cities(last_seen)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_geolocation_cities_country ON geolocation_cities(country)`);
-    
+
     // Indexes for route configs
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_configs_domain ON route_configs(domain)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_configs_path ON route_configs(path)`);
@@ -426,24 +424,7 @@ export class StatisticsService {
     };
   }
 
-  /**
-   * Save current statistics to SQLite database
-   */
-  private async saveStats(): Promise<void> {
-    try {
-      if (!this.db) {
-        logger.error('Database not initialized');
-        return;
-      }
 
-      // Note: With the new schema, we don't need to save aggregated stats
-      // since they are calculated on-demand from the requests table
-      // and geolocation data is updated in real-time
-      logger.debug('Statistics aggregation is now handled in real-time from requests table');
-    } catch (error) {
-      logger.error('Failed to save statistics to SQLite:', error);
-    }
-  }
 
   /**
    * Load persisted statistics from SQLite database
@@ -542,17 +523,7 @@ export class StatisticsService {
     }
   }
 
-  /**
-   * Start periodic saving of statistics
-   */
-  private startPeriodicSaving(): void {
-    // Save every 5 minutes
-    this.saveInterval = setInterval(() => {
-      this.saveStats();
-    }, 5 * 60 * 1000);
 
-    logger.info('Periodic statistics saving started (every 5 minutes)');
-  }
 
   /**
    * Clean up old statistics data
@@ -1701,14 +1672,6 @@ export class StatisticsService {
       clearInterval(this.reportInterval);
       this.reportInterval = null;
     }
-
-    if (this.saveInterval) {
-      clearInterval(this.saveInterval);
-      this.saveInterval = null;
-    }
-
-    // Save current statistics before shutting down
-    await this.saveStats();
 
     // Generate final report
     await this.generateAndSaveReport();

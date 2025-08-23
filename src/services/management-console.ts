@@ -1026,16 +1026,16 @@ export class ManagementConsole {
           }
         },
 
-                "/api/statistics/version": {
+        "/api/statistics/version": {
           GET: async (req: Request) => {
             try {
               if (!this.isAuthenticated(req)) {
                 return this.createUnauthorizedResponse();
               }
-              
+
               const databaseVersion = this.statisticsService.getDatabaseVersion();
               const schemaVersion = this.statisticsService.SCHEMA_VERSION;
-              
+
               return new Response(JSON.stringify({
                 success: true,
                 data: {
@@ -1070,9 +1070,9 @@ export class ManagementConsole {
               const url = new URL(req.url);
               const period = url.searchParams.get('period') || '24h';
               const limit = parseInt(url.searchParams.get('limit') || '50');
-              
+
               const countryStats = this.statisticsService.getCountryStats(period, limit);
-              
+
               return new Response(JSON.stringify({ success: true, data: countryStats }), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
@@ -1099,9 +1099,9 @@ export class ManagementConsole {
               const url = new URL(req.url);
               const period = url.searchParams.get('period') || '24h';
               const limit = parseInt(url.searchParams.get('limit') || '50');
-              
+
               const cityStats = this.statisticsService.getCityStats(period, limit);
-              
+
               return new Response(JSON.stringify({ success: true, data: cityStats }), {
                 status: 200,
                 headers: { 'Content-Type': 'application/json' }
