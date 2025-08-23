@@ -882,8 +882,8 @@ export class ManagementConsole {
 
               // Calculate overall statistics
               const totalRequests = allRoutes.reduce((sum, route) => sum + route.requests, 0);
-              const avgResponseTime = allRoutes.length > 0
-                ? allRoutes.reduce((sum, route) => sum + route.avgResponseTime, 0) / allRoutes.length
+              const avgResponseTime = matchedRoutes.length > 0
+                ? matchedRoutes.reduce((sum, route) => sum + route.avgResponseTime, 0) / matchedRoutes.length
                 : 0;
 
               // Get unique countries from all routes
