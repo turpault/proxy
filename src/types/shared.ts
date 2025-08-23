@@ -140,6 +140,26 @@ export interface DetailedStatistics {
   uniqueCountries: number;
   avgResponseTime: number;
   routes: RouteStatistics[];
+  countryStats?: Array<{
+    country: string;
+    totalRequests: number;
+    uniqueIPs: number;
+    avgResponseTime: number;
+    firstSeen: string;
+    lastSeen: string;
+    topCities: Array<{ city: string; count: number; percentage: number }>;
+    topRoutes: Array<{ routeName: string | null; count: number; percentage: number }>;
+  }>;
+  cityStats?: Array<{
+    city: string;
+    country: string;
+    totalRequests: number;
+    uniqueIPs: number;
+    avgResponseTime: number;
+    firstSeen: string;
+    lastSeen: string;
+    topRoutes: Array<{ routeName: string | null; count: number; percentage: number }>;
+  }>;
   period: {
     start: string;
     end: string;

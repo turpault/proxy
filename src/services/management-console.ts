@@ -817,6 +817,10 @@ export class ManagementConsole {
               // Get unmatched route statistics
               const unmatchedStats = this.statisticsService.getUnmatchedRouteStats(period, 50);
 
+              // Get geolocation data for the map
+              const countryStats = this.statisticsService.getCountryStats(period, 100);
+              const cityStats = this.statisticsService.getCityStats(period, 100);
+
               // Combine matched routes
               const matchedRoutes = perRouteStats.map(route => ({
                 name: route.routeName,
@@ -895,6 +899,8 @@ export class ManagementConsole {
                 uniqueCountries,
                 avgResponseTime,
                 routes: allRoutes,
+                countryStats,
+                cityStats,
                 period: {
                   start: new Date(Date.now() - this.getPeriodMs(period)),
                   end: new Date()

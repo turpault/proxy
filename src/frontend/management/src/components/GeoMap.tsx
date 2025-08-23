@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 
 interface CountryData {
   country: string;
@@ -7,8 +7,16 @@ interface CountryData {
   city?: string;
 }
 
+interface CityData {
+  city: string;
+  country: string;
+  count: number;
+  percentage: number;
+}
+
 interface GeoMapProps {
   countryData: CountryData[];
+  cityData?: CityData[];
   title?: string;
   height?: number;
 }
@@ -151,44 +159,95 @@ const countryCoordinates: { [key: string]: { x: number; y: number; name: string 
 
 export const GeoMap: React.FC<GeoMapProps> = ({
   countryData,
+  cityData = [],
   title = 'Request Distribution by Country',
   height = 400
 }) => {
+  const [viewMode, setViewMode] = useState<'country' | 'city'>('country');
+
   const processedData = useMemo(() => {
-    const maxCount = Math.max(...countryData.map(d => d.count), 1);
+    const data = viewMode === 'country' ? countryData : cityData;
+    const maxCount = Math.max(...data.map(d => d.count), 1);
 
-    return countryData.map(data => {
-      const countryCode = Object.keys(countryCodeMap).find(
-        code => countryCodeMap[code] === data.country
-      ) || 'Unknown';
+    return data.map(item => {
+      if (viewMode === 'country') {
+        const countryCode = Object.keys(countryCodeMap).find(
+          code => countryCodeMap[code] === item.country
+        ) || 'Unknown';
 
-      const coords = countryCoordinates[countryCode];
-      if (!coords) return null;
+        const coords = countryCoordinates[countryCode];
+        if (!coords) return null;
 
-      const intensity = Math.max(0.1, data.count / maxCount);
-      const size = Math.max(4, Math.min(20, 4 + (intensity * 16)));
+        const intensity = Math.max(0.1, item.count / maxCount);
+        const size = Math.max(4, Math.min(20, 4 + (intensity * 16)));
 
-      return {
-        ...data,
-        countryCode,
-        x: coords.x,
-        y: coords.y,
-        intensity,
-        size,
-        displayName: coords.name
-      };
+        return {
+          ...item,
+          countryCode,
+          x: coords.x,
+          y: coords.y,
+          intensity,
+          size,
+          displayName: coords.name,
+          type: 'country'
+        };
+      } else {
+        // For cities, we need to find the country coordinates and add some offset
+        const countryCode = Object.keys(countryCodeMap).find(
+          code => countryCodeMap[code] === item.country
+        ) || 'Unknown';
+
+        const coords = countryCoordinates[countryCode];
+        if (!coords) return null;
+
+        // Add some random offset for cities within the same country
+        const offsetX = (Math.random() - 0.5) * 4;
+        const offsetY = (Math.random() - 0.5) * 4;
+
+        const intensity = Math.max(0.1, item.count / maxCount);
+        const size = Math.max(3, Math.min(16, 3 + (intensity * 13)));
+
+        return {
+          ...item,
+          countryCode,
+          x: coords.x + offsetX,
+          y: coords.y + offsetY,
+          intensity,
+          size,
+          displayName: `${item.city}, ${item.country}`,
+          type: 'city'
+        };
+      }
     }).filter((data): data is NonNullable<typeof data> => data !== null);
-  }, [countryData]);
+  }, [countryData, cityData, viewMode]);
 
-  const totalRequests = countryData.reduce((sum, d) => sum + d.count, 0);
+  const totalRequests = (viewMode === 'country' ? countryData : cityData).reduce((sum, d) => sum + d.count, 0);
 
   return (
     <div className="geo-map-container">
       <div className="geo-map-header">
         <h3>{title}</h3>
-        <div className="geo-map-stats">
-          <span>Total Requests: {totalRequests.toLocaleString()}</span>
-          <span>Countries: {countryData.length}</span>
+        <div className="geo-map-controls">
+          {cityData.length > 0 && (
+            <div className="view-mode-toggle">
+              <button
+                className={`toggle-btn ${viewMode === 'country' ? 'active' : ''}`}
+                onClick={() => setViewMode('country')}
+              >
+                Countries
+              </button>
+              <button
+                className={`toggle-btn ${viewMode === 'city' ? 'active' : ''}`}
+                onClick={() => setViewMode('city')}
+              >
+                Cities
+              </button>
+            </div>
+          )}
+          <div className="geo-map-stats">
+            <span>Total Requests: {totalRequests.toLocaleString()}</span>
+            <span>{viewMode === 'country' ? 'Countries' : 'Cities'}: {(viewMode === 'country' ? countryData : cityData).length}</span>
+          </div>
         </div>
       </div>
 
@@ -304,9 +363,9 @@ export const GeoMap: React.FC<GeoMapProps> = ({
         </div>
       </div>
 
-      {/* Top countries list */}
+      {/* Top locations list */}
       <div className="geo-map-countries">
-        <h4>Top Countries</h4>
+        <h4>Top {viewMode === 'country' ? 'Countries' : 'Cities'}</h4>
         <div className="countries-list">
           {processedData
             .sort((a, b) => b.count - a.count)

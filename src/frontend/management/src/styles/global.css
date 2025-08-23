@@ -1439,6 +1439,41 @@ body {
   border-bottom: 1px solid #e2e8f0;
 }
 
+.geo-map-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.view-mode-toggle {
+  display: flex;
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.toggle-btn {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: #718096;
+  transition: all 0.2s;
+}
+
+.toggle-btn:hover {
+  background: #edf2f7;
+  color: #4a5568;
+}
+
+.toggle-btn.active {
+  background: #4299e1;
+  color: white;
+  font-weight: 500;
+}
+
 .geo-map-header h3 {
   margin: 0;
   color: #2d3748;

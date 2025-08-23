@@ -78,42 +78,28 @@ export const StatisticsTab: React.FC = () => {
     return `${route.domain} → ${route.target}`;
   };
 
-  // Aggregate country data from all routes for the geo map
+  // Convert backend country data to frontend format
   const aggregatedCountryData = useMemo(() => {
-    if (!detailedStatistics?.routes) return [];
+    if (!detailedStatistics?.countryStats) return [];
 
-    const countryMap = new Map<string, { count: number; routes: string[] }>();
+    return detailedStatistics.countryStats.map(country => ({
+      country: country.country,
+      count: country.totalRequests,
+      percentage: (country.totalRequests / (detailedStatistics.countryStats?.reduce((sum, c) => sum + c.totalRequests, 0) || 1)) * 100
+    })).sort((a, b) => b.count - a.count);
+  }, [detailedStatistics?.countryStats]);
 
-    detailedStatistics.routes.forEach(route => {
-      if (route.topCountries) {
-        route.topCountries.forEach(country => {
-          const existing = countryMap.get(country.country);
-          if (existing) {
-            existing.count += country.count;
-            if (!existing.routes.includes(route.domain)) {
-              existing.routes.push(route.domain);
-            }
-          } else {
-            countryMap.set(country.country, {
-              count: country.count,
-              routes: [route.domain]
-            });
-          }
-        });
-      }
-    });
+  // Convert backend city data to frontend format
+  const aggregatedCityData = useMemo(() => {
+    if (!detailedStatistics?.cityStats) return [];
 
-    const totalRequests = Array.from(countryMap.values()).reduce((sum, data) => sum + data.count, 0);
-
-    return Array.from(countryMap.entries())
-      .map(([country, data]) => ({
-        country,
-        count: data.count,
-        percentage: totalRequests > 0 ? (data.count / totalRequests) * 100 : 0,
-        routes: data.routes
-      }))
-      .sort((a, b) => b.count - a.count);
-  }, [detailedStatistics]);
+    return detailedStatistics.cityStats.map(city => ({
+      city: city.city,
+      country: city.country,
+      count: city.totalRequests,
+      percentage: (city.totalRequests / (detailedStatistics.cityStats?.reduce((sum, c) => sum + c.totalRequests, 0) || 1)) * 100
+    })).sort((a, b) => b.count - a.count);
+  }, [detailedStatistics?.cityStats]);
 
   return (
     <div className="statistics-tab">
@@ -220,7 +206,8 @@ export const StatisticsTab: React.FC = () => {
       {aggregatedCountryData.length > 0 && (
         <GeoMap
           countryData={aggregatedCountryData}
-          title="Request Distribution by Country"
+          cityData={aggregatedCityData}
+          title="Request Distribution by Location"
           height={500}
         />
       )}
