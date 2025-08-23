@@ -813,7 +813,7 @@ export class ManagementConsole {
 
               // Get per-route statistics
               const perRouteStats = this.statisticsService.getPerRouteStats(period, 50);
-              
+
               // Get unmatched route statistics
               const unmatchedStats = this.statisticsService.getUnmatchedRouteStats(period, 50);
 
@@ -840,19 +840,19 @@ export class ManagementConsole {
                   uniqueIPs: route.uniqueIPs,
                   methods: route.methods,
                   requestType: 'unmatched',
-                  uniquePaths: route.recentRequests?.slice(-5).map(req => req.ip) || [] // Show recent IPs
+                  uniquePaths: [route.path] // Show the unmatched path
                 }))
               ];
 
               // Calculate overall statistics
               const totalRequests = allRoutes.reduce((sum, route) => sum + route.requests, 0);
-              const avgResponseTime = allRoutes.length > 0 
-                ? allRoutes.reduce((sum, route) => sum + route.avgResponseTime, 0) / allRoutes.length 
+              const avgResponseTime = allRoutes.length > 0
+                ? allRoutes.reduce((sum, route) => sum + route.avgResponseTime, 0) / allRoutes.length
                 : 0;
 
               // Get unique countries from all routes
               const uniqueCountries = new Set(
-                allRoutes.flatMap(route => 
+                allRoutes.flatMap(route =>
                   route.topCountries?.map(country => country.country) || []
                 )
               ).size;
