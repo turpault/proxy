@@ -81,71 +81,71 @@ const countryCodeMap: { [key: string]: string } = {
   'Unknown': 'Unknown'
 };
 
-// Simplified world map coordinates (major countries)
+// World map coordinates (adjusted for better map layout)
 const countryCoordinates: { [key: string]: { x: number; y: number; name: string } } = {
-  'US': { x: 15, y: 40, name: 'United States' },
-  'CN': { x: 75, y: 45, name: 'China' },
-  'IN': { x: 65, y: 55, name: 'India' },
-  'JP': { x: 85, y: 45, name: 'Japan' },
-  'DE': { x: 50, y: 35, name: 'Germany' },
-  'GB': { x: 48, y: 35, name: 'United Kingdom' },
-  'FR': { x: 48, y: 38, name: 'France' },
-  'BR': { x: 30, y: 65, name: 'Brazil' },
-  'IT': { x: 52, y: 40, name: 'Italy' },
-  'CA': { x: 18, y: 30, name: 'Canada' },
-  'AU': { x: 80, y: 75, name: 'Australia' },
-  'RU': { x: 65, y: 25, name: 'Russia' },
-  'KR': { x: 82, y: 45, name: 'South Korea' },
-  'ES': { x: 47, y: 42, name: 'Spain' },
-  'MX': { x: 20, y: 50, name: 'Mexico' },
-  'ID': { x: 72, y: 60, name: 'Indonesia' },
-  'NL': { x: 49, y: 35, name: 'Netherlands' },
-  'SA': { x: 55, y: 50, name: 'Saudi Arabia' },
-  'TR': { x: 55, y: 40, name: 'Turkey' },
-  'CH': { x: 51, y: 38, name: 'Switzerland' },
-  'SE': { x: 52, y: 28, name: 'Sweden' },
-  'AR': { x: 28, y: 70, name: 'Argentina' },
-  'BE': { x: 49, y: 36, name: 'Belgium' },
-  'TH': { x: 70, y: 55, name: 'Thailand' },
-  'PL': { x: 54, y: 32, name: 'Poland' },
-  'AT': { x: 52, y: 37, name: 'Austria' },
-  'NO': { x: 51, y: 25, name: 'Norway' },
-  'AE': { x: 58, y: 50, name: 'United Arab Emirates' },
-  'SG': { x: 75, y: 58, name: 'Singapore' },
-  'MY': { x: 73, y: 58, name: 'Malaysia' },
-  'DK': { x: 51, y: 30, name: 'Denmark' },
-  'FI': { x: 55, y: 25, name: 'Finland' },
-  'CL': { x: 25, y: 75, name: 'Chile' },
-  'ZA': { x: 52, y: 75, name: 'South Africa' },
-  'EG': { x: 55, y: 48, name: 'Egypt' },
-  'PH': { x: 78, y: 55, name: 'Philippines' },
-  'VN': { x: 74, y: 55, name: 'Vietnam' },
-  'CZ': { x: 53, y: 35, name: 'Czech Republic' },
-  'RO': { x: 56, y: 38, name: 'Romania' },
-  'PT': { x: 46, y: 42, name: 'Portugal' },
-  'GR': { x: 54, y: 42, name: 'Greece' },
-  'HU': { x: 54, y: 37, name: 'Hungary' },
-  'IE': { x: 47, y: 33, name: 'Ireland' },
-  'IL': { x: 57, y: 45, name: 'Israel' },
-  'NZ': { x: 85, y: 80, name: 'New Zealand' },
-  'CO': { x: 26, y: 60, name: 'Colombia' },
-  'PE': { x: 24, y: 65, name: 'Peru' },
-  'HR': { x: 53, y: 39, name: 'Croatia' },
-  'BG': { x: 56, y: 40, name: 'Bulgaria' },
-  'SK': { x: 54, y: 36, name: 'Slovakia' },
-  'LT': { x: 56, y: 30, name: 'Lithuania' },
-  'SI': { x: 53, y: 38, name: 'Slovenia' },
-  'LV': { x: 56, y: 28, name: 'Latvia' },
-  'EE': { x: 57, y: 28, name: 'Estonia' },
-  'CY': { x: 58, y: 45, name: 'Cyprus' },
-  'LU': { x: 50, y: 37, name: 'Luxembourg' },
-  'MT': { x: 52, y: 45, name: 'Malta' },
-  'IS': { x: 48, y: 22, name: 'Iceland' },
-  'AD': { x: 48, y: 40, name: 'Andorra' },
-  'MC': { x: 50, y: 41, name: 'Monaco' },
-  'LI': { x: 51, y: 38, name: 'Liechtenstein' },
-  'SM': { x: 52, y: 40, name: 'San Marino' },
-  'VA': { x: 52, y: 42, name: 'Vatican City' },
+  'US': { x: 25, y: 32, name: 'United States' },
+  'CN': { x: 75, y: 35, name: 'China' },
+  'IN': { x: 68, y: 45, name: 'India' },
+  'JP': { x: 85, y: 35, name: 'Japan' },
+  'DE': { x: 52, y: 30, name: 'Germany' },
+  'GB': { x: 48, y: 30, name: 'United Kingdom' },
+  'FR': { x: 50, y: 32, name: 'France' },
+  'BR': { x: 28, y: 60, name: 'Brazil' },
+  'IT': { x: 54, y: 35, name: 'Italy' },
+  'CA': { x: 22, y: 22, name: 'Canada' },
+  'AU': { x: 78, y: 72, name: 'Australia' },
+  'RU': { x: 70, y: 25, name: 'Russia' },
+  'KR': { x: 82, y: 38, name: 'South Korea' },
+  'ES': { x: 47, y: 35, name: 'Spain' },
+  'MX': { x: 18, y: 42, name: 'Mexico' },
+  'ID': { x: 72, y: 55, name: 'Indonesia' },
+  'NL': { x: 51, y: 30, name: 'Netherlands' },
+  'SA': { x: 58, y: 45, name: 'Saudi Arabia' },
+  'TR': { x: 58, y: 35, name: 'Turkey' },
+  'CH': { x: 53, y: 32, name: 'Switzerland' },
+  'SE': { x: 54, y: 25, name: 'Sweden' },
+  'AR': { x: 26, y: 68, name: 'Argentina' },
+  'BE': { x: 51, y: 31, name: 'Belgium' },
+  'TH': { x: 72, y: 48, name: 'Thailand' },
+  'PL': { x: 56, y: 28, name: 'Poland' },
+  'AT': { x: 54, y: 32, name: 'Austria' },
+  'NO': { x: 53, y: 22, name: 'Norway' },
+  'AE': { x: 62, y: 45, name: 'United Arab Emirates' },
+  'SG': { x: 75, y: 52, name: 'Singapore' },
+  'MY': { x: 73, y: 52, name: 'Malaysia' },
+  'DK': { x: 52, y: 26, name: 'Denmark' },
+  'FI': { x: 57, y: 22, name: 'Finland' },
+  'CL': { x: 22, y: 72, name: 'Chile' },
+  'ZA': { x: 52, y: 65, name: 'South Africa' },
+  'EG': { x: 58, y: 42, name: 'Egypt' },
+  'PH': { x: 80, y: 48, name: 'Philippines' },
+  'VN': { x: 74, y: 48, name: 'Vietnam' },
+  'CZ': { x: 55, y: 30, name: 'Czech Republic' },
+  'RO': { x: 58, y: 33, name: 'Romania' },
+  'PT': { x: 46, y: 35, name: 'Portugal' },
+  'GR': { x: 56, y: 38, name: 'Greece' },
+  'HU': { x: 56, y: 30, name: 'Hungary' },
+  'IE': { x: 47, y: 28, name: 'Ireland' },
+  'IL': { x: 60, y: 40, name: 'Israel' },
+  'NZ': { x: 85, y: 78, name: 'New Zealand' },
+  'CO': { x: 24, y: 55, name: 'Colombia' },
+  'PE': { x: 22, y: 60, name: 'Peru' },
+  'HR': { x: 55, y: 34, name: 'Croatia' },
+  'BG': { x: 58, y: 35, name: 'Bulgaria' },
+  'SK': { x: 56, y: 31, name: 'Slovakia' },
+  'LT': { x: 58, y: 26, name: 'Lithuania' },
+  'SI': { x: 55, y: 33, name: 'Slovenia' },
+  'LV': { x: 58, y: 24, name: 'Latvia' },
+  'EE': { x: 59, y: 24, name: 'Estonia' },
+  'CY': { x: 60, y: 40, name: 'Cyprus' },
+  'LU': { x: 52, y: 32, name: 'Luxembourg' },
+  'MT': { x: 54, y: 40, name: 'Malta' },
+  'IS': { x: 50, y: 18, name: 'Iceland' },
+  'AD': { x: 50, y: 35, name: 'Andorra' },
+  'MC': { x: 52, y: 36, name: 'Monaco' },
+  'LI': { x: 53, y: 32, name: 'Liechtenstein' },
+  'SM': { x: 54, y: 35, name: 'San Marino' },
+  'VA': { x: 54, y: 37, name: 'Vatican City' },
   'Unknown': { x: 50, y: 50, name: 'Unknown' }
 };
 
@@ -198,49 +198,63 @@ export const GeoMap: React.FC<GeoMapProps> = ({
           className="geo-map-svg"
           style={{ width: '100%', height: '100%' }}
         >
-          {/* World map outline (simplified) */}
+          {/* World map outline (more realistic) */}
           <g className="world-outline">
             {/* North America */}
             <path
-              d="M 15 35 L 25 35 L 25 45 L 15 45 Z"
-              fill="none"
-              stroke="#e2e8f0"
-              strokeWidth="0.5"
+              d="M 12 25 Q 15 20 20 22 L 25 20 Q 30 18 35 22 L 38 25 Q 40 30 38 35 L 35 40 Q 30 42 25 40 L 20 38 Q 15 35 12 30 Z"
+              fill="#f7fafc"
+              stroke="#cbd5e0"
+              strokeWidth="0.3"
             />
             {/* South America */}
             <path
-              d="M 25 55 L 35 55 L 35 75 L 25 75 Z"
-              fill="none"
-              stroke="#e2e8f0"
-              strokeWidth="0.5"
+              d="M 25 45 Q 28 48 30 50 L 32 55 Q 33 60 32 65 L 30 70 Q 28 75 25 78 L 22 75 Q 20 70 22 65 L 23 60 Q 24 55 25 50 Z"
+              fill="#f7fafc"
+              stroke="#cbd5e0"
+              strokeWidth="0.3"
             />
             {/* Europe */}
             <path
-              d="M 45 30 L 60 30 L 60 45 L 45 45 Z"
-              fill="none"
-              stroke="#e2e8f0"
-              strokeWidth="0.5"
+              d="M 45 25 Q 50 22 55 25 L 58 28 Q 60 32 58 35 L 55 38 Q 50 40 45 38 L 42 35 Q 40 32 42 28 Z"
+              fill="#f7fafc"
+              stroke="#cbd5e0"
+              strokeWidth="0.3"
             />
             {/* Africa */}
             <path
-              d="M 50 45 L 65 45 L 65 70 L 50 70 Z"
-              fill="none"
-              stroke="#e2e8f0"
-              strokeWidth="0.5"
+              d="M 48 35 Q 52 38 55 40 L 58 45 Q 60 50 58 55 L 55 60 Q 52 65 48 68 L 45 65 Q 43 60 45 55 L 46 50 Q 47 45 48 40 Z"
+              fill="#f7fafc"
+              stroke="#cbd5e0"
+              strokeWidth="0.3"
             />
             {/* Asia */}
             <path
-              d="M 65 30 L 90 30 L 90 60 L 65 60 Z"
-              fill="none"
-              stroke="#e2e8f0"
-              strokeWidth="0.5"
+              d="M 60 20 Q 70 18 80 22 L 85 25 Q 88 30 85 35 L 80 40 Q 70 45 60 42 L 55 38 Q 52 35 55 30 Z"
+              fill="#f7fafc"
+              stroke="#cbd5e0"
+              strokeWidth="0.3"
             />
             {/* Australia */}
             <path
-              d="M 75 70 L 85 70 L 85 80 L 75 80 Z"
-              fill="none"
-              stroke="#e2e8f0"
-              strokeWidth="0.5"
+              d="M 70 65 Q 75 68 80 70 L 82 72 Q 83 75 82 78 L 80 80 Q 75 82 70 80 L 68 78 Q 67 75 68 72 Z"
+              fill="#f7fafc"
+              stroke="#cbd5e0"
+              strokeWidth="0.3"
+            />
+            {/* Greenland */}
+            <path
+              d="M 35 15 Q 38 12 40 15 L 42 18 Q 43 20 42 22 L 40 25 Q 38 28 35 25 L 33 22 Q 32 20 33 18 Z"
+              fill="#f7fafc"
+              stroke="#cbd5e0"
+              strokeWidth="0.3"
+            />
+            {/* Antarctica */}
+            <path
+              d="M 30 85 Q 50 88 70 85 L 75 87 Q 80 90 75 92 L 70 95 Q 50 98 30 95 L 25 92 Q 20 90 25 87 Z"
+              fill="#f7fafc"
+              stroke="#cbd5e0"
+              strokeWidth="0.3"
             />
           </g>
 

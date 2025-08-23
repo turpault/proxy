@@ -817,32 +817,64 @@ export class ManagementConsole {
               // Get unmatched route statistics
               const unmatchedStats = this.statisticsService.getUnmatchedRouteStats(period, 50);
 
-              // Combine matched and unmatched routes
-              const allRoutes = [
-                ...perRouteStats.map(route => ({
-                  name: route.routeName,
-                  domain: route.domain,
-                  target: route.target,
-                  requests: route.totalRequests,
-                  avgResponseTime: route.avgResponseTime,
-                  topCountries: route.topCountries,
-                  uniqueIPs: route.uniqueIPs,
-                  methods: route.methods,
-                  requestType: route.requestType
-                })),
-                ...unmatchedStats.map(route => ({
+              // Combine matched routes
+              const matchedRoutes = perRouteStats.map(route => ({
+                name: route.routeName,
+                domain: route.domain,
+                target: route.target,
+                requests: route.totalRequests,
+                avgResponseTime: route.avgResponseTime,
+                topCountries: route.topCountries,
+                uniqueIPs: route.uniqueIPs,
+                methods: route.methods,
+                requestType: route.requestType,
+                uniquePaths: route.topPaths?.slice(-5).map(path => path.path) || [] // Extract path strings
+              }));
+
+              // Aggregate unmatched routes into a single card
+              let unmatchedCard = null;
+              if (unmatchedStats.length > 0) {
+                const totalUnmatchedRequests = unmatchedStats.reduce((sum, route) => sum + route.totalRequests, 0);
+                const avgUnmatchedResponseTime = unmatchedStats.reduce((sum, route) => sum + route.avgResponseTime, 0) / unmatchedStats.length;
+                const totalUnmatchedIPs = new Set(unmatchedStats.flatMap(route => route.recentRequests?.map(req => req.ip) || [])).size;
+                
+                // Combine all countries from unmatched routes
+                const allUnmatchedCountries = unmatchedStats.flatMap(route => route.topCountries || []);
+                const countryMap = new Map<string, { count: number; percentage: number }>();
+                allUnmatchedCountries.forEach(country => {
+                  const existing = countryMap.get(country.country);
+                  if (existing) {
+                    existing.count += country.count;
+                  } else {
+                    countryMap.set(country.country, { count: country.count, percentage: country.percentage });
+                  }
+                });
+                const topUnmatchedCountries = Array.from(countryMap.entries())
+                  .map(([country, data]) => ({ country, count: data.count, percentage: data.percentage }))
+                  .sort((a, b) => b.count - a.count)
+                  .slice(0, 5);
+
+                // Combine all methods from unmatched routes
+                const allUnmatchedMethods = new Set(unmatchedStats.flatMap(route => route.methods || []));
+
+                // Get unique paths from unmatched routes
+                const uniqueUnmatchedPaths = [...new Set(unmatchedStats.map(route => route.path))];
+
+                unmatchedCard = {
                   name: 'Unmatched',
-                  domain: route.domain,
+                  domain: 'All Domains',
                   target: '',
-                  requests: route.totalRequests,
-                  avgResponseTime: route.avgResponseTime,
-                  topCountries: route.topCountries,
-                  uniqueIPs: route.uniqueIPs,
-                  methods: route.methods,
+                  requests: totalUnmatchedRequests,
+                  avgResponseTime: avgUnmatchedResponseTime,
+                  topCountries: topUnmatchedCountries,
+                  uniqueIPs: totalUnmatchedIPs,
+                  methods: Array.from(allUnmatchedMethods),
                   requestType: 'unmatched',
-                  uniquePaths: [route.path] // Show the unmatched path
-                }))
-              ];
+                  uniquePaths: uniqueUnmatchedPaths.slice(-5) // Show last 5 unique unmatched paths
+                };
+              }
+
+              const allRoutes = matchedRoutes.concat(unmatchedCard ? [unmatchedCard] : []);
 
               // Calculate overall statistics
               const totalRequests = allRoutes.reduce((sum, route) => sum + route.requests, 0);

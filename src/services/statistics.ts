@@ -868,7 +868,6 @@ export class StatisticsService {
    * Get unmatched route statistics using SQLite queries
    */
   public getUnmatchedRouteStats(period: string = '24h', limit: number = 50): Array<{
-    domain: string;
     path: string;
     totalRequests: number;
     avgResponseTime: number;
@@ -896,7 +895,6 @@ export class StatisticsService {
       // Get unmatched route statistics
       const unmatchedStats = this.db.query(`
         SELECT 
-          domain,
           path,
           COUNT(*) as total_requests,
           AVG(response_time) as avg_response_time,
@@ -904,7 +902,7 @@ export class StatisticsService {
           COUNT(DISTINCT json_extract(geolocation_json, '$.country')) as unique_countries
         FROM requests 
         WHERE timestamp >= ? AND is_matched = 0
-        GROUP BY domain, path
+        GROUP BY path
         ORDER BY total_requests DESC
         LIMIT ?
       `).all(startISO, limit) as any[];
@@ -916,18 +914,18 @@ export class StatisticsService {
             json_extract(geolocation_json, '$.country') as country,
             COUNT(*) as count
           FROM requests 
-          WHERE timestamp >= ? AND domain = ? AND path = ? AND is_matched = 0
+          WHERE timestamp >= ? AND path = ? AND is_matched = 0
           GROUP BY country
           ORDER BY count DESC
           LIMIT 5
-        `).all(startISO, route.domain, route.path) as any[];
+        `).all(startISO, route.path) as any[];
 
         // Get methods for this unmatched route
         const methods = this.db.query(`
           SELECT DISTINCT method
           FROM requests 
-          WHERE timestamp >= ? AND domain = ? AND path = ? AND is_matched = 0
-        `).all(startISO, route.domain, route.path) as any[];
+          WHERE timestamp >= ? AND path = ? AND is_matched = 0
+        `).all(startISO, route.path) as any[];
 
         // Get status codes for this unmatched route
         const statusCodes = this.db.query(`
@@ -935,10 +933,10 @@ export class StatisticsService {
             status_code as code,
             COUNT(*) as count
           FROM requests 
-          WHERE timestamp >= ? AND domain = ? AND path = ? AND is_matched = 0
+          WHERE timestamp >= ? AND path = ? AND is_matched = 0
           GROUP BY status_code
           ORDER BY count DESC
-        `).all(startISO, route.domain, route.path) as any[];
+        `).all(startISO, route.path) as any[];
 
         // Get top user agents for this unmatched route
         const topUserAgents = this.db.query(`
@@ -946,11 +944,11 @@ export class StatisticsService {
             user_agent,
             COUNT(*) as count
           FROM requests 
-          WHERE timestamp >= ? AND domain = ? AND path = ? AND is_matched = 0
+          WHERE timestamp >= ? AND path = ? AND is_matched = 0
           GROUP BY user_agent
           ORDER BY count DESC
           LIMIT 10
-        `).all(startISO, route.domain, route.path) as any[];
+        `).all(startISO, route.path) as any[];
 
         // Get recent requests for this unmatched route
         const recentRequests = this.db.query(`
@@ -962,15 +960,14 @@ export class StatisticsService {
             user_agent,
             json_extract(geolocation_json, '$.country') as country
           FROM requests 
-          WHERE timestamp >= ? AND domain = ? AND path = ? AND is_matched = 0
+          WHERE timestamp >= ? AND path = ? AND is_matched = 0
           ORDER BY timestamp DESC
           LIMIT 20
-        `).all(startISO, route.domain, route.path) as any[];
+        `).all(startISO, route.path) as any[];
 
         const totalRequests = route.total_requests;
 
         return {
-          domain: route.domain,
           path: route.path,
           totalRequests,
           avgResponseTime: route.avg_response_time || 0,
