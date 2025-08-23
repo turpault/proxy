@@ -841,7 +841,7 @@ export class ManagementConsole {
                 const totalUnmatchedRequests = unmatchedStats.reduce((sum, route) => sum + route.totalRequests, 0);
                 const avgUnmatchedResponseTime = unmatchedStats.reduce((sum, route) => sum + route.avgResponseTime, 0) / unmatchedStats.length;
                 const totalUnmatchedIPs = new Set(unmatchedStats.flatMap(route => route.recentRequests?.map(req => req.ip) || [])).size;
-                
+
                 // Combine all countries from unmatched routes
                 const allUnmatchedCountries = unmatchedStats.flatMap(route => route.topCountries || []);
                 const countryMap = new Map<string, { count: number; percentage: number }>();

@@ -766,7 +766,11 @@ export class StatisticsService {
       const startDate = this.getStartDateForPeriod(period);
       const startISO = startDate.toISOString();
 
-      // Get route statistics
+      // Get currently configured routes
+      const configuredRoutes = configService.getRoutes();
+      const configuredRouteNames = new Set(configuredRoutes.map((route: any) => route.name).filter(Boolean));
+
+      // Get route statistics only for currently configured routes
       const routeStats = this.db.query(`
         SELECT 
           route_name,
@@ -780,30 +784,32 @@ export class StatisticsService {
           COUNT(DISTINCT json_extract(geolocation_json, '$.country')) as unique_countries
         FROM requests 
         WHERE timestamp >= ? AND route_name IS NOT NULL AND is_matched = 1
-        GROUP BY route_name, domain, path, target_url, request_type
+        GROUP BY route_name
         ORDER BY total_requests DESC
         LIMIT ?
       `).all(startISO, limit) as any[];
 
-      return routeStats.map(route => {
+      return routeStats
+        .filter(route => configuredRouteNames.has(route.route_name))
+        .map(route => {
         // Get top countries for this route
         const topCountries = this.db.query(`
           SELECT 
             json_extract(geolocation_json, '$.country') as country,
             COUNT(*) as count
           FROM requests 
-          WHERE timestamp >= ? AND route_name = ? AND domain = ? AND path = ? AND is_matched = 1
+          WHERE timestamp >= ? AND route_name = ? AND is_matched = 1
           GROUP BY country
           ORDER BY count DESC
           LIMIT 5
-        `).all(startISO, route.route_name, route.domain, route.path) as any[];
+        `).all(startISO, route.route_name) as any[];
 
         // Get methods for this route
         const methods = this.db.query(`
           SELECT DISTINCT method
           FROM requests 
-          WHERE timestamp >= ? AND route_name = ? AND domain = ? AND path = ? AND is_matched = 1
-        `).all(startISO, route.route_name, route.domain, route.path) as any[];
+          WHERE timestamp >= ? AND route_name = ? AND is_matched = 1
+        `).all(startISO, route.route_name) as any[];
 
         // Get status codes for this route
         const statusCodes = this.db.query(`
@@ -811,10 +817,10 @@ export class StatisticsService {
             status_code as code,
             COUNT(*) as count
           FROM requests 
-          WHERE timestamp >= ? AND route_name = ? AND domain = ? AND path = ? AND is_matched = 1
+          WHERE timestamp >= ? AND route_name = ? AND is_matched = 1
           GROUP BY status_code
           ORDER BY count DESC
-        `).all(startISO, route.route_name, route.domain, route.path) as any[];
+        `).all(startISO, route.route_name) as any[];
 
         // Get top paths for this route
         const topPaths = this.db.query(`
@@ -822,19 +828,22 @@ export class StatisticsService {
             path,
             COUNT(*) as count
           FROM requests 
-          WHERE timestamp >= ? AND route_name = ? AND domain = ? AND is_matched = 1
+          WHERE timestamp >= ? AND route_name = ? AND is_matched = 1
           GROUP BY path
           ORDER BY count DESC
           LIMIT 10
-        `).all(startISO, route.route_name, route.domain) as any[];
+        `).all(startISO, route.route_name) as any[];
 
         const totalRequests = route.total_requests;
 
+        // Get route configuration details
+        const routeConfig = configuredRoutes.find(r => r.name === route.route_name);
+        
         return {
           routeName: route.route_name,
-          domain: route.domain,
-          path: route.path,
-          target: route.target_url,
+          domain: routeConfig?.domain || route.domain,
+          path: routeConfig?.path || route.path,
+          target: routeConfig?.target || route.target_url,
           requestType: route.request_type,
           totalRequests,
           avgResponseTime: route.avg_response_time || 0,
