@@ -160,6 +160,17 @@ export interface DetailedStatistics {
     lastSeen: string;
     topRoutes: Array<{ routeName: string | null; count: number; percentage: number }>;
   }>;
+  ipStats?: Array<{
+    ip: string;
+    totalRequests: number;
+    avgResponseTime: number;
+    firstSeen: string;
+    lastSeen: string;
+    country: string;
+    city: string;
+    topRoutes: Array<{ routeName: string | null; count: number; percentage: number }>;
+    methods: string[];
+  }>;
   period: {
     start: string;
     end: string;

@@ -101,8 +101,46 @@ export const StatisticsTab: React.FC = () => {
     })).sort((a, b) => b.count - a.count);
   }, [detailedStatistics?.cityStats]);
 
+  // Convert backend IP data to frontend format
+  const aggregatedIPData = useMemo(() => {
+    if (!detailedStatistics?.ipStats) return [];
+
+    return detailedStatistics.ipStats.map(ip => ({
+      ip: ip.ip,
+      country: ip.country,
+      city: ip.city,
+      count: ip.totalRequests,
+      percentage: (ip.totalRequests / (detailedStatistics.ipStats?.reduce((sum, i) => sum + i.totalRequests, 0) || 1)) * 100
+    })).sort((a, b) => b.count - a.count);
+  }, [detailedStatistics?.ipStats]);
+
   return (
     <div className="statistics-tab">
+      <div className="period-selector">
+        <h3>Statistics Period</h3>
+        <select
+          value={selectedPeriod}
+          onChange={(e) => setSearchParams({ period: e.target.value })}
+          className="period-select"
+        >
+          <option value="24h">Last 24 Hours</option>
+          <option value="7d">Last 7 Days</option>
+          <option value="30d">Last 30 Days</option>
+          <option value="90d">Last 90 Days</option>
+        </select>
+      </div>
+
+      {/* Geolocation Map - Moved to top */}
+      {aggregatedCountryData.length > 0 && (
+        <GeoMap
+          countryData={aggregatedCountryData}
+          cityData={aggregatedCityData}
+          ipData={aggregatedIPData}
+          title="Request Distribution by Location"
+          height={500}
+        />
+      )}
+
       <div className="stats-overview">
         <div className="stat-card">
           <h4>Total Requests</h4>
@@ -128,20 +166,6 @@ export const StatisticsTab: React.FC = () => {
             {detailedStatistics?.uniqueRoutes || status?.routes || '0'}
           </div>
         </div>
-      </div>
-
-      <div className="period-selector">
-        <h3>Statistics Period</h3>
-        <select
-          value={selectedPeriod}
-          onChange={(e) => setSearchParams({ period: e.target.value })}
-          className="period-select"
-        >
-          <option value="24h">Last 24 Hours</option>
-          <option value="7d">Last 7 Days</option>
-          <option value="30d">Last 30 Days</option>
-          <option value="90d">Last 90 Days</option>
-        </select>
       </div>
 
       <div className="routes-statistics">
@@ -199,32 +223,6 @@ export const StatisticsTab: React.FC = () => {
               )}
             </div>
           ))}
-        </div>
-      </div>
-
-      {/* Geolocation Map */}
-      {aggregatedCountryData.length > 0 && (
-        <GeoMap
-          countryData={aggregatedCountryData}
-          cityData={aggregatedCityData}
-          title="Request Distribution by Location"
-          height={500}
-        />
-      )}
-
-      <div className="charts-container">
-        <div className="chart-section">
-          <h3>Response Time Distribution</h3>
-          <div className="chart">
-            <p>Response time chart will be rendered here</p>
-          </div>
-        </div>
-
-        <div className="chart-section">
-          <h3>Request Methods Distribution</h3>
-          <div className="chart">
-            <p>Request methods chart will be rendered here</p>
-          </div>
         </div>
       </div>
     </div>

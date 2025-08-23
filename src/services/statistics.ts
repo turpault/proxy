@@ -1440,6 +1440,88 @@ export class StatisticsService {
       return [];
     }
   }
+
+  /**
+   * Get IP-based statistics
+   */
+  public getIPStats(period: string = '24h', limit: number = 50): Array<{
+    ip: string;
+    totalRequests: number;
+    avgResponseTime: number;
+    firstSeen: string;
+    lastSeen: string;
+    country: string;
+    city: string;
+    topRoutes: Array<{ routeName: string | null; count: number; percentage: number }>;
+    methods: string[];
+  }> {
+    try {
+      if (!this.db) return [];
+
+      const startDate = this.getStartDateForPeriod(period);
+      const startISO = startDate.toISOString();
+
+      // Get IP statistics
+      const ipStats = this.db.query(`
+        SELECT 
+          ip,
+          COUNT(*) as total_requests,
+          AVG(response_time) as avg_response_time,
+          MIN(timestamp) as first_seen,
+          MAX(timestamp) as last_seen,
+          json_extract(geolocation_json, '$.country') as country,
+          json_extract(geolocation_json, '$.city') as city
+        FROM requests 
+        WHERE timestamp >= ?
+        GROUP BY ip
+        ORDER BY total_requests DESC
+        LIMIT ?
+      `).all(startISO, limit) as any[];
+
+      return ipStats.map(ip => {
+        // Get top routes for this IP
+        const topRoutes = this.db.query(`
+          SELECT 
+            route_name,
+            COUNT(*) as count
+          FROM requests 
+          WHERE ip = ? AND timestamp >= ?
+          GROUP BY route_name
+          ORDER BY count DESC
+          LIMIT 10
+        `).all(ip.ip, startISO) as any[];
+
+        // Get methods used by this IP
+        const methods = this.db.query(`
+          SELECT DISTINCT method
+          FROM requests 
+          WHERE ip = ? AND timestamp >= ?
+          ORDER BY method
+        `).all(ip.ip, startISO) as any[];
+
+        const totalRequests = ip.total_requests;
+
+        return {
+          ip: ip.ip,
+          totalRequests,
+          avgResponseTime: ip.avg_response_time || 0,
+          firstSeen: ip.first_seen,
+          lastSeen: ip.last_seen,
+          country: ip.country || 'Unknown',
+          city: ip.city || 'Unknown',
+          topRoutes: topRoutes.map(r => ({
+            routeName: r.route_name,
+            count: r.count,
+            percentage: (r.count / totalRequests) * 100
+          })),
+          methods: methods.map(m => m.method)
+        };
+      });
+    } catch (error) {
+      logger.error('Failed to get IP statistics:', error);
+      return [];
+    }
+  }
 }
 
 // Export a function to get the statistics service instance

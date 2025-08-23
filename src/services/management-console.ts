@@ -820,6 +820,7 @@ export class ManagementConsole {
               // Get geolocation data for the map
               const countryStats = this.statisticsService.getCountryStats(period, 100);
               const cityStats = this.statisticsService.getCityStats(period, 100);
+              const ipStats = this.statisticsService.getIPStats(period, 100);
 
               // Combine matched routes
               const matchedRoutes = perRouteStats.map(route => ({
@@ -901,6 +902,7 @@ export class ManagementConsole {
                 routes: allRoutes,
                 countryStats,
                 cityStats,
+                ipStats,
                 period: {
                   start: new Date(Date.now() - this.getPeriodMs(period)),
                   end: new Date()
