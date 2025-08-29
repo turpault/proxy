@@ -109,7 +109,7 @@ export interface ProxyRoute {
 export interface WebSocketConfig {
   enabled?: boolean; // Enable WebSocket proxying for this route
   timeout?: number; // Connection timeout in milliseconds (default: 30000)
-  pingInterval?: number; // Ping interval in milliseconds (default: 0, disabled to prevent connection drops)
+  pingInterval?: number; // Ping interval in milliseconds (default: 60000, uses proper WebSocket ping frames)
   maxRetries?: number; // Maximum retry attempts for failed connections (default: 3)
   retryDelay?: number; // Delay between retry attempts in milliseconds (default: 1000)
 }
