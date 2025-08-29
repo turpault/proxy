@@ -1063,17 +1063,32 @@ export class ProcessManager {
           logger.debug(`Could not set process title for ${id}: ${error}`);
         }
       }
+      function getISOLocalTimeWithAMinutePrecision(): string {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = '00';
+        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+      }
 
       // Redirect stdout and stderr to log file with proper formatting
       const logStream = fs.createWriteStream(logFilePath, { flags: 'a' });
+      let timestamp = getISOLocalTimeWithAMinutePrecision();
 
       if (childProcess.stdout) {
         childProcess.stdout.on('data', (data) => {
           const output = data.toString().trim();
           if (output) {
             // Add stdout prefix to log file
-            const timestamp = new Date().toISOString();
-            logStream.write(`[${timestamp}] [STDOUT] ${output}\n`);
+            const t = getISOLocalTimeWithAMinutePrecision();
+            if (t !== timestamp) {
+              timestamp = t;
+              logStream.write(`[${timestamp}]\n`);
+            }
+            logStream.write(`${output}\n`);
             logger.info(`[${processName}] ${output}`);
           }
         });
@@ -1084,8 +1099,12 @@ export class ProcessManager {
           const output = data.toString().trim();
           if (output) {
             // Add stderr prefix to log file
-            const timestamp = new Date().toISOString();
-            logStream.write(`[${timestamp}] [STDERR] ${output}\n`);
+            const t = getISOLocalTimeWithAMinutePrecision();
+            if (t !== timestamp) {
+              timestamp = t;
+              logStream.write(`[${timestamp}]\n`);
+            }
+            logStream.write(`[STDERR]\n${output}\n`);
             logger.warn(`[${processName}] STDERR: ${output}`);
           }
         });
@@ -1209,18 +1228,10 @@ export class ProcessManager {
    * Build environment variables for a process with enhanced support
    */
   private buildProcessEnvironment(id: string, config: ProcessConfig, processName: string): NodeJS.ProcessEnv {
-    // Start with a clean environment, excluding proxy-specific variables
+    // Start with only basic environment variables
+    const basicEnvVars = ['HOME', 'LOGNAME', 'PATH', 'LANG'];
     const baseEnv = Object.fromEntries(
-      Object.entries(process.env).filter(([key]) =>
-        key !== 'PORT' &&
-        key !== 'HTTPS_PORT' &&
-        key !== 'CONFIG_FILE' &&
-        key !== 'LOG_LEVEL' &&
-        key !== 'LOG_FILE' &&
-        key !== 'RATE_LIMIT_' &&
-        key !== 'PRIMARY_DOMAIN' &&
-        key !== 'CERT_DIR'
-      )
+      Object.entries(process.env).filter(([key]) => basicEnvVars.includes(key))
     );
 
     // Process custom environment variables with substitution
