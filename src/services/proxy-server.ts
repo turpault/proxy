@@ -105,7 +105,7 @@ export class ProxyServer {
    * Connect to target WebSocket server with retry logic
    */
   private connectToTarget(clientWs: any, data: WebSocketProxyData) {
-    const wsConfig = data.wsConfig || { timeout: 30000, pingInterval: 30000, maxRetries: 3, retryDelay: 1000 };
+    const wsConfig = data.wsConfig || { timeout: 30000, pingInterval: 0, maxRetries: 3, retryDelay: 1000 };
 
     try {
       // Set connection timeout
@@ -134,19 +134,9 @@ export class ProxyServer {
         // Reset retry count on successful connection
         data.retryCount = 0;
 
-        // Set up ping interval if configured (using empty message as ping)
-        if (wsConfig.pingInterval > 0) {
-          data.pingTimer = setInterval(() => {
-            try {
-              if (targetWs.readyState === WebSocket.OPEN) {
-                // Send empty message as keep-alive ping
-                targetWs.send('');
-              }
-            } catch (error) {
-              logger.error(`[PROXY WS] Error sending ping to target for ${data.routeIdentifier}`, error);
-            }
-          }, wsConfig.pingInterval);
-        }
+        // Note: Ping mechanism disabled to prevent 30-second connection drops
+        // WebSocket connections will rely on TCP keep-alive and application-level heartbeats
+        // If keep-alive is needed, configure it at the application level in your WebSocket server
       };
 
       targetWs.onmessage = (event) => {
