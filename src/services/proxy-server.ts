@@ -1,4 +1,6 @@
 import { Server } from 'bun';
+import * as fs from 'fs-extra';
+import * as path from 'path';
 import { ProxyConfig } from '../types';
 import { logger } from '../utils/logger';
 import { BunMiddleware } from './bun-middleware';
@@ -6,11 +8,8 @@ import { BunRoutes } from './bun-routes';
 import { cacheService, setCacheExpiration } from './cache';
 import { configService } from './config-service';
 import { ProxyCertificates } from './proxy-certificates';
-import { getStatisticsService, StatisticsService } from './statistics';
 import { ServiceContainer } from './service-container';
-import * as fs from 'fs-extra';
-import * as path from 'path';
-import { SessionManager } from './session-manager';
+import { StatisticsService } from './statistics';
 
 interface WebSocketProxyData {
   target: string;

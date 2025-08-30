@@ -888,10 +888,9 @@ export class ProcessManager {
       return;
     }
 
-    // Don't restart if the process was manually stopped by management console
+    // Allow restarting manually stopped processes - this is a user-initiated restart
     if (managedProcess.isStopped) {
-      logger.info(`Skipping restart for process ${id}: process was manually stopped`);
-      return;
+      logger.info(`Restarting manually stopped process ${id}`);
     }
 
     logger.info(`Restarting process ${id}`);
