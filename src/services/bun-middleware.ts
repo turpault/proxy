@@ -158,7 +158,7 @@ export class BunMiddleware {
     return null;
   }
 
-    private shouldBlockRequest(geolocation: GeolocationInfo | null, filter: GeolocationFilter): boolean {
+  private shouldBlockRequest(geolocation: GeolocationInfo | null, filter: GeolocationFilter): boolean {
     if (!geolocation) {
       // If we can't determine location, allow the request by default
       // You might want to change this behavior based on your security requirements
@@ -166,13 +166,13 @@ export class BunMiddleware {
     }
 
     const { mode = 'block', countries = [], regions = [], cities = [] } = filter;
-    
+
     // Check if the location matches any of the specified criteria
     // Empty arrays mean "no restrictions" for that field
     const matchesCountry = countries.length === 0 || countries.includes(geolocation.country || '');
     const matchesRegion = regions.length === 0 || regions.includes(geolocation.region || '');
     const matchesCity = cities.length === 0 || cities.includes(geolocation.city || '');
-    
+
     // For allow mode: block if NOT in the allowlist
     // For block mode: block if IN the blocklist
     if (mode === 'allow') {
@@ -186,7 +186,7 @@ export class BunMiddleware {
       const hasCountryRestriction = countries.length > 0 && countries.includes(geolocation.country || '');
       const hasRegionRestriction = regions.length > 0 && regions.includes(geolocation.region || '');
       const hasCityRestriction = cities.length > 0 && cities.includes(geolocation.city || '');
-      
+
       return hasCountryRestriction || hasRegionRestriction || hasCityRestriction;
     }
   }

@@ -299,10 +299,12 @@ export class BunRoutes {
     if (xClientIP) {
       ip = xClientIP;
     }
+    const geolocation = this.geolocationService.getGeolocation(ip);
+    logger.info(`[GEOLOCATION] ${ip} -> ${geolocation?.city}, ${geolocation?.region}, ${geolocation?.country}`);
 
     const requestContext: BunRequestContext = {
       method: req.method,
-      geolocation: this.geolocationService.getGeolocation(ip),
+      geolocation,
       userAgent: headers['user-agent'] || 'Unknown',
       url: req.url,
       pathname: url.pathname,
