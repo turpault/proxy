@@ -117,6 +117,12 @@ export interface RouteStatistics {
     count: number;
     percentage: number;
   }>;
+  topCities: Array<{
+    city: string;
+    country: string;
+    count: number;
+    percentage: number;
+  }>;
   uniqueIPs: number;
   methods: string[];
   requestType?: string; // Frontend-specific

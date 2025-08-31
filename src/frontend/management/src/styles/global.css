@@ -978,6 +978,48 @@ body {
   font-size: 0.8rem;
 }
 
+.route-locations {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.route-cities {
+  margin-top: 0;
+}
+
+.cities-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.city-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  background: #f7fafc;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.city-name {
+  font-weight: 500;
+  color: #2d3748;
+}
+
+.city-count {
+  color: #4299e1;
+  font-weight: 600;
+}
+
+.city-percentage {
+  color: #718096;
+  font-size: 0.8rem;
+}
+
 .paths-list {
   display: flex;
   flex-direction: column;

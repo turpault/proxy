@@ -764,6 +764,7 @@ export class StatisticsService {
     uniqueIPs: number;
     uniqueCountries: number;
     topCountries: Array<{ country: string; count: number; percentage: number }>;
+    topCities: Array<{ city: string; country: string; count: number; percentage: number }>;
     methods: string[];
     statusCodes: Array<{ code: number; count: number; percentage: number }>;
     topPaths: Array<{ path: string; count: number; percentage: number }>;
@@ -808,6 +809,19 @@ export class StatisticsService {
           FROM requests 
           WHERE timestamp >= ? AND route_name = ? AND is_matched = 1
           GROUP BY country
+          ORDER BY count DESC
+          LIMIT 5
+        `).all(startISO, route.route_name) as any[];
+
+          // Get top cities for this route
+          const topCities = this.db.query(`
+          SELECT 
+            json_extract(geolocation_json, '$.city') as city,
+            json_extract(geolocation_json, '$.country') as country,
+            COUNT(*) as count
+          FROM requests 
+          WHERE timestamp >= ? AND route_name = ? AND is_matched = 1
+          GROUP BY city, country
           ORDER BY count DESC
           LIMIT 5
         `).all(startISO, route.route_name) as any[];
@@ -858,6 +872,12 @@ export class StatisticsService {
             uniqueIPs: route.unique_ips,
             uniqueCountries: route.unique_countries,
             topCountries: topCountries.map(c => ({
+              country: c.country || 'Unknown',
+              count: c.count,
+              percentage: (c.count / totalRequests) * 100
+            })),
+            topCities: topCities.map(c => ({
+              city: c.city || 'Unknown',
               country: c.country || 'Unknown',
               count: c.count,
               percentage: (c.count / totalRequests) * 100

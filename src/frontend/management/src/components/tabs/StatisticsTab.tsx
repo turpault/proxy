@@ -206,20 +206,36 @@ export const StatisticsTab: React.FC = () => {
                   <span className="value">{route.methods.join(', ')}</span>
                 </div>
               </div>
-              {route.topCountries && route.topCountries.length > 0 && (
-                <div className="route-countries">
-                  <h5>Top Countries</h5>
-                  <div className="countries-list">
-                    {route.topCountries.slice(0, 3).map((country, idx) => (
-                      <div key={idx} className="country-item">
-                        <span className="country-name">{country.country}</span>
-                        <span className="country-count">{country.count}</span>
-                        <span className="country-percentage">({country.percentage.toFixed(1)}%)</span>
-                      </div>
-                    ))}
+              <div className="route-locations">
+                {route.topCountries && route.topCountries.length > 0 && (
+                  <div className="route-countries">
+                    <h5>Top Countries</h5>
+                    <div className="countries-list">
+                      {route.topCountries.slice(0, 3).map((country, idx) => (
+                        <div key={idx} className="country-item">
+                          <span className="country-name">{country.country}</span>
+                          <span className="country-count">{country.count}</span>
+                          <span className="country-percentage">({country.percentage.toFixed(1)}%)</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+                {route.topCities && route.topCities.length > 0 && (
+                  <div className="route-cities">
+                    <h5>Top Cities</h5>
+                    <div className="cities-list">
+                      {route.topCities.slice(0, 3).map((city, idx) => (
+                        <div key={idx} className="city-item">
+                          <span className="city-name">{city.city}, {city.country}</span>
+                          <span className="city-count">{city.count}</span>
+                          <span className="city-percentage">({city.percentage.toFixed(1)}%)</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               {route.uniquePaths && route.uniquePaths.length > 0 && (
                 <div className="route-paths">
                   <h5>Recent Paths ({route.uniquePaths.length})</h5>

@@ -830,6 +830,7 @@ export class ManagementConsole {
                 requests: route.totalRequests,
                 avgResponseTime: route.avgResponseTime,
                 topCountries: route.topCountries,
+                topCities: route.topCities,
                 uniqueIPs: route.uniqueIPs,
                 methods: route.methods,
                 requestType: route.requestType,
@@ -872,6 +873,7 @@ export class ManagementConsole {
                   requests: totalUnmatchedRequests,
                   avgResponseTime: avgUnmatchedResponseTime,
                   topCountries: topUnmatchedCountries,
+                  topCities: [], // No city data for unmatched routes
                   uniqueIPs: totalUnmatchedIPs,
                   methods: Array.from(allUnmatchedMethods),
                   requestType: 'unmatched',
