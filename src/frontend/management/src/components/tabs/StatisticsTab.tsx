@@ -4,6 +4,7 @@ import { useWebSocket } from '../WebSocketProvider';
 import { StatisticsSummary, DetailedStatistics, RouteStatistics } from '../../types';
 import { GeoMap } from '../GeoMap';
 import { API_BASE, GetStatisticsResponse, GetDetailedStatisticsResponse } from '../../utils/api-client';
+import { getCountryName } from '../../utils/country-codes';
 
 // Utility function to strip IPv6-mapped IPv4 prefix
 const stripIPv6Prefix = (ip: string): string => {
@@ -213,7 +214,7 @@ export const StatisticsTab: React.FC = () => {
                     <div className="countries-list">
                       {route.topCountries.slice(0, 3).map((country, idx) => (
                         <div key={idx} className="country-item">
-                          <span className="country-name">{country.country}</span>
+                          <span className="country-name">{getCountryName(country.country)}</span>
                           <span className="country-count">{country.count}</span>
                           <span className="country-percentage">({country.percentage.toFixed(1)}%)</span>
                         </div>
@@ -227,7 +228,7 @@ export const StatisticsTab: React.FC = () => {
                     <div className="cities-list">
                       {route.topCities.slice(0, 3).map((city, idx) => (
                         <div key={idx} className="city-item">
-                          <span className="city-name">{city.city}, {city.country}</span>
+                          <span className="city-name">{city.city}, {getCountryName(city.country)}</span>
                           <span className="city-count">{city.count}</span>
                           <span className="city-percentage">({city.percentage.toFixed(1)}%)</span>
                         </div>

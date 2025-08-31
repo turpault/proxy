@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import { getCountryName } from '../utils/country-codes';
 
 // Utility function to strip IPv6-mapped IPv4 prefix
 const stripIPv6Prefix = (ip: string): string => {
@@ -52,73 +53,7 @@ interface GeoMapProps {
   height?: number;
 }
 
-// Country code to country name mapping
-const countryCodeMap: { [key: string]: string } = {
-  'US': 'United States',
-  'CN': 'China',
-  'IN': 'India',
-  'JP': 'Japan',
-  'DE': 'Germany',
-  'GB': 'United Kingdom',
-  'FR': 'France',
-  'BR': 'Brazil',
-  'IT': 'Italy',
-  'CA': 'Canada',
-  'AU': 'Australia',
-  'RU': 'Russia',
-  'KR': 'South Korea',
-  'ES': 'Spain',
-  'MX': 'Mexico',
-  'ID': 'Indonesia',
-  'NL': 'Netherlands',
-  'SA': 'Saudi Arabia',
-  'TR': 'Turkey',
-  'CH': 'Switzerland',
-  'SE': 'Sweden',
-  'AR': 'Argentina',
-  'BE': 'Belgium',
-  'TH': 'Thailand',
-  'PL': 'Poland',
-  'AT': 'Austria',
-  'NO': 'Norway',
-  'AE': 'United Arab Emirates',
-  'SG': 'Singapore',
-  'MY': 'Malaysia',
-  'DK': 'Denmark',
-  'FI': 'Finland',
-  'CL': 'Chile',
-  'ZA': 'South Africa',
-  'EG': 'Egypt',
-  'PH': 'Philippines',
-  'VN': 'Vietnam',
-  'CZ': 'Czech Republic',
-  'RO': 'Romania',
-  'PT': 'Portugal',
-  'GR': 'Greece',
-  'HU': 'Hungary',
-  'IE': 'Ireland',
-  'IL': 'Israel',
-  'NZ': 'New Zealand',
-  'CO': 'Colombia',
-  'PE': 'Peru',
-  'HR': 'Croatia',
-  'BG': 'Bulgaria',
-  'SK': 'Slovakia',
-  'LT': 'Lithuania',
-  'SI': 'Slovenia',
-  'LV': 'Latvia',
-  'EE': 'Estonia',
-  'CY': 'Cyprus',
-  'LU': 'Luxembourg',
-  'MT': 'Malta',
-  'IS': 'Iceland',
-  'AD': 'Andorra',
-  'MC': 'Monaco',
-  'LI': 'Liechtenstein',
-  'SM': 'San Marino',
-  'VA': 'Vatican City',
-  'Unknown': 'Unknown'
-};
+
 
 // Country coordinates for Leaflet (latitude, longitude)
 const countryCoordinates: { [key: string]: { lat: number; lng: number; name: string } } = {
@@ -212,22 +147,21 @@ export const GeoMap: React.FC<GeoMapProps> = ({
     return data.map(item => {
       if (viewMode === 'country') {
         const countryItem = item as CountryData;
-        const countryCode = Object.keys(countryCodeMap).find(
-          code => countryCodeMap[code] === countryItem.country
-        ) || 'Unknown';
+        // The country field should already be a country code, so we can use it directly
+        const countryCode = countryItem.country;
 
         // Use actual coordinates if available, otherwise fall back to simplified coordinates
         let lat, lng, displayName;
         if (countryItem.latitude && countryItem.longitude) {
           lat = countryItem.latitude;
           lng = countryItem.longitude;
-          displayName = countryItem.country;
+          displayName = getCountryName(countryItem.country);
         } else {
           const coords = countryCoordinates[countryCode];
           if (!coords) return null;
           lat = coords.lat;
           lng = coords.lng;
-          displayName = coords.name;
+          displayName = getCountryName(countryCode);
         }
 
         const intensity = Math.max(0.1, item.count / maxCount);
@@ -252,9 +186,7 @@ export const GeoMap: React.FC<GeoMapProps> = ({
           lng = cityItem.longitude;
         } else {
           // For cities, we need to find the country coordinates and add some offset
-          const countryCode = Object.keys(countryCodeMap).find(
-            code => countryCodeMap[code] === cityItem.country
-          ) || 'Unknown';
+          const countryCode = cityItem.country;
 
           const coords = countryCoordinates[countryCode];
           if (!coords) return null;
@@ -271,14 +203,12 @@ export const GeoMap: React.FC<GeoMapProps> = ({
 
         return {
           ...cityItem,
-          countryCode: Object.keys(countryCodeMap).find(
-            code => countryCodeMap[code] === cityItem.country
-          ) || 'Unknown',
+          countryCode: cityItem.country,
           lat,
           lng,
           intensity,
           radius,
-          displayName: `${cityItem.city}, ${cityItem.country}`,
+          displayName: `${cityItem.city}, ${getCountryName(cityItem.country)}`,
           type: 'city'
         };
       } else {
@@ -290,9 +220,7 @@ export const GeoMap: React.FC<GeoMapProps> = ({
           lng = ipItem.longitude;
         } else {
           // For IPs, we need to find the country coordinates and add some offset
-          const countryCode = Object.keys(countryCodeMap).find(
-            code => countryCodeMap[code] === ipItem.country
-          ) || 'Unknown';
+          const countryCode = ipItem.country;
 
           const coords = countryCoordinates[countryCode];
           if (!coords) return null;
@@ -309,14 +237,12 @@ export const GeoMap: React.FC<GeoMapProps> = ({
 
         return {
           ...ipItem,
-          countryCode: Object.keys(countryCodeMap).find(
-            code => countryCodeMap[code] === ipItem.country
-          ) || 'Unknown',
+          countryCode: ipItem.country,
           lat,
           lng,
           intensity,
           radius,
-          displayName: `${stripIPv6Prefix(ipItem.ip)} (${ipItem.city}, ${ipItem.country})`,
+          displayName: `${stripIPv6Prefix(ipItem.ip)} (${ipItem.city}, ${getCountryName(ipItem.country)})`,
           type: 'ip'
         };
       }
