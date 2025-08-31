@@ -10,11 +10,13 @@ export class BunMiddleware {
   private oauth2Service: OAuth2Service;
   private statisticsService: StatisticsService;
   private geolocationService: any;
+  private config: ProxyConfig;
 
   constructor(config: ProxyConfig, serviceContainer: ServiceContainer) {
     this.oauth2Service = serviceContainer.oauth2Service;
     this.statisticsService = serviceContainer.statisticsService;
     this.geolocationService = serviceContainer.geolocationService;
+    this.config = config;
   }
 
   async processRequest(requestContext: BunRequestContext, route: ProxyRoute): Promise<Response | null> {
@@ -25,7 +27,7 @@ export class BunMiddleware {
     const corsHeaders = this.buildCorsHeaders();
 
     // Apply geolocation filtering
-    const geolocationResult = await this.processGeolocation(requestContext);
+    const geolocationResult = await this.processGeolocation(requestContext, route);
     if (geolocationResult) {
       return geolocationResult;
     }
@@ -63,11 +65,10 @@ export class BunMiddleware {
     };
   }
 
-  private async processGeolocation(requestContext: BunRequestContext): Promise<Response | null> {
+  private async processGeolocation(requestContext: BunRequestContext, route: ProxyRoute): Promise<Response | null> {
     try {
-
       // Check geolocation filters
-      const filter = this.getGeolocationFilterForRequest(requestContext);
+      const filter = this.getGeolocationFilterForRequest(requestContext, route);
       if (filter && this.shouldBlockRequest(requestContext.geolocation, filter)) {
         const locationString = this.formatLocationString(requestContext.ip, requestContext.geolocation);
         logger.warn(`[GEOBLOCK] Request blocked from ${locationString}`, {
@@ -76,11 +77,22 @@ export class BunMiddleware {
           filter
         });
 
+        // Use custom response if provided, otherwise use default
+        const statusCode = filter.customResponse?.statusCode || 403;
+        const message = filter.customResponse?.message || 'Access denied based on your location';
+
+        if (filter.customResponse?.redirectUrl) {
+          return new Response(null, {
+            status: 302,
+            headers: { 'Location': filter.customResponse.redirectUrl }
+          });
+        }
+
         return new Response(JSON.stringify({
           error: 'Access Denied',
-          message: 'Access denied based on your location'
+          message: message
         }), {
-          status: 403,
+          status: statusCode,
           headers: { 'Content-Type': 'application/json' }
         });
       }
@@ -130,16 +142,53 @@ export class BunMiddleware {
     }
   }
 
-  private getGeolocationFilterForRequest(requestContext: BunRequestContext): GeolocationFilter | null {
-    // This would be implemented based on your specific filtering logic
-    // For now, return null to indicate no filtering
+  private getGeolocationFilterForRequest(requestContext: BunRequestContext, route: ProxyRoute): GeolocationFilter | null {
+    // Priority order: route-specific filter > global filter > no filter
+
+    // Check route-specific filter first
+    if (route.geolocationFilter?.enabled) {
+      return route.geolocationFilter;
+    }
+
+    // Check global filter from config
+    if (this.config.security?.geolocationFilter?.enabled) {
+      return this.config.security.geolocationFilter;
+    }
+
     return null;
   }
 
-  private shouldBlockRequest(geolocation: GeolocationInfo | null, filter: GeolocationFilter): boolean {
-    // This would be implemented based on your specific filtering logic
-    // For now, return false to allow all requests
-    return false;
+    private shouldBlockRequest(geolocation: GeolocationInfo | null, filter: GeolocationFilter): boolean {
+    if (!geolocation) {
+      // If we can't determine location, allow the request by default
+      // You might want to change this behavior based on your security requirements
+      return false;
+    }
+
+    const { mode = 'block', countries = [], regions = [], cities = [] } = filter;
+    
+    // Check if the location matches any of the specified criteria
+    // Empty arrays mean "no restrictions" for that field
+    const matchesCountry = countries.length === 0 || countries.includes(geolocation.country || '');
+    const matchesRegion = regions.length === 0 || regions.includes(geolocation.region || '');
+    const matchesCity = cities.length === 0 || cities.includes(geolocation.city || '');
+    
+    // For allow mode: block if NOT in the allowlist
+    // For block mode: block if IN the blocklist
+    if (mode === 'allow') {
+      // Allow mode: block if location doesn't match any criteria
+      // All criteria must match (country AND region AND city)
+      return !(matchesCountry && matchesRegion && matchesCity);
+    } else {
+      // Block mode: block if location matches any criteria
+      // Any criteria match (country OR region OR city)
+      // But only if that field has restrictions (non-empty array)
+      const hasCountryRestriction = countries.length > 0 && countries.includes(geolocation.country || '');
+      const hasRegionRestriction = regions.length > 0 && regions.includes(geolocation.region || '');
+      const hasCityRestriction = cities.length > 0 && cities.includes(geolocation.city || '');
+      
+      return hasCountryRestriction || hasRegionRestriction || hasCityRestriction;
+    }
   }
 
   private formatLocationString(clientIP: string, geolocation: GeolocationInfo | null): string {

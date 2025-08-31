@@ -150,6 +150,7 @@ export interface ProxyConfig {
       path: string;
       csp: CSPConfig;
     }>;
+    geolocationFilter?: GeolocationFilter;
   };
 }
 
