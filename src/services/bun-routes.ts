@@ -327,21 +327,33 @@ export class BunRoutes {
     let response: Response | null = null;
 
     try {
-
       const { route: matchedRoute, handler } = this.getHandler(requestContext);
       route = matchedRoute;
+      
       if (route && handler) {
+        // Check if route requires SSL and request is HTTP
+        if (route.ssl && req.url.startsWith('http://')) {
+          const httpsUrl = req.url.replace('http://', 'https://');
+          logger.warn(`[SSL ENFORCEMENT] Blocking HTTP request for SSL-enabled route: ${req.url} -> ${httpsUrl}`);
+          
+          return new Response(null, {
+            status: 301,
+            headers: { 
+              'Location': httpsUrl,
+              'Cache-Control': 'public, max-age=3600'
+            }
+          });
+        }
+        
         // Apply middleware
         if (middleware) {
           const middlewareResult = await middleware?.processRequest(requestContext, route);
           if (middlewareResult) {
             response = middlewareResult;
           } else {
-
             response = await handler(requestContext, server);
           }
         }
-
       } else {
         logger.info(`[BUN ROUTES] ${requestContext.method} ${requestContext.originalUrl} - no handler found`);
         // No route found, record statistics for unmatched request
