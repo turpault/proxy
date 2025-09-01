@@ -89,7 +89,7 @@ export class BunClassicProxy {
       // Get WebSocket configuration with defaults
       const wsConfig = route.websocket || {};
       const timeout = wsConfig.timeout || 30000;
-      const pingInterval = wsConfig.pingInterval || 60000;
+      const pingInterval = wsConfig.pingInterval || 0;
       const maxRetries = wsConfig.maxRetries || 3;
       const retryDelay = wsConfig.retryDelay || 1000;
 

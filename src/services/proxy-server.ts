@@ -104,7 +104,7 @@ export class ProxyServer {
    * Connect to target WebSocket server with retry logic
    */
   private connectToTarget(clientWs: any, data: WebSocketProxyData) {
-    const wsConfig = data.wsConfig || { timeout: 30000, pingInterval: 60000, maxRetries: 3, retryDelay: 1000 };
+    const wsConfig = data.wsConfig || { timeout: 30000, pingInterval: 0, maxRetries: 3, retryDelay: 1000 };
 
     try {
       // Set connection timeout
