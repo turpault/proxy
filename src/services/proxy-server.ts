@@ -18,12 +18,10 @@ interface WebSocketProxyData {
   targetWebSocket?: WebSocket;
   wsConfig?: {
     timeout: number;
-    pingInterval: number;
     maxRetries: number;
     retryDelay: number;
   };
   retryCount?: number;
-  pingTimer?: any;
   connectionTimeout?: any;
 }
 
@@ -104,7 +102,7 @@ export class ProxyServer {
    * Connect to target WebSocket server with retry logic
    */
   private connectToTarget(clientWs: any, data: WebSocketProxyData) {
-    const wsConfig = data.wsConfig || { timeout: 30000, pingInterval: 0, maxRetries: 3, retryDelay: 1000 };
+    const wsConfig = data.wsConfig || { timeout: 30000, maxRetries: 3, retryDelay: 1000 };
 
     try {
       // Set connection timeout
@@ -132,20 +130,6 @@ export class ProxyServer {
 
         // Reset retry count on successful connection
         data.retryCount = 0;
-
-        // Set up ping interval if configured (using proper WebSocket ping frames)
-        if (wsConfig.pingInterval > 0) {
-          data.pingTimer = setInterval(() => {
-            try {
-              if (targetWs.readyState === WebSocket.OPEN) {
-                // Send proper WebSocket ping frame for keep-alive
-                targetWs.ping();
-              }
-            } catch (error) {
-              logger.error(`[PROXY WS] Error sending ping to target for ${data.routeIdentifier}`, error);
-            }
-          }, wsConfig.pingInterval);
-        }
       };
 
       targetWs.onmessage = (event: any) => {
@@ -242,11 +226,6 @@ export class ProxyServer {
    * Clean up timers for WebSocket connection
    */
   private cleanupTimers(data: WebSocketProxyData) {
-    if (data.pingTimer) {
-      clearInterval(data.pingTimer);
-      data.pingTimer = null;
-    }
-
     if (data.connectionTimeout) {
       clearTimeout(data.connectionTimeout);
       data.connectionTimeout = null;

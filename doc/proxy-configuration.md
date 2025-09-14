@@ -531,7 +531,6 @@ routes:
     websocket:
       enabled: true
       timeout: 30000
-      pingInterval: 30000
       maxRetries: 3
       retryDelay: 1000
 ```
@@ -547,11 +546,6 @@ routes:
 - **Type**: `number`
 - **Default**: `30000`
 - **Description**: Connection timeout in milliseconds
-
-#### `websocket.pingInterval`
-- **Type**: `number`
-- **Default**: `30000`
-- **Description**: Ping interval in milliseconds (0 to disable)
 
 #### `websocket.maxRetries`
 - **Type**: `number`
