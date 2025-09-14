@@ -662,7 +662,8 @@ export class ProcessManager {
         }
 
         // Trigger restart if configured and not manually stopped
-        if (config.restartOnExit !== false && !this.isShuttingDown && !managedProcess.isStopped) {
+        const restartConfig = this.getRestartConfig(config);
+        if (restartConfig.restartOnExit && !this.isShuttingDown && !managedProcess.isStopped) {
           logger.info(`Auto-restarting dead process ${id}`);
           this.restartProcess(id, target).catch(error => {
             logger.error(`Failed to auto-restart process ${id}`, error);
@@ -879,6 +880,24 @@ export class ProcessManager {
   }
 
   /**
+   * Get merged restart configuration for a process (global defaults + process-specific)
+   */
+  private getRestartConfig(processConfig: ProcessConfig): {
+    restartOnExit: boolean;
+    restartDelay: number;
+    maxRestarts: number;
+  } {
+    const processManagementConfig = configService.getProcessConfig();
+    const globalDefaults = processManagementConfig?.settings?.defaultRestart;
+
+    return {
+      restartOnExit: processConfig.restartOnExit ?? globalDefaults?.restartOnExit ?? true,
+      restartDelay: processConfig.restartDelay ?? globalDefaults?.restartDelay ?? 1000,
+      maxRestarts: processConfig.maxRestarts ?? globalDefaults?.maxRestarts ?? 5,
+    };
+  }
+
+  /**
    * Restart a managed process
    */
   async restartProcess(id: string, target: string): Promise<void> {
@@ -895,10 +914,12 @@ export class ProcessManager {
 
     logger.info(`Restarting process ${id}`);
 
+    // Get merged restart configuration
+    const restartConfig = this.getRestartConfig(managedProcess.config);
+    
     // Check restart limits
-    const maxRestarts = managedProcess.config.maxRestarts || 5;
-    if (managedProcess.restartCount >= maxRestarts) {
-      logger.error(`Process ${id} has exceeded maximum restart attempts (${maxRestarts})`);
+    if (managedProcess.restartCount >= restartConfig.maxRestarts) {
+      logger.error(`Process ${id} has exceeded maximum restart attempts (${restartConfig.maxRestarts})`);
       return;
     }
 
@@ -920,8 +941,7 @@ export class ProcessManager {
     managedProcess.isTerminated = false;
 
     // Wait for restart delay
-    const restartDelay = managedProcess.config.restartDelay || 1000;
-    await new Promise(resolve => setTimeout(resolve, restartDelay));
+    await new Promise(resolve => setTimeout(resolve, restartConfig.restartDelay));
 
     // First try to reconnect to existing process
     const existingProcess = await this.checkAndReconnectProcess(id, managedProcess.pidFilePath, managedProcess.logFilePath);
@@ -1203,13 +1223,14 @@ export class ProcessManager {
         }
 
         // Auto-restart if configured and not manually stopped
-        if (config.restartOnExit !== false && !this.isShuttingDown && !managedProcess.isStopped) {
+        const restartConfig = this.getRestartConfig(config);
+        if (restartConfig.restartOnExit && !this.isShuttingDown && !managedProcess.isStopped) {
           logger.info(`Auto-restarting process ${processName}`);
           setTimeout(() => {
             this.restartProcess(id, target).catch(error => {
               logger.error(`Failed to auto-restart process ${processName}`, error);
             });
-          }, config.restartDelay || 1000);
+          }, restartConfig.restartDelay);
         }
       });
 
@@ -1463,7 +1484,8 @@ export class ProcessManager {
           logger.error(`Process ${processName} failed health check ${maxRetries} times, killing child process`);
           await this.killChildProcess(id);
           // Optionally restart if configured and not manually stopped
-          if (managedProcess.config.restartOnExit !== false && !managedProcess.isStopped) {
+          const restartConfig = this.getRestartConfig(managedProcess.config);
+          if (restartConfig.restartOnExit && !managedProcess.isStopped) {
             logger.info(`Restarting process ${processName} after health check failure`);
             this.restartProcess(id, target).catch(restartError => {
               logger.error(`Failed to restart unhealthy process ${processName}`, restartError);
