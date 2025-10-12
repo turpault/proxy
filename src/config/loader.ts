@@ -67,6 +67,7 @@ const oauth2ConfigSchema = Joi.object({
 const processConfigSchema = Joi.object({
   enabled: Joi.boolean().default(true),
   name: Joi.string().optional(),
+  description: Joi.string().optional(),
   command: Joi.string().required(),
   args: Joi.array().items(Joi.string()).optional(),
   cwd: Joi.string().optional(),
