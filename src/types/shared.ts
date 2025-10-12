@@ -267,6 +267,7 @@ export interface LogLine {
 export interface Process {
   id: string;
   name: string;
+  description?: string;
   isRunning: boolean;
   pid?: number;
   pidFile?: string;

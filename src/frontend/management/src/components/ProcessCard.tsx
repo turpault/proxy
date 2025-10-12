@@ -28,6 +28,12 @@ export const ProcessCard: React.FC<ProcessCardProps> = ({
         <span className={`process-status ${statusClass}`}>{statusText}</span>
       </div>
 
+      {process.description && (
+        <div className="process-description">
+          {process.description}
+        </div>
+      )}
+
       <div className="process-info">
         <div className="info-row">
           <span className="label">PID:</span>

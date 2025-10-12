@@ -1514,6 +1514,7 @@ export class ProcessManager {
   getProcessStatus(): Array<{
     id: string;
     name?: string;
+    description?: string;
     isRunning: boolean;
     pid?: number;
     pidFile?: string;
@@ -1564,6 +1565,7 @@ export class ProcessManager {
       return {
         id: proc.id,
         name: proc.config.name || `proxy-${proc.id}`,
+        description: proc.config.description,
         isRunning: actualIsRunning,
         pid: actualPid,
         pidFile: proc.pidFilePath,
