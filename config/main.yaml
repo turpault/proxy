@@ -1,52 +1,22 @@
-# Main Configuration File
-# This file serves as the entry point for the proxy server configuration
-# It defines the management console port and references separate configuration files
-
-# Management Console Configuration
 management:
-  port: 4481  # Port for the management console web interface
-  host: "0.0.0.0"  # Host to bind the management console to
-  adminPassword: "isa"  # Admin password for management console access
-  sessionTimeout: 3600000  # Session timeout in milliseconds (1 hour)
-  cors:
-    enabled: true
-    origin: ["http://localhost:3000", "http://localhost:3001", "https://home.turpault.me"]
-    credentials: true
+  port: 4000
+  host: 0.0.0.0
+  adminPassword: admin123
 
-# Configuration File References
-# These files contain the actual proxy and process management configurations
 config:
-  # Proxy configuration file (contains routes, SSL, security, etc.)
-  proxy: "./config/proxy.yaml"
-  
-  # Process management configuration file (contains managed processes)
-  processes: "./config/processes.yaml"
+  proxy: config/proxy.yaml
+  processes: config/processes.yaml
 
-# Global Settings
 settings:
-  # Data directories
-  dataDir: "./data"
-  logsDir: "./logs"
-  certificatesDir: "./certificates"
-  tempDir: "./data/temp"
-  statsDir: "./data/statistics"
-  cacheDir: "./data/cache"
-  backupDir: "./config/backup"
-  
-  # Statistics and caching
+  dataDir: data
+  logsDir: logs
+  certificatesDir: certificates
+  tempDir: temp
+  statsDir: data/statistics
+  cacheDir: data/cache
   statistics:
     enabled: true
-    backupInterval: 86400000  # 24 hours in milliseconds
-    retentionDays: 30
-  
-  cache:
+  networkMonitoring:
     enabled: true
-    maxAge: 86400000  # 24 hours in milliseconds
-    maxSize: "100MB"
-    cleanupInterval: 3600000  # 1 hour in milliseconds
-
-# Development and debugging settings
-development:
-  debug: false
-  verbose: false
-  hotReload: false  # Auto-reload configuration changes 
+    interval: 30000
+    endpoint: 1.1.1.1

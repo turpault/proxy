@@ -7,7 +7,7 @@
     "dev": "NODE_ENV=development bun --watch --inspect=localhost:6499/ src/index.ts",
     "test": "bun test",
     "lint": "eslint src/**/*.ts",
-    "create-dummy-configs": "cp config/samples/basic-proxy.yaml config/proxy.yaml && cp config/samples/process-management.yaml config/processes.yaml && echo '\\nmanagement:\\n  port: 4000\\n  host: 0.0.0.0\\n  adminPassword: admin123\\n\\nconfig:\\n  proxy: config/proxy.yaml\\n  processes: config/processes.yaml\\n\\nsettings:\\n  dataDir: data\\n  logsDir: logs\\n  certificatesDir: certificates\\n  tempDir: temp\\n  statsDir: data/statistics\\n  cacheDir: data/cache\\n  statistics:\\n    enabled: true\\n  networkMonitoring:\\n    enabled: true\\n    interval: 30000\\n    endpoint: 1.1.1.1' > config/main.yaml && echo 'Dummy config files created in config/ directory'"
+    "create-dummy-configs": "cp config/samples/basic-proxy.yaml config/proxy.yaml && cp config/samples/process-management.yaml config/processes.yaml && printf 'management:\\n  port: 4000\\n  host: 0.0.0.0\\n  adminPassword: admin123\\n\\nconfig:\\n  proxy: config/proxy.yaml\\n  processes: config/processes.yaml\\n\\nsettings:\\n  dataDir: data\\n  logsDir: logs\\n  certificatesDir: certificates\\n  tempDir: temp\\n  statsDir: data/statistics\\n  cacheDir: data/cache\\n  statistics:\\n    enabled: true\\n  networkMonitoring:\\n    enabled: true\\n    interval: 30000\\n    endpoint: 1.1.1.1\\n' > config/main.yaml && echo 'Dummy config files created in config/ directory'"
   },
   "engines": {
     "bun": ">=1.1.30"
