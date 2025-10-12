@@ -10,7 +10,6 @@
 # Server ports configuration
 port: 80          # HTTP port (redirects to HTTPS)
 httpsPort: 443    # HTTPS port (main server)
-managementPort: 4481  # Management interface port
 
 # Let's Encrypt SSL certificate configuration
 letsEncrypt:
@@ -70,11 +69,4 @@ security:
       fontSrc: ["'self'", "data:"]
       objectSrc: ["'none'"]
       mediaSrc: ["'self'"]
-      frameSrc: ["'none'"]
-
-# Statistics and monitoring
-statistics:
-  enabled: true
-  saveInterval: 300000              # Save stats every 5 minutes
-  maxEntries: 10000                 # Maximum entries to keep
-  geolocation: true                 # Enable IP geolocation tracking 
+      frameSrc: ["'none'"] 

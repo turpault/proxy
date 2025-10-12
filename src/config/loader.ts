@@ -192,6 +192,12 @@ export const mainConfigSchema = Joi.object({
       maxSize: Joi.string().default('100MB'),
       cleanupInterval: Joi.number().default(3600000),
     }).optional(),
+    networkMonitoring: Joi.object({
+      enabled: Joi.boolean().default(true),
+      interval: Joi.number().default(30000).description('Monitoring interval in milliseconds (default 30s)'),
+      endpoint: Joi.string().default('1.1.1.1').description('Endpoint to test connectivity against'),
+      timeout: Joi.number().default(5000).description('Timeout for connectivity tests in milliseconds'),
+    }).optional(),
   }).default({
     dataDir: './data',
     logsDir: './logs',
