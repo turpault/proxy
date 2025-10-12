@@ -10,6 +10,7 @@ export const TabBar: React.FC<TabBarProps> = ({ activeTab, onTabChange }) => {
   const tabs: { id: TabType; label: string; icon: string }[] = [
     { id: 'processes', label: 'Processes', icon: '⚙️' },
     { id: 'statistics', label: 'Statistics', icon: '📊' },
+    { id: 'connectivity', label: 'Connectivity', icon: '🌐' },
     { id: 'certificates', label: 'Certificates', icon: '🔒' },
     { id: 'cache', label: 'Cache', icon: '💾' },
     { id: 'config', label: 'Configuration', icon: '⚙️' }

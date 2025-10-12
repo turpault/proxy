@@ -5,6 +5,7 @@ import { Header } from './Header';
 import { TabBar } from './TabBar';
 import { ProcessesTab } from './tabs/ProcessesTab';
 import { StatisticsTab } from './tabs/StatisticsTab';
+import { ConnectivityTab } from './tabs/ConnectivityTab';
 import { CertificatesTab } from './tabs/CertificatesTab';
 import { CacheTab } from './tabs/CacheTab';
 import { ConfigTab } from './tabs/ConfigTab';
@@ -69,6 +70,7 @@ const ManagementAppContent: React.FC = () => {
           <Route path="" element={<Navigate to="processes" replace />} />
           <Route path="processes" element={<ProcessesTab />} />
           <Route path="statistics" element={<StatisticsTab />} />
+          <Route path="connectivity" element={<ConnectivityTab />} />
           <Route path="certificates" element={<CertificatesTab />} />
           <Route path="cache" element={<CacheTab />} />
           <Route path="config/:configType" element={<ConfigTab />} />

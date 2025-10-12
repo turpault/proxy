@@ -9,6 +9,7 @@ import { ProxyCertificates } from './proxy-certificates';
 import { LocalAdminAuthService } from './local-admin-auth-service';
 import { ProcessManager } from './process-manager';
 import { ProcessScheduler } from './process-scheduler';
+import { NetworkMonitor } from './network-monitor';
 import { logger } from '../utils/logger';
 
 export interface ServiceContainer {
@@ -22,6 +23,7 @@ export interface ServiceContainer {
   authService: LocalAdminAuthService;
   processManager: ProcessManager;
   processScheduler: ProcessScheduler;
+  networkMonitor: NetworkMonitor;
 }
 
 export class ServiceContainerImpl implements ServiceContainer {
@@ -35,6 +37,7 @@ export class ServiceContainerImpl implements ServiceContainer {
   private _authService: LocalAdminAuthService;
   private _processManager: ProcessManager;
   private _processScheduler: ProcessScheduler;
+  private _networkMonitor: NetworkMonitor;
 
   constructor(config: ProxyConfig, mainConfig?: MainConfig) {
     // Initialize core services
@@ -48,6 +51,7 @@ export class ServiceContainerImpl implements ServiceContainer {
     this._authService = LocalAdminAuthService.getInstance();
     this._processScheduler = new ProcessScheduler();
     this._processManager = new ProcessManager();
+    this._networkMonitor = NetworkMonitor.getInstance(this._statisticsService);
   }
 
   // Getters for all services
@@ -91,6 +95,10 @@ export class ServiceContainerImpl implements ServiceContainer {
     return this._processScheduler;
   }
 
+  get networkMonitor(): NetworkMonitor {
+    return this._networkMonitor;
+  }
+
   /**
    * Initialize all services that require initialization
    */
@@ -113,6 +121,9 @@ export class ServiceContainerImpl implements ServiceContainer {
       this._processManager.updateSchedulerProcessStatus(id, isRunning);
     });
 
+    // Start network monitoring
+    this._networkMonitor.start();
+
     logger.info('Service container initialization complete');
   }
 
@@ -123,6 +134,7 @@ export class ServiceContainerImpl implements ServiceContainer {
     logger.info('Shutting down service container...');
 
     // Shutdown services in reverse dependency order
+    await this._networkMonitor.stop();
     await this._statisticsService.shutdown();
     SessionManager.shutdownAll();
     this._configService.stopConfigMonitoring();

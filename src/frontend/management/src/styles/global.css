@@ -1698,3 +1698,250 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Connectivity Tab Styles */
+.connectivity-tab {
+  padding: 20px;
+  background: #f5f7fa;
+  min-height: 100%;
+}
+
+.connectivity-tab .loading {
+  text-align: center;
+  padding: 40px;
+  font-size: 1.2rem;
+  color: #666;
+}
+
+.connectivity-tab .period-selector {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.connectivity-tab .period-selector h3 {
+  margin: 0 0 10px 0;
+  font-size: 1.1rem;
+  color: #333;
+}
+
+.connectivity-tab .period-select {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+  background: white;
+  cursor: pointer;
+}
+
+.connectivity-tab .current-status {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.connectivity-tab .current-status h3 {
+  margin: 0 0 15px 0;
+  font-size: 1.2rem;
+  color: #333;
+}
+
+.connectivity-tab .status-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.connectivity-tab .status-indicator {
+  padding: 20px 30px;
+  border-radius: 8px;
+  color: white;
+  font-weight: bold;
+  font-size: 1.1rem;
+  text-align: center;
+}
+
+.connectivity-tab .status-details {
+  flex: 1;
+}
+
+.connectivity-tab .status-detail {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.connectivity-tab .status-detail .label {
+  font-weight: bold;
+  color: #555;
+  min-width: 100px;
+}
+
+.connectivity-tab .status-detail .value {
+  color: #333;
+}
+
+.connectivity-tab .status-detail.error .value {
+  color: #f44336;
+}
+
+.connectivity-tab .stats-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.connectivity-tab .stat-card {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.connectivity-tab .stat-card h4 {
+  margin: 0 0 15px 0;
+  font-size: 1rem;
+  color: #666;
+  font-weight: normal;
+}
+
+.connectivity-tab .stat-card .value {
+  font-size: 2.5rem;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.connectivity-tab .stat-card .range {
+  font-size: 0.9rem;
+  color: #999;
+}
+
+.connectivity-tab .charts-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 20px;
+}
+
+.connectivity-tab .chart-card {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.connectivity-tab .chart-card h3 {
+  margin: 0 0 15px 0;
+  font-size: 1.1rem;
+  color: #333;
+}
+
+.connectivity-tab .chart {
+  min-height: 250px;
+}
+
+.connectivity-tab .no-data {
+  text-align: center;
+  padding: 40px;
+  color: #999;
+  font-size: 1.1rem;
+}
+
+/* Simple Line Chart */
+.simple-line-chart {
+  display: flex;
+  gap: 10px;
+  height: 200px;
+}
+
+.simple-line-chart .chart-y-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding-right: 10px;
+  min-width: 50px;
+  text-align: right;
+  font-size: 0.8rem;
+  color: #999;
+}
+
+.simple-line-chart .chart-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.simple-line-chart .chart-x-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: #999;
+}
+
+/* Simple Bar Chart */
+.simple-bar-chart {
+  display: flex;
+  gap: 10px;
+  height: 200px;
+}
+
+.simple-bar-chart .chart-y-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding-right: 10px;
+  min-width: 50px;
+  text-align: right;
+  font-size: 0.8rem;
+  color: #999;
+}
+
+.simple-bar-chart .chart-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.simple-bar-chart .bars {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 10px 0;
+}
+
+.simple-bar-chart .bar {
+  flex: 1;
+  min-width: 2px;
+  border-radius: 2px 2px 0 0;
+  transition: opacity 0.2s;
+}
+
+.simple-bar-chart .bar:hover {
+  opacity: 0.8;
+}
+
+.simple-bar-chart .chart-x-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: #999;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .connectivity-tab .charts-container {
+    grid-template-columns: 1fr;
+  }
+
+  .connectivity-tab .status-card {
+    flex-direction: column;
+  }
+}

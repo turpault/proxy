@@ -523,9 +523,54 @@ export type PaginatedResponse<T> = DataResponse<{
 }>;
 
 // ============================================================================
+// NETWORK CONNECTIVITY MONITORING
+// ============================================================================
+
+// Connectivity test result type
+export interface ConnectivityTestResult {
+  endpoint: string;
+  connectionTime: number; // milliseconds
+  responseTime: number; // milliseconds
+  success: boolean;
+  errorMessage?: string;
+  timestamp: string; // ISO string
+}
+
+// Connectivity history entry type
+export interface ConnectivityHistoryEntry {
+  timestamp: string;
+  connectionTime: number;
+  responseTime: number;
+  success: boolean;
+}
+
+// Connectivity statistics type
+export interface ConnectivityStats {
+  avgConnectionTime: number;
+  avgResponseTime: number;
+  minConnectionTime: number;
+  maxConnectionTime: number;
+  minResponseTime: number;
+  maxResponseTime: number;
+  errorRate: number; // percentage (0-100)
+  totalTests: number;
+  successfulTests: number;
+  failedTests: number;
+  period: {
+    start: string;
+    end: string;
+  };
+}
+
+// Connectivity API response types
+export type GetConnectivityCurrentResponse = DataResponse<ConnectivityTestResult>;
+export type GetConnectivityHistoryResponse = DataResponse<ConnectivityHistoryEntry[]>;
+export type GetConnectivityStatsResponse = DataResponse<ConnectivityStats>;
+
+// ============================================================================
 // FRONTEND-SPECIFIC TYPES
 // ============================================================================
 
-export type TabType = 'processes' | 'statistics' | 'certificates' | 'cache' | 'config';
+export type TabType = 'processes' | 'statistics' | 'certificates' | 'cache' | 'config' | 'connectivity';
 export type LogFilter = 'all' | 'stdout' | 'stderr';
 export type NotificationType = 'success' | 'error' | 'warning' | 'info'; 

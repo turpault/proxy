@@ -330,6 +330,12 @@ export interface GlobalSettings {
     maxSize?: string;
     cleanupInterval?: number;
   };
+  networkMonitoring?: {
+    enabled?: boolean; // default: true
+    interval?: number; // default: 30000ms (30 seconds)
+    endpoint?: string; // default: "1.1.1.1"
+    timeout?: number; // default: 5000ms
+  };
 }
 
 export interface DevelopmentSettings {

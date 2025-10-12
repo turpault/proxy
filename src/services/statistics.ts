@@ -132,7 +132,7 @@ export class StatisticsService {
   private dataDir: string;
   private isShuttingDown = false;
   private db!: Database; // SQLite database instance
-  public readonly SCHEMA_VERSION = 4; // Current schema version
+  public readonly SCHEMA_VERSION = 5; // Current schema version
 
   constructor() {
     // Get directories from configService
@@ -243,14 +243,15 @@ export class StatisticsService {
   }
 
   /**
- * Drop all existing tables
- */
+   * Drop all existing tables
+   */
   private dropAllTables(): void {
     const tables = [
       'geolocation_cities',
       'geolocation_countries',
       'requests',
-      'route_configs'
+      'route_configs',
+      'network_connectivity'
     ];
 
     // Drop tables in reverse dependency order
@@ -344,6 +345,20 @@ export class StatisticsService {
       )
     `);
 
+    // Create network_connectivity table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS network_connectivity (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        endpoint TEXT NOT NULL,
+        connection_time REAL NOT NULL,
+        response_time REAL NOT NULL,
+        success BOOLEAN NOT NULL,
+        error_message TEXT,
+        timestamp TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
+
     logger.info('All tables created successfully');
   }
 
@@ -371,6 +386,10 @@ export class StatisticsService {
     // Indexes for route configs
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_configs_domain ON route_configs(domain)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_route_configs_path ON route_configs(path)`);
+
+    // Indexes for network connectivity
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_network_connectivity_timestamp ON network_connectivity(timestamp)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_network_connectivity_endpoint ON network_connectivity(endpoint)`);
 
     logger.info('All indexes created successfully');
   }
@@ -465,10 +484,13 @@ export class StatisticsService {
         'DELETE FROM geolocation_cities WHERE last_seen < ?'
       ).run(cutoffISO).changes;
 
+      const deletedConnectivity = this.db.query(
+        'DELETE FROM network_connectivity WHERE timestamp < ?'
+      ).run(cutoffISO).changes;
 
-      const totalDeleted = deletedRequests + deletedCountries + deletedCities;
+      const totalDeleted = deletedRequests + deletedCountries + deletedCities + deletedConnectivity;
       if (totalDeleted > 0) {
-        logger.info(`Cleaned up ${deletedRequests} old requests, ${deletedCountries} country entries, and ${deletedCities} city entries`);
+        logger.info(`Cleaned up ${deletedRequests} old requests, ${deletedCountries} country entries, ${deletedCities} city entries, and ${deletedConnectivity} connectivity tests`);
       }
     } catch (error) {
       logger.error('Failed to cleanup old statistics:', error);
@@ -1560,6 +1582,190 @@ export class StatisticsService {
     } catch (error) {
       logger.error('Failed to get IP statistics:', error);
       return [];
+    }
+  }
+
+  /**
+   * Record network connectivity test result
+   */
+  public recordConnectivityTest(
+    endpoint: string,
+    connectionTime: number,
+    responseTime: number,
+    success: boolean,
+    errorMessage?: string
+  ): void {
+    try {
+      if (!this.db || this.isShuttingDown) return;
+
+      const now = new Date().toISOString();
+
+      this.db.run(`
+        INSERT INTO network_connectivity (
+          endpoint, connection_time, response_time, success, error_message, timestamp
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `, [
+        endpoint,
+        connectionTime,
+        responseTime,
+        success ? 1 : 0,
+        errorMessage || null,
+        now
+      ]);
+    } catch (error) {
+      logger.error('Failed to record connectivity test:', error);
+    }
+  }
+
+  /**
+   * Get latest connectivity test result
+   */
+  public getLatestConnectivityTest(endpoint?: string): any | null {
+    try {
+      if (!this.db) return null;
+
+      let query = 'SELECT * FROM network_connectivity';
+      const params: any[] = [];
+
+      if (endpoint) {
+        query += ' WHERE endpoint = ?';
+        params.push(endpoint);
+      }
+
+      query += ' ORDER BY timestamp DESC LIMIT 1';
+
+      const result = this.db.query(query).get(...params) as any;
+
+      if (!result) return null;
+
+      return {
+        endpoint: result.endpoint,
+        connectionTime: result.connection_time,
+        responseTime: result.response_time,
+        success: result.success === 1,
+        errorMessage: result.error_message,
+        timestamp: result.timestamp
+      };
+    } catch (error) {
+      logger.error('Failed to get latest connectivity test:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get connectivity test history for a period
+   */
+  public getConnectivityHistory(period: string = '24h', endpoint?: string): any[] {
+    try {
+      if (!this.db) return [];
+
+      const startDate = this.getStartDateForPeriod(period);
+      const startISO = startDate.toISOString();
+
+      let query = `
+        SELECT timestamp, connection_time, response_time, success
+        FROM network_connectivity
+        WHERE timestamp >= ?
+      `;
+      const params: any[] = [startISO];
+
+      if (endpoint) {
+        query += ' AND endpoint = ?';
+        params.push(endpoint);
+      }
+
+      query += ' ORDER BY timestamp ASC';
+
+      const results = this.db.query(query).all(...params) as any[];
+
+      return results.map(row => ({
+        timestamp: row.timestamp,
+        connectionTime: row.connection_time,
+        responseTime: row.response_time,
+        success: row.success === 1
+      }));
+    } catch (error) {
+      logger.error('Failed to get connectivity history:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get connectivity statistics for a period
+   */
+  public getConnectivityStats(period: string = '24h', endpoint?: string): any | null {
+    try {
+      if (!this.db) return null;
+
+      const startDate = this.getStartDateForPeriod(period);
+      const startISO = startDate.toISOString();
+      const endISO = new Date().toISOString();
+
+      let query = `
+        SELECT 
+          AVG(connection_time) as avg_connection_time,
+          AVG(response_time) as avg_response_time,
+          MIN(connection_time) as min_connection_time,
+          MAX(connection_time) as max_connection_time,
+          MIN(response_time) as min_response_time,
+          MAX(response_time) as max_response_time,
+          COUNT(*) as total_tests,
+          SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successful_tests,
+          SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as failed_tests
+        FROM network_connectivity
+        WHERE timestamp >= ?
+      `;
+      const params: any[] = [startISO];
+
+      if (endpoint) {
+        query += ' AND endpoint = ?';
+        params.push(endpoint);
+      }
+
+      const result = this.db.query(query).get(...params) as any;
+
+      if (!result || result.total_tests === 0) {
+        return {
+          avgConnectionTime: 0,
+          avgResponseTime: 0,
+          minConnectionTime: 0,
+          maxConnectionTime: 0,
+          minResponseTime: 0,
+          maxResponseTime: 0,
+          errorRate: 0,
+          totalTests: 0,
+          successfulTests: 0,
+          failedTests: 0,
+          period: {
+            start: startISO,
+            end: endISO
+          }
+        };
+      }
+
+      const errorRate = result.total_tests > 0 
+        ? (result.failed_tests / result.total_tests) * 100 
+        : 0;
+
+      return {
+        avgConnectionTime: result.avg_connection_time || 0,
+        avgResponseTime: result.avg_response_time || 0,
+        minConnectionTime: result.min_connection_time || 0,
+        maxConnectionTime: result.max_connection_time || 0,
+        minResponseTime: result.min_response_time || 0,
+        maxResponseTime: result.max_response_time || 0,
+        errorRate,
+        totalTests: result.total_tests,
+        successfulTests: result.successful_tests,
+        failedTests: result.failed_tests,
+        period: {
+          start: startISO,
+          end: endISO
+        }
+      };
+    } catch (error) {
+      logger.error('Failed to get connectivity statistics:', error);
+      return null;
     }
   }
 }

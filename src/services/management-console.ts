@@ -10,18 +10,19 @@ import {
   ClearCacheResponse,
   CreateBackupResponse,
   DeleteCacheEntryResponse,
-
   GetBackupsResponse,
   GetCacheEntriesResponse,
   GetCacheStatsResponse,
   GetCertificatesResponse,
   GetConfigResponse,
+  GetConnectivityCurrentResponse,
+  GetConnectivityHistoryResponse,
+  GetConnectivityStatsResponse,
   GetDetailedStatisticsResponse,
   GetProcessConfigResponse,
   GetProcessesResponse,
   GetProcessLogsResponse,
   GetStatisticsResponse,
-
   HealthResponse,
   KillProcessResponse,
   LoginRequest,
@@ -793,6 +794,104 @@ export class ManagementConsole {
               status: 200,
               headers: { 'Content-Type': 'application/json' }
             });
+          }
+        },
+
+        "/api/connectivity/current": {
+          GET: async (req: Request) => {
+            if (!this.isAuthenticated(req)) {
+              return this.createUnauthorizedResponse();
+            }
+
+            try {
+              const url = new URL(req.url);
+              const endpoint = url.searchParams.get('endpoint') || undefined;
+              
+              const current = this.statisticsService.getLatestConnectivityTest(endpoint);
+              
+              return new Response(JSON.stringify({ 
+                success: true, 
+                data: current 
+              } as GetConnectivityCurrentResponse), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({
+                success: false,
+                error: 'Failed to get current connectivity status',
+                details: error instanceof Error ? error.message : 'Unknown error'
+              } as ApiErrorResponse), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+        },
+
+        "/api/connectivity/history": {
+          GET: async (req: Request) => {
+            if (!this.isAuthenticated(req)) {
+              return this.createUnauthorizedResponse();
+            }
+
+            try {
+              const url = new URL(req.url);
+              const period = url.searchParams.get('period') || '24h';
+              const endpoint = url.searchParams.get('endpoint') || undefined;
+              
+              const history = this.statisticsService.getConnectivityHistory(period, endpoint);
+              
+              return new Response(JSON.stringify({ 
+                success: true, 
+                data: history 
+              } as GetConnectivityHistoryResponse), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({
+                success: false,
+                error: 'Failed to get connectivity history',
+                details: error instanceof Error ? error.message : 'Unknown error'
+              } as ApiErrorResponse), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
+          }
+        },
+
+        "/api/connectivity/stats": {
+          GET: async (req: Request) => {
+            if (!this.isAuthenticated(req)) {
+              return this.createUnauthorizedResponse();
+            }
+
+            try {
+              const url = new URL(req.url);
+              const period = url.searchParams.get('period') || '24h';
+              const endpoint = url.searchParams.get('endpoint') || undefined;
+              
+              const stats = this.statisticsService.getConnectivityStats(period, endpoint);
+              
+              return new Response(JSON.stringify({ 
+                success: true, 
+                data: stats 
+              } as GetConnectivityStatsResponse), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            } catch (error) {
+              return new Response(JSON.stringify({
+                success: false,
+                error: 'Failed to get connectivity statistics',
+                details: error instanceof Error ? error.message : 'Unknown error'
+              } as ApiErrorResponse), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+              });
+            }
           }
         },
 
