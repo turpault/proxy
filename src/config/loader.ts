@@ -87,6 +87,7 @@ const processConfigSchema = Joi.object({
   healthCheck: Joi.object({
     enabled: Joi.boolean().default(false),
     path: Joi.string().default('/health'), // Can be a full URL (http://localhost:8888/health) or relative path (/health)
+    url: Joi.string().optional(), // Alternative to path for full URLs
     interval: Joi.number().default(30000),
     timeout: Joi.number().default(5000),
     retries: Joi.number().default(3),
