@@ -8,8 +8,8 @@
 # - Static file serving
 
 # Server ports configuration
-port: 80          # HTTP port (redirects to HTTPS)
-httpsPort: 443    # HTTPS port (main server)
+port: 4480        # HTTP port (redirects to HTTPS)
+httpsPort: 4443   # HTTPS port (main server)
 
 # Let's Encrypt SSL certificate configuration
 letsEncrypt:
