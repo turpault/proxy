@@ -916,7 +916,7 @@ export class ProcessManager {
 
     // Get merged restart configuration
     const restartConfig = this.getRestartConfig(managedProcess.config);
-    
+
     // Check restart limits
     if (managedProcess.restartCount >= restartConfig.maxRestarts) {
       logger.error(`Process ${id} has exceeded maximum restart attempts (${restartConfig.maxRestarts})`);
