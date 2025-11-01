@@ -1654,20 +1654,25 @@ export class StatisticsService {
 
   /**
    * Get connectivity test history for a period
+   * @param period - Time period (1h, 6h, 24h, 7d, 30d)
+   * @param endpoint - Optional endpoint filter
+   * @param buckets - Optional number of buckets for aggregation (0 = no bucketing, return all records)
    */
-  public getConnectivityHistory(period: string = '24h', endpoint?: string): any[] {
+  public getConnectivityHistory(period: string = '24h', endpoint?: string, buckets: number = 0): any[] {
     try {
       if (!this.db) return [];
 
       const startDate = this.getStartDateForPeriod(period);
       const startISO = startDate.toISOString();
+      const endDate = new Date();
+      const endISO = endDate.toISOString();
 
       let query = `
         SELECT timestamp, connection_time, response_time, success
         FROM network_connectivity
-        WHERE timestamp >= ?
+        WHERE timestamp >= ? AND timestamp <= ?
       `;
-      const params: any[] = [startISO];
+      const params: any[] = [startISO, endISO];
 
       if (endpoint) {
         query += ' AND endpoint = ?';
@@ -1678,12 +1683,72 @@ export class StatisticsService {
 
       const results = this.db.query(query).all(...params) as any[];
 
-      return results.map(row => ({
-        timestamp: row.timestamp,
-        connectionTime: row.connection_time,
-        responseTime: row.response_time,
-        success: row.success === 1
-      }));
+      if (buckets === 0 || results.length === 0) {
+        // No bucketing, return all records
+        return results.map(row => ({
+          timestamp: row.timestamp,
+          connectionTime: row.connection_time,
+          responseTime: row.response_time,
+          success: row.success === 1
+        }));
+      }
+
+      // Bucketize by time windows
+      const periodMs = endDate.getTime() - startDate.getTime();
+      const bucketDurationMs = periodMs / buckets;
+      const bucketedData: Map<number, { timestamps: string[], connectionTimes: number[], responseTimes: number[], successes: boolean[] }> = new Map();
+
+      // Assign each record to a bucket
+      for (const row of results) {
+        const timestamp = new Date(row.timestamp).getTime();
+        const relativeTime = timestamp - startDate.getTime();
+        const bucketIndex = Math.floor(relativeTime / bucketDurationMs);
+        // Clamp to valid bucket range
+        const safeBucketIndex = Math.min(bucketIndex, buckets - 1);
+        
+        if (!bucketedData.has(safeBucketIndex)) {
+          bucketedData.set(safeBucketIndex, {
+            timestamps: [],
+            connectionTimes: [],
+            responseTimes: [],
+            successes: []
+          });
+        }
+        
+        const bucket = bucketedData.get(safeBucketIndex)!;
+        bucket.timestamps.push(row.timestamp);
+        bucket.connectionTimes.push(row.connection_time);
+        bucket.responseTimes.push(row.response_time);
+        bucket.successes.push(row.success === 1);
+      }
+
+      // Aggregate each bucket
+      const aggregated: any[] = [];
+      for (let i = 0; i < buckets; i++) {
+        const bucketStartTime = startDate.getTime() + (i * bucketDurationMs);
+        const bucketMidTime = bucketStartTime + (bucketDurationMs / 2);
+        
+        if (bucketedData.has(i)) {
+          const bucket = bucketedData.get(i)!;
+          if (bucket.timestamps.length > 0) {
+            // Calculate averages and success rate
+            const avgConnectionTime = bucket.connectionTimes.reduce((a, b) => a + b, 0) / bucket.connectionTimes.length;
+            const avgResponseTime = bucket.responseTimes.reduce((a, b) => a + b, 0) / bucket.responseTimes.length;
+            const successRate = (bucket.successes.filter(s => s).length / bucket.successes.length) * 100;
+            
+            aggregated.push({
+              timestamp: new Date(bucketMidTime).toISOString(),
+              connectionTime: avgConnectionTime,
+              responseTime: avgResponseTime,
+              success: successRate >= 50, // Overall success if majority succeeded
+              successRate: successRate,
+              count: bucket.timestamps.length
+            });
+          }
+        }
+      }
+
+      return aggregated;
     } catch (error) {
       logger.error('Failed to get connectivity history:', error);
       return [];

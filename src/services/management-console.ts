@@ -839,8 +839,10 @@ export class ManagementConsole {
               const url = new URL(req.url);
               const period = url.searchParams.get('period') || '24h';
               const endpoint = url.searchParams.get('endpoint') || undefined;
+              const bucketsParam = url.searchParams.get('buckets');
+              const buckets = bucketsParam ? parseInt(bucketsParam, 10) : 0;
               
-              const history = this.statisticsService.getConnectivityHistory(period, endpoint);
+              const history = this.statisticsService.getConnectivityHistory(period, endpoint, buckets);
               
               return new Response(JSON.stringify({ 
                 success: true, 

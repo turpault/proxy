@@ -543,6 +543,9 @@ export interface ConnectivityHistoryEntry {
   connectionTime: number;
   responseTime: number;
   success: boolean;
+  // Optional fields from bucketed data
+  successRate?: number; // Percentage (0-100)
+  count?: number; // Number of samples in bucket
 }
 
 // Connectivity statistics type

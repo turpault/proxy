@@ -17,6 +17,24 @@ export const ConnectivityTab: React.FC = () => {
   // Get period from URL params, default to '24h'
   const selectedPeriod = searchParams.get('period') || '24h';
 
+  // Helper function to calculate bucket count based on period
+  const getBucketCount = (period: string): number => {
+    switch (period) {
+      case '30d':
+        return 30; // Daily for 30 days
+      case '7d':
+        return 7 * 24; // Hourly for 7 days (168 buckets)
+      case '24h':
+        return 24 * 6; // 10 minutes for 24 hours (144 buckets)
+      case '6h':
+        return 6 * 12; // 5 minutes for 6 hours (72 buckets)
+      case '1h':
+        return 60 * 3; // 20 seconds for 1 hour (180 buckets)
+      default:
+        return 0; // No bucketing
+    }
+  };
+
   useEffect(() => {
     loadConnectivityData();
 
@@ -39,7 +57,7 @@ export const ConnectivityTab: React.FC = () => {
         }
       }
 
-      // Load history
+      // Load history - unbucketed for line charts
       const historyResponse = await fetch(`${API_BASE}/api/connectivity/history?period=${selectedPeriod}`);
       if (historyResponse.ok) {
         const data = await historyResponse.json();
@@ -182,6 +200,7 @@ export const ConnectivityTab: React.FC = () => {
                 data={history.map(h => ({ x: h.timestamp, y: h.connectionTime }))}
                 color="#2196f3"
                 label="Connection Time (ms)"
+                period={selectedPeriod}
               />
             ) : (
               <div className="no-data">No data available</div>
@@ -198,6 +217,7 @@ export const ConnectivityTab: React.FC = () => {
                 data={history.map(h => ({ x: h.timestamp, y: h.responseTime }))}
                 color="#4caf50"
                 label="Response Time (ms)"
+                period={selectedPeriod}
               />
             ) : (
               <div className="no-data">No data available</div>
@@ -213,6 +233,8 @@ export const ConnectivityTab: React.FC = () => {
               <SimpleBarChart
                 data={history}
                 color="#ff9800"
+                period={selectedPeriod}
+                bucketCount={getBucketCount(selectedPeriod)}
               />
             ) : (
               <div className="no-data">No data available</div>
@@ -224,19 +246,80 @@ export const ConnectivityTab: React.FC = () => {
   );
 };
 
+// Helper function to format X-axis labels based on period
+const formatXAxisLabel = (timestamp: string, period: string): string => {
+  const date = new Date(timestamp);
+  // For periods >= 7 days, show dates; for shorter periods, show times
+  if (period === '7d' || period === '30d') {
+    return date.toLocaleDateString();
+  } else {
+    return date.toLocaleTimeString();
+  }
+};
+
+// Helper function to get start date for a given period
+const getStartDateForPeriod = (period: string): Date => {
+  const now = new Date();
+  switch (period) {
+    case '1h':
+      return new Date(now.getTime() - 60 * 60 * 1000);
+    case '6h':
+      return new Date(now.getTime() - 6 * 60 * 60 * 1000);
+    case '24h':
+      return new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    case '7d':
+      return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    case '30d':
+      return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    default:
+      return new Date(now.getTime() - 24 * 60 * 60 * 1000); // Default to 24h
+  }
+};
+
 // Simple Line Chart Component
 interface LineChartProps {
   data: Array<{ x: string; y: number }>;
   color: string;
   label: string;
+  period: string;
 }
 
-const SimpleLineChart: React.FC<LineChartProps> = ({ data, color, label }) => {
+const SimpleLineChart: React.FC<LineChartProps> = ({ data, color, label, period }) => {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null);
+
   if (data.length === 0) return <div className="no-data">No data</div>;
 
   const maxValue = Math.max(...data.map(d => d.y));
   const minValue = Math.min(...data.map(d => d.y));
   const range = maxValue - minValue || 1;
+
+  // Calculate period range for positioning
+  const periodStart = getStartDateForPeriod(period).getTime();
+  const periodEnd = new Date().getTime();
+  const periodRange = periodEnd - periodStart || 1;
+
+  // Helper function to calculate X position based on timestamp
+  const getXPosition = (timestamp: string): number => {
+    const timestampMs = new Date(timestamp).getTime();
+    const relativePosition = (timestampMs - periodStart) / periodRange;
+    // Clamp to 0-100% to handle out-of-range timestamps
+    return Math.max(0, Math.min(100, relativePosition * 100));
+  };
+
+  const handleMouseEnter = (index: number) => {
+    setHoveredIndex(index);
+    const xPos = getXPosition(data[index].x);
+    setTooltipPosition({
+      x: xPos,
+      y: 200 - ((data[index].y - minValue) / range) * 180
+    });
+  };
+
+  const handleMouseLeave = () => {
+    setHoveredIndex(null);
+    setTooltipPosition(null);
+  };
 
   return (
     <div className="simple-line-chart">
@@ -245,11 +328,11 @@ const SimpleLineChart: React.FC<LineChartProps> = ({ data, color, label }) => {
         <span className="y-label">{((maxValue + minValue) / 2).toFixed(0)}</span>
         <span className="y-label">{minValue.toFixed(0)}</span>
       </div>
-      <div className="chart-content">
+      <div className="chart-content" style={{ position: 'relative' }}>
         <svg width="100%" height="200" preserveAspectRatio="none">
           <polyline
-            points={data.map((d, i) => {
-              const x = (i / (data.length - 1)) * 100;
+            points={data.map((d) => {
+              const x = getXPosition(d.x);
               const y = 200 - ((d.y - minValue) / range) * 180;
               return `${x}%,${y}`;
             }).join(' ')}
@@ -258,23 +341,53 @@ const SimpleLineChart: React.FC<LineChartProps> = ({ data, color, label }) => {
             strokeWidth="2"
           />
           {data.map((d, i) => {
-            const x = (i / (data.length - 1)) * 100;
+            const x = getXPosition(d.x);
             const y = 200 - ((d.y - minValue) / range) * 180;
             return (
               <circle
                 key={i}
                 cx={`${x}%`}
                 cy={y}
-                r="3"
+                r={hoveredIndex === i ? "5" : "3"}
                 fill={color}
+                onMouseEnter={() => handleMouseEnter(i)}
+                onMouseLeave={handleMouseLeave}
+                style={{ cursor: 'pointer', transition: 'r 0.2s' }}
               />
             );
           })}
+          {hoveredIndex !== null && (
+            <line
+              x1={`${getXPosition(data[hoveredIndex].x)}%`}
+              y1="0"
+              x2={`${getXPosition(data[hoveredIndex].x)}%`}
+              y2="200"
+              stroke="#999"
+              strokeWidth="1"
+              strokeDasharray="3,3"
+              opacity="0.5"
+            />
+          )}
         </svg>
+        {hoveredIndex !== null && tooltipPosition !== null && (
+          <div 
+            className="chart-tooltip"
+            style={{
+              position: 'absolute',
+              left: `${tooltipPosition.x}%`,
+              top: `${tooltipPosition.y - 50}px`,
+              transform: 'translateX(-50%)',
+              zIndex: 10
+            }}
+          >
+            <div className="tooltip-label">{formatXAxisLabel(data[hoveredIndex].x, period)}</div>
+            <div className="tooltip-value">{label}: {data[hoveredIndex].y.toFixed(0)}ms</div>
+          </div>
+        )}
         <div className="chart-x-axis">
-          <span className="x-label">{new Date(data[0].x).toLocaleTimeString()}</span>
-          <span className="x-label">{new Date(data[Math.floor(data.length / 2)].x).toLocaleTimeString()}</span>
-          <span className="x-label">{new Date(data[data.length - 1].x).toLocaleTimeString()}</span>
+          <span className="x-label">{formatXAxisLabel(getStartDateForPeriod(period).toISOString(), period)}</span>
+          <span className="x-label">{formatXAxisLabel(new Date((getStartDateForPeriod(period).getTime() + new Date().getTime()) / 2).toISOString(), period)}</span>
+          <span className="x-label">{formatXAxisLabel(new Date().toISOString(), period)}</span>
         </div>
       </div>
     </div>
@@ -285,22 +398,86 @@ const SimpleLineChart: React.FC<LineChartProps> = ({ data, color, label }) => {
 interface BarChartProps {
   data: ConnectivityHistoryEntry[];
   color: string;
+  period: string;
+  bucketCount: number;
 }
 
-const SimpleBarChart: React.FC<BarChartProps> = ({ data, color }) => {
-  if (data.length === 0) return <div className="no-data">No data</div>;
+const SimpleBarChart: React.FC<BarChartProps> = ({ data, color, period, bucketCount }) => {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [bucketedData, setBucketedData] = useState<Array<{ timestamp: string; successRate: number; count: number }>>([]);
 
-  // Group data into buckets (e.g., every N entries)
-  const bucketSize = Math.max(1, Math.floor(data.length / 50));
-  const buckets = [];
-  for (let i = 0; i < data.length; i += bucketSize) {
-    const bucket = data.slice(i, i + bucketSize);
-    const successRate = (bucket.filter(d => d.success).length / bucket.length) * 100;
-    buckets.push({
-      timestamp: bucket[0].timestamp,
-      successRate
-    });
+  useEffect(() => {
+    // Load bucketed data from backend
+    const loadBucketedData = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/connectivity/history?period=${period}&buckets=${bucketCount}`);
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success && result.data) {
+            // Map bucketed data to our format
+            const buckets = result.data
+              .filter((entry: ConnectivityHistoryEntry) => entry.successRate !== undefined && entry.count !== undefined)
+              .map((entry: ConnectivityHistoryEntry) => ({
+                timestamp: entry.timestamp,
+                successRate: entry.successRate!,
+                count: entry.count!
+              }));
+            setBucketedData(buckets);
+          } else {
+            setBucketedData([]);
+          }
+        } else {
+          setBucketedData([]);
+        }
+      } catch (error) {
+        console.error('Failed to load bucketed data:', error);
+        setBucketedData([]);
+      }
+    };
+
+    if (bucketCount > 0) {
+      loadBucketedData();
+    } else {
+      setBucketedData([]);
+    }
+  }, [period, bucketCount]);
+
+  if (bucketCount === 0) {
+    return <div className="no-data">Bucketing not configured</div>;
   }
+
+  if (bucketedData.length === 0) {
+    return <div className="no-data">No data available</div>;
+  }
+
+  // Calculate period range for positioning
+  const periodStart = getStartDateForPeriod(period).getTime();
+  const periodEnd = new Date().getTime();
+  const periodRange = periodEnd - periodStart || 1;
+
+  // Helper function to calculate X position based on timestamp
+  const getXPosition = (timestamp: string): number => {
+    const timestampMs = new Date(timestamp).getTime();
+    const relativePosition = (timestampMs - periodStart) / periodRange;
+    // Clamp to 0-100% to handle out-of-range timestamps
+    return Math.max(0, Math.min(100, relativePosition * 100));
+  };
+
+  const buckets = bucketedData;
+
+  // Fixed width for bars (in percentage)
+  const fixedBarWidth = 0.8; // Fixed width percentage
+  
+  // Calculate positions for each bucket based on timestamp
+  // Bars are centered on their timestamp position
+  const bucketPositions = buckets.map((bucket) => {
+    const xPos = getXPosition(bucket.timestamp);
+    const left = Math.max(0, xPos - fixedBarWidth / 2);
+    return { 
+      left: Math.min(left, 100 - fixedBarWidth), 
+      width: fixedBarWidth 
+    };
+  });
 
   return (
     <div className="simple-bar-chart">
@@ -309,23 +486,50 @@ const SimpleBarChart: React.FC<BarChartProps> = ({ data, color }) => {
         <span className="y-label">50%</span>
         <span className="y-label">0%</span>
       </div>
-      <div className="chart-content">
-        <div className="bars">
-          {buckets.map((bucket, i) => (
-            <div
-              key={i}
-              className="bar"
-              style={{
-                height: `${bucket.successRate}%`,
-                backgroundColor: bucket.successRate < 90 ? '#f44336' : bucket.successRate < 98 ? '#ff9800' : color
-              }}
-              title={`${bucket.successRate.toFixed(1)}% success at ${new Date(bucket.timestamp).toLocaleString()}`}
-            />
-          ))}
+      <div className="chart-content" style={{ position: 'relative' }}>
+        <div className="bars" style={{ position: 'relative', width: '100%', height: '100%' }}>
+          {buckets.map((bucket, i) => {
+            const pos = bucketPositions[i];
+            const xPos = getXPosition(bucket.timestamp);
+            return (
+              <div
+                key={i}
+                className="bar"
+                style={{
+                  position: 'absolute',
+                  left: `${pos.left}%`,
+                  width: `${pos.width}%`,
+                  height: `${bucket.successRate}%`,
+                  backgroundColor: bucket.successRate < 90 ? '#f44336' : bucket.successRate < 98 ? '#ff9800' : color,
+                  bottom: 0
+                }}
+                onMouseEnter={() => setHoveredIndex(i)}
+                onMouseLeave={() => setHoveredIndex(null)}
+              />
+            );
+          })}
         </div>
+        {hoveredIndex !== null && hoveredIndex < buckets.length && (
+          <div 
+            className="chart-tooltip"
+            style={{
+              position: 'absolute',
+              left: `${getXPosition(buckets[hoveredIndex].timestamp)}%`,
+              top: `${200 - (buckets[hoveredIndex].successRate / 100) * 180 - 50}px`,
+              transform: 'translateX(-50%)',
+              zIndex: 10
+            }}
+          >
+            <div className="tooltip-label">{formatXAxisLabel(buckets[hoveredIndex].timestamp, period)}</div>
+            <div className="tooltip-value">Success Rate: {buckets[hoveredIndex].successRate.toFixed(1)}%</div>
+            <div className="tooltip-value" style={{ fontSize: '0.75rem', opacity: 0.8 }}>
+              ({buckets[hoveredIndex].count} {buckets[hoveredIndex].count === 1 ? 'sample' : 'samples'})
+            </div>
+          </div>
+        )}
         <div className="chart-x-axis">
-          <span className="x-label">{new Date(buckets[0].timestamp).toLocaleTimeString()}</span>
-          <span className="x-label">{new Date(buckets[buckets.length - 1].timestamp).toLocaleTimeString()}</span>
+          <span className="x-label">{formatXAxisLabel(getStartDateForPeriod(period).toISOString(), period)}</span>
+          <span className="x-label">{formatXAxisLabel(new Date().toISOString(), period)}</span>
         </div>
       </div>
     </div>
